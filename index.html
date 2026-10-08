@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>URBANA — City Builder v0.31</title>
+<title>URBANA — City Builder v0.32</title>
 <style>
 :root{--glass:rgba(17,25,22,.84);--line:rgba(255,255,255,.09);--acc:#f2c84b;--ok:#7fd88f;--bad:#ff7a6b;--txt:#f3f6f4;--sb:max(10px,env(safe-area-inset-bottom));--st:max(10px,env(safe-area-inset-top))}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -211,6 +211,11 @@ html,body{font-family:'InterV',Inter,system-ui,-apple-system,"Segoe UI",Roboto,s
 .panel::-webkit-scrollbar,.info::-webkit-scrollbar,.sheet::-webkit-scrollbar{width:4px}.panel::-webkit-scrollbar-thumb,.info::-webkit-scrollbar-thumb,.sheet::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
 button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.glass,.tool,.panel,.info,.toast,.sub,.btn,#story{transition-duration:.01s!important}}
+/* v0.32: el menú termina arriba de la barra de herramientas y se desplaza si no entra */
+.sheet{max-height:calc(100% - var(--st) - var(--sb) - 196px);overscroll-behavior:contain}
+body.tz1 .sheet{max-height:calc((100% - var(--st) - var(--sb) - 196px)/1.12)}body.tz2 .sheet{max-height:calc((100% - var(--st) - var(--sb) - 196px)/1.25)}
+@media (max-height:500px) and (orientation:landscape){.sheet{top:calc(var(--st) + 64px);max-height:calc(100% - var(--st) - var(--sb) - 136px)}
+ body.tz1 .sheet{max-height:calc((100% - var(--st) - var(--sb) - 136px)/1.12)}body.tz2 .sheet{max-height:calc((100% - var(--st) - var(--sb) - 136px)/1.25)}}
 </style>
 </head>
 <body>
@@ -271,7 +276,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
   <button id="mHelp">Controles</button>
   <hr>
   <button id="mNew">Nueva ciudad</button>
-  <div class="ver">URBANA 0.31 · WebGL2 · guardado automático</div>
+  <div class="ver">URBANA 0.32 · WebGL2 · guardado automático</div>
  </div>
  <div class="sheet glass" id="ovl"></div>
  <div class="legend glass" id="legend"></div>
@@ -299,7 +304,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-of
 <script>
 'use strict';
 /* =====================================================================
-   URBANA v0.31 — motor WebGL2 propio
+   URBANA v0.32 — motor WebGL2 propio
+   · v0.32: luz más liviana en media/ahorro, la resolución baja con los efectos, menú que entra en apaisado, contador oculto con el menú, más luz con lluvia
    · v0.31: luz realista (lineal, especular GGX, tonemap ACES), relieve en fachadas, autos modelados, interfaz premium con Inter, simulación repartida entre cuadros
    · v0.30 (0.26 a 0.30 juntas): arreglo del parpadeo (textura del relieve en su propia unidad), copias automáticas, consejeros, maravillas por etapas,
      ciclistas, clases sociales, producción y comercio con vecinos, diario, modo paseo, carnaval y año nuevo, modo historia y 3 escenarios nuevos
@@ -535,15 +541,16 @@ out vec4 o;
 float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+vec2(1,1)),f.x),f.y);}
 // oclusión ambiental: cuánto tapan los edificios vecinos (mapa de alturas de 128×128)
-float aoHM(vec3 n){vec2 b=vW.xz+n.xz*.28;float oc=0.,ws=0.;for(int k=0;k<8;k++){float a=float(k)*.7854+.39,r=(k%2==0)?.75:1.5;vec2 d=vec2(cos(a),sin(a));
+float aoHM(vec3 n){vec2 b=vW.xz+n.xz*.28;float oc=0.,ws=0.;for(int k=0;k<8;k++){if(uHQ<.9&&k%2==1)continue;float a=float(k)*.7854+.39,r=(k%2==0)?.75:1.5;vec2 d=vec2(cos(a),sin(a));
   float w=n.y>.5?1.:step(-.15,dot(d,n.xz));float h=texture(uHM,(b+d*r)/128.).r*9.;oc+=w*clamp((h-vW.y)/(r*1.25+.25),0.,1.);ws+=w;}
  float ao=1.-.78*oc/max(ws,1.);if(abs(n.y)<.5)ao*=mix(.62,1.,smoothstep(0.,.35,vW.y));return ao;}
 float shade(){vec3 p=vLP.xyz/vLP.w*.5+.5;if(p.x<0.||p.x>1.||p.y<0.||p.y>1.||p.z>1.)return 1.;float b=.0012,s=0.;
- if(uHQ<.5){s+=texture(uSM,vec3(p.xy+vec2(-.6,-.6)*uSMs,p.z-b));s+=texture(uSM,vec3(p.xy+vec2(.6,-.6)*uSMs,p.z-b));
+ if(uHQ<.9){s+=texture(uSM,vec3(p.xy+vec2(-.6,-.6)*uSMs,p.z-b));s+=texture(uSM,vec3(p.xy+vec2(.6,-.6)*uSMs,p.z-b));
  s+=texture(uSM,vec3(p.xy+vec2(-.6,.6)*uSMs,p.z-b));s+=texture(uSM,vec3(p.xy+vec2(.6,.6)*uSMs,p.z-b));return s*.25;}
  for(int j=-1;j<=1;j++)for(int k=-1;k<=1;k++){float w=(j==0?2.:1.)*(k==0?2.:1.);s+=w*texture(uSM,vec3(p.xy+vec2(float(j),float(k))*1.25*uSMs,p.z-b));}return s/16.;}
 const float SUNI=3.,AMBI=1.45,EXPO=.46;
-float ggx(vec3 n,vec3 v,vec3 l,float r){vec3 h=normalize(l+v);float a=r*r,a2=a*a,nh=max(dot(n,h),0.),nv=max(dot(n,v),1e-3),nl=max(dot(n,l),1e-3),d=nh*nh*(a2-1.)+1.;float k=(r+1.)*(r+1.)/8.;
+uniform float uExp;
+float ggx(vec3 n,vec3 v,vec3 l,float r){vec3 h=normalize(l+v);if(uHQ<.9){float a4=r*r*r*r;return pow(max(dot(n,h),0.),2./a4-2.)*.0064/a4;}float a=r*r,a2=a*a,nh=max(dot(n,h),0.),nv=max(dot(n,v),1e-3),nl=max(dot(n,l),1e-3),d=nh*nh*(a2-1.)+1.;float k=(r+1.)*(r+1.)/8.;
  return a2/(3.14159*d*d)*(nv/(nv*(1.-k)+k))*(nl/(nl*(1.-k)+k))*(.04+.96*pow(1.-max(dot(v,h),0.),5.))/(4.*nv*nl);}
 vec3 aces(vec3 x){return clamp(x*(2.51*x+.03)/(x*(2.43*x+.59)+.14),0.,1.);}
 void main(){vec3 n=normalize(vNor);vec3 base=vCol;float em=vEm;float wsh=1.,wgv=.5;
@@ -577,7 +584,7 @@ void main(){vec3 n=normalize(vNor);vec3 base=vCol;float em=vEm;float wsh=1.,wgv=
  else if(em>-1.5){c+=alb*SUN*vec3(1.,1.12,.55)*max(.3-ndr,0.)*.32*sh*day;c+=SUN*ggx(n,V,uSun,.7)*nd*sh*.12*day;}
  if(uWet>.01&&n.y>.9&&vW.y<.06&&em<.25&&em>-1.5){float pd=smoothstep(.52,.68,vn(vW.xz*1.6+3.))*uWet;vec3 Hh=normalize(uSun+V);float sp=pow(max(n.y*Hh.y,0.),60.);
   c=mix(c*(1.-.22*uWet),SKR*.5+c*.25,pd*.6)+SUN*sp*pd*.17*day+WINL*uNight*pd*.3*vn(vW.xz*3.1);}
- c=pow(aces(c*EXPO),vec3(.4545));
+ c=pow(aces(c*uExp),vec3(.4545));
  if(uCZ>.01){vec2 q=(vW.xz+vec2(6.,-4.))*.05+uTime*vec2(.011,.005);float k=vn(q)*.62+vn(q*2.3+3.7)*.38;float cm=smoothstep(.5,.78,k)*uCZ;c=mix(c,mix(vec3(1.),uFog,.35)*(.75+.35*day),cm*.42);}
  float d=length(vW.xz-uTarget);c=mix(c,uFog,clamp((d-uFogR)/(uFogR*1.8),0.,.4)+uMist*(.18+.25*vn(vW.xz*.12+uTime*.02)));
  o=vec4(c,1.);}`;
@@ -1654,7 +1661,7 @@ function post(){const w=PP.w,h=PP.h,nt=L.night;gl.disable(gl.DEPTH_TEST);gl.disa
  gl.uniform1f(u.uTilt,(Q()==='alta'||photoOn)&&prefs.tilt&&!prefs.calm?1:0);gl.uniform1f(u.uSat,lerp(.97,1.06,nt));gl.uniform1f(u.uAsp,w/h);gl.uniform1f(u.uNight,nt);gl.drawArrays(gl.TRIANGLES,0,3);gl.activeTexture(gl.TEXTURE0)}
 
 // ---------------------------------------------------------------- render
-function resize(){W=innerWidth;H=innerHeight;const dev=devicePixelRatio||1,q=prefs.quality;DPR=Math.max(Math.min(dev,.85),Math.min(dev,q==='ahorro'?1.5:2)*RS);
+function resize(){W=innerWidth;H=innerHeight;const dev=devicePixelRatio||1,q=Q();DPR=Math.max(Math.min(dev,.85),Math.min(dev,q==='ahorro'?1.5:q==='media'?1.75:2)*RS);
  cvs.width=Math.round(W*DPR);cvs.height=Math.round(H*DPR);const fd=Math.min(dev,q==='alta'?2:1.5);fx.width=Math.round(W*fd);fx.height=Math.round(H*fd);setupPost()}
 addEventListener('resize',resize);
 // ¿el chunk k se ve? (proyección del centro con margen por edificios altos)
@@ -1684,7 +1691,7 @@ function render(now){
  gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.clear(gl.DEPTH_BUFFER_BIT);
  const u=P_MAIN.u;gl.useProgram(P_MAIN.p);gl.uniformMatrix4fv(u.uVP,false,VP);if(LVP)gl.uniformMatrix4fv(u.uLVP,false,LVP);gl.uniform1f(u.uSY,1);gl.uniform1f(u.uTime,T);
  gl.uniform3fv(u.uSun,L.dir);gl.uniform3fv(u.uSunCol,L.sun);gl.uniform3fv(u.uSkyA,L.sky);gl.uniform3fv(u.uGndA,L.gnd);gl.uniform3fv(u.uWin,[1.0,.8,.48]);gl.uniform3fv(u.uFog,L.fog);
- gl.uniform3fv(u.uView,camF);gl.uniform3fv(u.uSkyR,mul(mix3(L.top,L.bot,.45),1.05));gl.uniform1f(u.uCloud,Q()==='ahorro'&&!stormK?0:lerp(.3,.85,stormK)*day);gl.uniform1f(u.uHQ,Q()==='ahorro'?0:1);gl.uniform1f(u.uLegend,reached>=9?1:0);gl.uniform4fv(u.uSeason,SEAS);
+ gl.uniform3fv(u.uView,camF);gl.uniform3fv(u.uSkyR,mul(mix3(L.top,L.bot,.45),1.05));gl.uniform1f(u.uCloud,Q()==='ahorro'&&!stormK?0:lerp(.3,.85,stormK)*day);gl.uniform1f(u.uHQ,Q()==='ahorro'?0:Q()==='media'?.7:1);gl.uniform1f(u.uExp,.46*(1+.38*Math.max(stormK,wxFall==='rain'||wxFall==='snow'?1:0)));gl.uniform1f(u.uLegend,reached>=9?1:0);gl.uniform4fv(u.uSeason,SEAS);
  gl.uniform1f(u.uNight,L.night);gl.uniform1f(u.uShadow,shadows?1:0);gl.uniform1f(u.uSMs,1/Math.max(SMS,1));gl.uniform1f(u.uFogR,Math.max(HH,HW)*1.6);gl.uniform1f(u.uWet,Q()==='ahorro'?0:wetK);gl.uniform1f(u.uMist,mistK);gl.uniform1f(u.uCZ,prefs.calm?0:clamp((HH-16)/26,0,1)*(.55+stormK*.4));gl.uniform2f(u.uTarget,cam.x,cam.z);
  hmUpdate();gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,smTex);gl.uniform1i(u.uSM,0);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,hmTex);gl.uniform1i(u.uHM,2);gl.uniform1f(u.uAO,Q()==='ahorro'?0:1);gl.activeTexture(gl.TEXTURE0);
  drawM(slabMesh);for(let k=0;k<chunks.length;k++)if(chunkVis(k))drawM(lodMode&&!chunks[k].ld?chunks[k].l:chunks[k].m);
@@ -2571,7 +2578,7 @@ function stepConfetti(dt){if(!confetti.length)return;for(let k=confetti.length-1
   fctx.save();fctx.translate(p.x,p.y);fctx.rotate(p.r);fctx.fillStyle=p.c;fctx.globalAlpha=Math.min(1,p.life);fctx.fillRect(-4,-2.5,8,5);fctx.restore()}}
 function closeAll(){$('budget').classList.remove('show');$('stp').classList.remove('show');$('newg').classList.remove('show');$('prog').classList.remove('show');$('slots').classList.remove('show');$('photo').classList.remove('show');$('sheet').classList.remove('show');$('ovl').classList.remove('show');closeSub()}
 $('bUndo').onclick=()=>{ensureAudio();undo()};$('bRotL').onclick=()=>{ensureAudio();rotateStep(-1)};$('bRotR').onclick=()=>{ensureAudio();rotateStep(1)};$('bSpeed').onclick=()=>{ensureAudio();cycleSpeed()};
-$('bMenu').onclick=()=>{ensureAudio();const s=$('sheet').classList.contains('show');closeAll();if(!s)$('sheet').classList.add('show');SFX.ui()};
+$('bMenu').onclick=()=>{ensureAudio();const s=$('sheet').classList.contains('show');closeAll();if(!s){$('sheet').classList.add('show');$('fpsc').style.display='none'}SFX.ui()};
 $('bOvl').onclick=()=>{ensureAudio();const s=$('ovl').classList.contains('show');closeAll();if(!s){renderOvlMenu();$('ovl').classList.add('show')}SFX.ui()};
 function renderOvlMenu(){$('ovl').innerHTML=Object.keys(OVL).map(k=>'<button class="'+(overlay===k?'on':'')+'" data-o="'+k+'">'+OVL[k]+(overlay===k?' <span>✓</span>':'')+'</button>').join('');
  $('ovl').querySelectorAll('button').forEach(b=>b.onclick=()=>{setOverlay(b.dataset.o);closeAll()})}
@@ -2993,13 +3000,13 @@ function frame(t){requestAnimationFrame(frame);tNow=(t/1000)%3600;const rawDt=(t
  if(rsPend&&!ptrs.size&&performance.now()-camBusyT>900){const q=rsPend;rsPend=0;resize();if(q===2)setupShadow()}render(t);stepFx(dt,simDt);stepConfetti(dt);if(shotReq){const f=shotReq;shotReq=null;f()}clock();ambTick(dt);
  // calidad adaptativa: primero baja la resolución de a poco (y la vuelve a subir si sobra), recién después los efectos.
  // Si el navegador limita a 30 cuadros (ahorro de batería) no se toca nada.
- const ms=Math.min(250,rawDt*1000);ftAvg=ftAvg*.94+ms*.06;if(prefs.fps&&(fpsT=(fpsT||0)+dt)>.5){fpsT=0;$('fpsc').style.display='block';$('fpsc').textContent=Math.round(1000/Math.max(1,ftAvg))+' cps · '+Q()+' · '+Math.round(RS*100)+'%'}ftVar=ftVar*.94+Math.abs(ms-ftAvg)*.06;ftT+=dt;rsT+=dt;
+ const ms=Math.min(250,rawDt*1000);ftAvg=ftAvg*.94+ms*.06;if(prefs.fps&&(fpsT=(fpsT||0)+dt)>.5){fpsT=0;$('fpsc').style.display=$('sheet').classList.contains('show')?'none':'block';$('fpsc').textContent=Math.round(1000/Math.max(1,ftAvg))+' cps · '+Q()+' · '+Math.round(RS*100)+'%'}ftVar=ftVar*.94+Math.abs(ms-ftAvg)*.06;ftT+=dt;rsT+=dt;
  if(ptrs.size||performance.now()-camBusyT<1500){rsT=Math.min(rsT,0);lowT=0}
  if(ftT>4&&!document.hidden){const tgt=Q()==='ahorro'?37:19,capped=Math.abs(ftAvg-33.3)<2.5&&ftVar<3;
   // una sola medición al arrancar: si el equipo no llega, la resolución baja una vez y queda fija para toda la partida
   if(!rsLocked&&ftT>7){rsLocked=true;if(!capped&&ftAvg>tgt*1.25){RS=ftAvg>tgt*1.9?.7:ftAvg>tgt*1.5?.8:.9;rsPend=1}}
   // después, solo efectos (no cambia el tamaño de la pantalla, así que no parpadea)
-  if(rsLocked&&ftT>25&&!capped&&ftAvg>tgt*1.4){lowT+=dt;if(lowT>12&&Q()!=='ahorro'){qDown++;lowT=0;setupShadow();setupPost();syncMenu();toast('Bajé algunos efectos para que vaya más fluido',2500)}}else lowT=0}}
+  if(rsLocked&&ftT>25&&!capped&&ftAvg>tgt*1.4){lowT+=dt;if(lowT>12&&(Q()!=='ahorro'||RS>.62)){if(Q()!=='ahorro')qDown++;RS=Math.max(.6,RS*.85);lowT=0;rsPend=2;syncMenu();toast('Bajé algunos efectos para que vaya más fluido',2500)}}else lowT=0}}
 
 resize();setupShadow();
 if(!load())newCity();else{renderReq();chunkDirty.fill(1);buildStatic();buildRegionMesh();rebuildTransit();buildNetMesh();rebuildRoadList();recount();renderTools();checkObjective();hud()}
