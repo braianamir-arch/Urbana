@@ -1,0 +1,2 @@
+{"name":"URBANA","short_name":"URBANA","description":"Construí tu ciudad desde un camino de tierra hasta una metrópolis.","start_url":"./index.html","scope":"./","display":"fullscreen","orientation":"any","background_color":"#1c2b24","theme_color":"#1c2b24","lang":"es-AR",
+"icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png"},{"src":"icon-512.png","sizes":"512x512","type":"image/png"},{"src":"icon-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]}
