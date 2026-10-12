@@ -10,6 +10,9 @@ if [ ! -x "$GODOT" ]; then echo "falta Godot: correr tools/get_godot.sh" >&2; ex
 # user:// propio por corrida, así las pruebas no se pisan
 export XDG_DATA_HOME="$OUT/home"
 rm -rf "$XDG_DATA_HOME"; mkdir -p "$XDG_DATA_HOME"
+if ! python3 "$ROOT/tools/godot_modules.py" check; then echo "correr: python3 tools/godot_modules.py build" >&2; exit 2; fi
+# importar primero (registra class_name y genera .uid)
+"$GODOT" --headless --path "$ROOT/godot" --import > "$OUT/import.log" 2>&1
 fail=0
 run() {
 	local mode="$1" name="$2" ok="$3"

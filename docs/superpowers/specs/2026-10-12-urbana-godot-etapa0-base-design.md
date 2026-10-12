@@ -41,6 +41,15 @@ tocar la simulación.
 
 ## Estructura
 
+> **Cambio durante la implementación (2026-10-12):** la separación con autoload `G` y módulos
+> como nodos hacía la simulación un **70 % más lenta** (cada acceso a `G.x` es una búsqueda por
+> nombre), y una variante con herencia en capas costaba entre 6 % y 22 %. Se reemplazó por:
+> **el código se edita en `godot/src/*.gd` (un archivo por tema) y `tools/godot_modules.py build`
+> los junta en `godot/scripts/main.gd`**, el único script que usa Godot. En ejecución es el mismo
+> script de siempre (mismo rendimiento, medido); para trabajar, cada tema está en su archivo.
+> No hay `G` ni `Data`: los nombres no cambian. Lo compartido entre temas vive en `src/state.gd`.
+> `run_tests.sh` falla si `main.gd` no coincide con `src/` (por ejemplo, si se editó a mano).
+
 ```
 godot/
   project.godot        Godot 4.7, renderer Mobile, nombre URBANA, ícono, orientación sensor

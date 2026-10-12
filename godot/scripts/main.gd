@@ -1,36 +1,28 @@
 extends Node3D
+# ARCHIVO GENERADO: no editar a mano.
+# Se arma juntando godot/src/*.gd con: python3 tools/godot_modules.py build
+# ================================================================ src/state.gd
+# Estado compartido y constantes (lo usan varios módulos).
 const N := 128
 const CELL := 4.0
-const CH := 32
 const NCH := N / CH
 const REG := 32
 const NREG := N / REG
 const WATER_Y := -0.45
 const DAY_SECONDS := 90.0
-const DAYS_PER_SEASON := 10
-const YEAR_DAYS := 40
 const SEASONS := ["Verano", "Otoño", "Invierno", "Primavera"]
-const SAVE_VERSION := 1
 const T_LAND := 0
 const T_WATER := 1
 const T_SAND := 2
 const T_ROCK := 3
-const ROAD_NAMES := ["", "Tierra", "Calle", "Avenida", "Autopista"]
 const ROAD_COST := [0, 5, 12, 30, 70]
-const ROAD_UPK := [0.0, 0.03, 0.08, 0.2, 0.5]
-const RCAP := [0, 60, 170, 400, 850]
-const ROUND_CAP := 520
 const Z_R := 1
 const Z_C := 2
 const Z_I := 3
 const Z_M := 4
-const ZONE_NAMES := ["", "Residencial", "Comercial", "Industrial", "Mixta"]
 const ZONE_COST := 4
-const CAP_R := [0, 6, 14, 30, 64]
 const CAP_C := [0, 5, 12, 26, 56]
 const CAP_I := [0, 8, 18, 34, 60]
-const CAP_MR := [0, 4, 10, 22, 48]
-const CAP_MJ := [0, 3, 6, 12, 24]
 const W_POWER := 1
 const W_PIPE := 2
 const W_BIKE := 4
@@ -47,7 +39,6 @@ const CV_PARK := 6
 const CV_TRANSIT := 7
 const CV_GARB := 8
 const NCV := 9
-const DEPTS := ["Policía", "Bomberos", "Salud", "Educación", "Parques", "Transporte", "Basura"]
 const STAGES := [
 	["Pueblo", 0], ["Villa", 150], ["Ciudad chica", 400], ["Ciudad", 1000],
 	["Ciudad grande", 2500], ["Metrópolis chica", 6000], ["Metrópolis", 12000],
@@ -112,7 +103,6 @@ const CATS := [
 	["roads", "Calles"], ["zones", "Zonas"], ["serv", "Servicios"],
 	["infra", "Infra"], ["work", "Trabajo"], ["fun", "Ocio"], ["quit", "Quitar"],
 ]
-const DISTRICT_RULES := ["Sin regla", "Densa", "Verde", "Tranquila", "24 horas"]
 const DISTRICT_NAMES := [
 	"Barrio Norte", "Villa del Parque", "La Loma", "El Bajo",
 	"San Telmo Chico", "Los Aromos", "Villa Sol", "Las Acacias",
@@ -149,15 +139,6 @@ const PROMISES := [
 	["Bajar el crimen", "crime"], ["Más espacios verdes", "park"], ["Que no se corte la luz", "power"],
 	["Menos tránsito", "traffic"], ["Más trabajo", "jobs"],
 ]
-const REQUESTS := [
-	["una plaza cerca", CV_PARK], ["más policía", CV_POL], ["una salita", CV_HEALTH],
-	["una escuela", CV_EDU1], ["un colectivo", CV_TRANSIT], ["bomberos cerca", CV_FIRE],
-]
-const FIRST_NAMES := ["Marta", "Juan", "Lucía", "Diego", "Sofía", "Carlos", "Valentina", "Martín", "Camila", "Jorge", "Florencia", "Pablo", "Rocío", "Nicolás", "Julieta", "Lionel", "Ana", "Gustavo", "Belén", "Facundo"]
-const LAST_NAMES := ["González", "Rodríguez", "Gómez", "Fernández", "López", "Díaz", "Martínez", "Pérez", "Romero", "Sosa", "Álvarez", "Torres", "Ruiz", "Ramírez", "Flores", "Benítez", "Acosta", "Medina"]
-const STREET_NAMES := ["San Martín", "Belgrano", "Rivadavia", "Sarmiento", "Mitre", "Moreno", "Alvear", "Güemes", "Lavalle", "Pueyrredón", "Corrientes", "Mendoza", "Tucumán", "Córdoba", "Entre Ríos", "Santa Fe", "Las Heras", "Urquiza", "Alberdi", "Brown", "Dorrego", "Castelli", "Paso", "French"]
-const NEIGHBOR_CITIES := ["San Ramón", "Villa Esperanza", "Puerto Grande"]
-const MAP_KINDS := ["Río", "Lago", "Costa", "Islas", "Llanura"]
 const SCENARIOS := [
 	{"n": "Libre", "d": "Construí la ciudad que quieras."},
 	{"n": "Crisis energética", "d": "Sin usinas a carbón. Llegá a 2500 habitantes con toda la ciudad con luz antes del día 60."},
@@ -280,8 +261,6 @@ var test_city: bool = false
 var wind := Vector2(1, 0)
 var mods := {"hp": 0.0, "crime": 0.0, "pol": 0.0, "edu": 0.0, "tour": 0.0, "days": 0}
 var no_fire_days: int = 0
-var trips_total: int = 0
-var trips_green: int = 0
 var avg_happy: float = 0.6
 var avg_commute: float = 0.0
 var last_net: float = 0.0
@@ -294,6 +273,118 @@ var opts := {
 	"colorblind": false, "calm": false, "lefty": false, "vibrate": true, "intro": true, "g_shadow": true, "g_water": true, "g_fog": true, "g_dyn": true, "g_wind": true, "g_rain": true, "g_ao": true, "g_detail": true, "g_clouds": true, "g_grass": true, "g_grade": true, "g_audio": true, "g_music": true, "autoround": true,
 	"idle30": true, "tutorial_done": false,
 }
+const M_BOX := 0
+const M_ROOF := 1
+const M_CYL := 2
+const M_SPH := 3
+const M_CONE := 4
+const NMESH := 9
+var meshes: Array = []
+var chunk_dirty := PackedByteArray()
+var _bufs: Array = []
+var _counts := PackedInt32Array()
+var preview_node: MultiMeshInstance3D
+var sun: DirectionalLight3D
+var night: float = 0.0
+var hour: float = 8.0
+var view_mode: String = ""
+var terrain_dirty: bool = true
+var built_season: int = -1
+var anim_cells := {}
+var lamps := {}
+var cam: Camera3D
+var cam_target := Vector3.ZERO
+var cam_goal := Vector3.ZERO
+var cam_yaw: float = 0.6
+var cam_pitch: float = 0.85
+var cam_dist: float = 150.0
+var cam_dist_goal: float = 150.0
+var cam_follow = null
+var cam_moving_t: float = 0.0
+var intro_t: float = -1.0
+var tool := {"k": "look"}
+var touches := {}
+var drag_a: int = -1
+var drag_b: int = -1
+var stops := {}
+var line_edit := {}
+var sim_dirty: bool = true
+const LINE_COST := {"bus": 200, "tram": 600, "metro": 2000, "train": 1500, "ferry": 800}
+const LINE_NAMES := {"bus": "Colectivo", "tram": "Tranvía", "metro": "Subte", "train": "Tren", "ferry": "Ferry"}
+var finger_pos: Vector2 = Vector2.ZERO
+var drag_acc: float = 0.0
+var sim_stage: int = -1
+var zone_list := PackedInt32Array()
+var anchors: Array = []
+var comp := PackedInt32Array()
+var unemployment: float = 0.0
+var trade_ok: bool = false
+var commute := PackedFloat32Array()
+var car_paths: Array = []
+var power_frac: float = 1.0
+var water_frac: float = 1.0
+var last_budget := {}
+var classes := [0, 0, 0]
+var green_power: float = 0.0
+var hp_bonus: float = 0.0
+const WHY_TEXT := ["", "contaminación", "inseguridad", "cortes de luz", "falta de agua", "basura en la calle", "mucho tránsito", "falta de salud", "falta de escuelas", "impuestos altos", "falta de trabajo", "falta de verde", "inundación o incendio"]
+var dyn_nodes: Array = []
+var cars: Array = []
+var peds: Array = []
+var svc: Array = []
+var boats: Array = []
+var planes: Array = []
+var parts: Array = []
+var line_labels: Array = []
+var drive = null
+var drive_turn: int = 0
+var follow_ped = null
+var follow_info := {}
+var stars: Array = []
+var downs: Array = []
+var movie_on: int = -1
+var cine_next_day: int = 0
+var ui_scale: float = 1.0
+var notif_panel: PanelContainer
+var notif_busy: bool = false
+var tray_sc: ScrollContainer
+var build_btn: Button
+var fan_btns: Array = []
+var fan_open: bool = false
+var fan_hold: bool = false
+var fan_hover: String = ""
+var top_money: Label
+var tray: HBoxContainer
+var cat_bar: HBoxContainer
+var cur_cat: String = ""
+var sheet: PanelContainer
+var sheet_body: VBoxContainer
+var sheet_name: String = ""
+var info_panel: PanelContainer
+var card_panel: PanelContainer
+var card_title: Label
+var card_text: Label
+var card_btns: HBoxContainer
+var card_queue: Array = []
+var mode_bar: PanelContainer
+var photo_mode: bool = false
+const COL_BTN_HI := Color(0.45, 0.33, 0.23, 1.0)
+var prev_crumb: String = ""
+var new_opts := {"name": "Mi ciudad", "map": 0, "scen": 0, "creative": false, "story": true, "tut": false}
+var sounds := {}
+var test_mode: String = ""
+# ================================================================ src/world.gd
+# El mapa: celdas, terreno, generación y utilidades.
+const DAYS_PER_SEASON := 10
+const YEAR_DAYS := 40
+const RCAP := [0, 60, 170, 400, 850]
+const ROUND_CAP := 520
+const CAP_R := [0, 6, 14, 30, 64]
+const CAP_MR := [0, 4, 10, 22, 48]
+const FIRST_NAMES := ["Marta", "Juan", "Lucía", "Diego", "Sofía", "Carlos", "Valentina", "Martín", "Camila", "Jorge", "Florencia", "Pablo", "Rocío", "Nicolás", "Julieta", "Lionel", "Ana", "Gustavo", "Belén", "Facundo"]
+const LAST_NAMES := ["González", "Rodríguez", "Gómez", "Fernández", "López", "Díaz", "Martínez", "Pérez", "Romero", "Sosa", "Álvarez", "Torres", "Ruiz", "Ramírez", "Flores", "Benítez", "Acosta", "Medina"]
+const STREET_NAMES := ["San Martín", "Belgrano", "Rivadavia", "Sarmiento", "Mitre", "Moreno", "Alvear", "Güemes", "Lavalle", "Pueyrredón", "Corrientes", "Mendoza", "Tucumán", "Córdoba", "Entre Ríos", "Santa Fe", "Las Heras", "Urquiza", "Alberdi", "Brown", "Dorrego", "Castelli", "Paso", "French"]
+const NEIGHBOR_CITIES := ["San Ramón", "Villa Esperanza", "Puerto Grande"]
 func idx(x: int, z: int) -> int:
 	return z * N + x
 func inb(x: int, z: int) -> bool:
@@ -541,1029 +632,14 @@ func init_neighbors() -> void:
 	neighbors.clear()
 	for n in NEIGHBOR_CITIES:
 		neighbors.append({"n": n, "rel": 50.0})
-const M_BOX := 0
-const M_ROOF := 1
-const M_CYL := 2
-const M_SPH := 3
-const M_CONE := 4
-const M_CORNER := 5
-const M_GRASS := 6
-const M_GABLE := 7
-const M_HIP := 8
-const NMESH := 9
-const MESH_CENTERED := [true, true, true, true, true, false, true, false, false]
-var meshes: Array = []
-var city_mat: ShaderMaterial
-var water_mat: ShaderMaterial
-var overlay_mat: ShaderMaterial
-var terrain_mat: ShaderMaterial
-var cloud_mat: ShaderMaterial
-var cloud_node: MeshInstance3D
-var dtex: ImageTexture
-var ctex: ImageTexture
-var terrain_node: MeshInstance3D
-var water_node: MeshInstance3D
-var chunk_nodes: Array = []
-var chunk_dirty := PackedByteArray()
-var _bufs: Array = []
-var _counts := PackedInt32Array()
-var overlay_node: MultiMeshInstance3D
-var preview_node: MultiMeshInstance3D
-var sun: DirectionalLight3D
-var moon: DirectionalLight3D
-var env: Environment
-var sky_mat: ProceduralSkyMaterial
-var night: float = 0.0
-var hour: float = 8.0
-var view_mode: String = ""
-var terrain_dirty: bool = true
-var built_season: int = -1
-var anim_cells := {}
-const SHADER_CITY := """
-shader_type spatial;
-uniform float night = 0.0;
-uniform float snow = 0.0;
-uniform float wet = 0.0;
-uniform float wind = 0.0;
-uniform float ao_on = 0.0;
-uniform vec4 hinfo = vec4(1.0, 0.0, 1.0, 0.0);
-uniform sampler2D hmap : filter_linear, repeat_disable;
-uniform sampler2D dtex : filter_linear_mipmap, repeat_enable;
-uniform sampler2D ctex : filter_linear, repeat_enable;
-uniform float det = 0.0;
-uniform float cshadow = 0.0;
-varying vec3 wpos;
-varying vec3 wnrm;
-varying vec4 cust;
-void vertex() {
-	if (INSTANCE_CUSTOM.w >= 2.0 && wind > 0.0) {
-		vec3 org = MODEL_MATRIX[3].xyz;
-		float sc = max(length(MODEL_MATRIX[0].xyz), 0.001);
-		float amp = (INSTANCE_CUSTOM.w - 2.0) * wind;
-		float k = clamp(VERTEX.y + 0.5, 0.0, 1.0);
-		float t = TIME * 1.7 + org.x * 0.35 + org.z * 0.27;
-		VERTEX.x += sin(t) * amp * k / sc;
-		VERTEX.z += cos(t * 0.83) * amp * 0.7 * k / sc;
-	}
-	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
-	cust = INSTANCE_CUSTOM;
-}
-float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-vec3 mirror(vec3 wp, vec3 n, vec3 cp, float nt) {
-	vec3 r = reflect(normalize(wp - cp), n);
-	vec3 sky = mix(vec3(0.82, 0.88, 0.95), vec3(0.32, 0.52, 0.85), clamp(r.y * 1.6, 0.0, 1.0));
-	sky = mix(sky, vec3(0.04, 0.06, 0.12), nt);
-	float a = atan(r.z, r.x) * 9.0;
-	float hb = 0.04 + 0.32 * hash(vec2(floor(a), 5.0));
-	vec3 bc = mix(vec3(0.42, 0.44, 0.48), vec3(0.03, 0.035, 0.05), nt);
-	bc += vec3(1.0, 0.8, 0.5) * nt * step(0.6, hash(floor(vec2(fract(a) * 6.0, r.y * 60.0)))) * 0.6;
-	return mix(sky, bc, step(r.y, hb));
-}
-void fragment() {
-	vec3 col = COLOR.rgb;
-	float rough = 0.85;
-	vec3 emit = vec3(0.0);
-	float metal0 = 0.0;
-	if (cust.w < -0.5) {
-		int mi = int(-cust.w + 0.5);
-		vec2 tt = length(wnrm.xz) > 0.15 ? normalize(vec2(-wnrm.z, wnrm.x)) : vec2(1.0, 0.0);
-		bool side = abs(wnrm.y) < 0.75;
-		vec2 mu = (side || mi == 4) ? vec2(dot(wpos.xz, tt), wpos.y) : wpos.xz;
-		float fw = clamp(1.0 - max(fwidth(mu.x), fwidth(mu.y)) * 3.0, 0.0, 1.0);
-		if (mi == 1) {
-			if (side) {
-				float row = floor(mu.y / 0.17);
-				float bxp = (mu.x + mod(row, 2.0) * 0.21) / 0.42;
-				vec2 bf = vec2(fract(bxp), fract(mu.y / 0.17));
-				col *= 0.8 + 0.34 * hash(vec2(floor(bxp), row)) * fw + 0.17 * (1.0 - fw);
-				col = mix(col, vec3(0.7, 0.66, 0.6), max(step(bf.x, 0.07), step(bf.y, 0.15)) * 0.7 * fw);
-			}
-			rough = 0.95;
-		} else if (mi == 2) {
-			float sl = mu.x / 0.15;
-			col *= (0.8 + 0.32 * hash(vec2(floor(sl), 1.0))) * (0.93 + 0.07 * sin(mu.y * 11.0 + floor(sl) * 3.0));
-			col *= 1.0 - step(0.86, fract(sl)) * 0.6 * fw;
-			rough = 0.7;
-		} else if (mi == 3) {
-			vec2 pc = mu / vec2(1.6, 0.9);
-			vec2 pf = fract(pc);
-			col *= 0.9 + 0.12 * hash(floor(pc));
-			col *= 1.0 - max(step(pf.x, 0.02), step(pf.y, 0.035)) * 0.28 * fw;
-			rough = 0.92;
-		} else if (mi == 4) {
-			vec2 tc = mu / vec2(0.32, 0.2);
-			vec2 tf = fract(tc);
-			float tl = (0.72 + 0.38 * sin(tf.x * 3.14159)) * (0.78 + 0.22 * tf.y) * (0.9 + 0.2 * hash(floor(tc)));
-			col *= mix(0.92, tl, fw);
-			rough = 0.8;
-		} else if (mi == 5) {
-			col *= 1.0 - step(0.5, fract(mu.x / 0.16)) * 0.3 * fw;
-			rough = 0.62;
-			metal0 = 0.12;
-		} else if (mi == 6 || mi == 8) {
-			if (side) {
-				float fin;
-				vec3 fincol;
-				if (mi == 6) {
-					float fl = fract(mu.x / 0.24);
-					fin = step(fl, 0.68);
-					fincol = col * (0.8 + 0.4 * sin(fl / 0.68 * 3.14159));
-				} else {
-					vec2 mf = fract(mu / vec2(1.2, 2.6));
-					fin = max(step(mf.x, 0.04), step(mf.y, 0.03));
-					fincol = vec3(0.06);
-				}
-				fin = mix(0.55, fin, fw);
-				vec3 glass = mi == 8 ? mirror(wpos, wnrm, CAMERA_POSITION_WORLD, night) * 0.85 : vec3(0.1, 0.085, 0.075);
-				float litw = step(0.4, hash(floor(mu / vec2(1.2, 1.3)) + floor(wpos.xz * 0.07)));
-				col = mix(glass, fincol, fin);
-				emit += vec3(1.0, 0.75, 0.45) * litw * night * (1.0 - fin) * (mi == 8 ? 1.1 : 0.8);
-				rough = mix(0.08, 0.7, fin);
-			}
-		} else if (mi == 7) {
-			vec2 sc = vec2(mu.x / 1.1 + mod(floor(mu.y / 0.55), 2.0) * 0.5, mu.y / 0.55);
-			vec2 sf = fract(sc);
-			col *= 0.92 + 0.12 * hash(floor(sc));
-			col *= 1.0 - max(step(sf.x, 0.02), step(sf.y, 0.04)) * 0.2 * fw;
-			rough = 0.75;
-		}
-	}
-	if (cust.x > 0.0 && abs(wnrm.y) < 0.3) {
-		vec2 t = normalize(vec2(-wnrm.z, wnrm.x));
-		vec2 uv = vec2(dot(wpos.xz, t), wpos.y);
-		vec2 cell = vec2(uv.x / 1.15, (uv.y - 0.3) / 1.25);
-		vec2 f = fract(cell);
-		float outer = step(0.1, f.x) * step(f.x, 0.9) * step(0.12, f.y) * step(f.y, 0.88);
-		float wm = cust.x >= 1.25 ? 0.06 : 0.18;
-		float wv = cust.x >= 1.25 ? 0.1 : 0.22;
-		float win = step(wm, f.x) * step(f.x, 1.0 - wm) * step(wv, f.y) * step(f.y, 1.0 - wv);
-		if (win > 0.5) {
-			float gk = smoothstep(0.0, 1.0, f.y);
-			vec3 glass = mix(vec3(0.13, 0.2, 0.3), vec3(0.5, 0.64, 0.78), gk * gk) * (1.0 - night * 0.75);
-			glass += vec3(0.16) * smoothstep(0.16, 0.0, abs(f.x - f.y * 0.7 - 0.12)) * (1.0 - night);
-			if (cust.x >= 1.25) { glass = mix(glass, mirror(wpos, wnrm, CAMERA_POSITION_WORLD, night) * mix(vec3(1.0), COLOR.rgb * 1.5, 0.35), 0.75); }
-			float bl = hash(floor(cell) + 3.7);
-			if (bl > 0.72 && f.y > 0.5 - 0.3 * hash(floor(cell) + 9.1)) { glass = mix(glass, vec3(0.78, 0.74, 0.66) * (1.0 - night * 0.7), 0.75); }
-			col = mix(col, glass, 0.88 * min(cust.x, 1.0));
-			rough = 0.18;
-			float lit = step(0.5, hash(floor(cell) + floor(wpos.xz * 0.11)));
-			if (bl > 0.72 && f.y > 0.55) { lit *= 0.45; }
-			vec3 wc = mix(vec3(1.0, 0.78, 0.45), vec3(0.72, 0.86, 1.0), step(0.82, hash(floor(cell) + 7.3)));
-			emit += wc * lit * night * 1.15;
-		} else if (outer > 0.5) {
-			col *= f.y < 0.22 ? 1.1 : 0.72;
-		} else if (f.y > 0.93 || f.y < 0.05) {
-			col *= 0.86;
-		}
-	}
-	if (cust.y > 0.0) { emit += COLOR.rgb * cust.y * (0.15 + night * 2.0); }
-	if (cust.z > 0.0) { emit += COLOR.rgb * cust.z; }
-	if (det > 0.0 && cust.y <= 0.0 && cust.z <= 0.0 && cust.w > -0.5) {
-		vec2 uvd = abs(wnrm.y) > 0.5 ? wpos.xz * 0.8 : vec2(wpos.x + wpos.z, wpos.y) * 0.8;
-		float gr = texture(dtex, uvd).r;
-		col *= 0.93 + 0.14 * gr;
-		if (abs(wnrm.y) > 0.5) { col *= 0.93 + 0.14 * gr; }
-		rough = clamp(rough + (gr - 0.5) * 0.25, 0.3, 1.0);
-	}
-	if (abs(wnrm.y) < 0.5 && cust.x > 0.0) {
-		col *= mix(0.86, 1.05, clamp(wpos.y / 22.0, 0.0, 1.0));
-	}
-	if (snow > 0.0 && wnrm.y > 0.7 && (cust.w < 0.5 || cust.w >= 2.0)) { col = mix(col, vec3(0.94, 0.95, 1.0), snow); }
-	if (wnrm.y > 0.7) {
-		float lum = dot(col, vec3(0.33, 0.33, 0.33));
-		if (lum < 0.3 && cust.x <= 0.0) {
-			// asfalto: algo de brillo, más con lluvia
-			rough = mix(0.82, 0.14, wet);
-			col *= 1.0 - 0.25 * wet;
-		} else if (cust.x <= 0.0) {
-			rough = mix(0.9, 0.5, wet);
-		}
-	}
-	if (cshadow > 0.0 && wnrm.y > 0.3) {
-		col *= 1.0 - cshadow * 0.3 * smoothstep(0.5, 0.7, texture(ctex, wpos.xz * 0.0045 + vec2(TIME * 0.012, TIME * 0.006)).r);
-	}
-	if (ao_on > 0.0 && abs(wnrm.y) < 0.6) {
-		float g = texture(hmap, (wpos.xz + hinfo.y) / hinfo.x * hinfo.z + hinfo.w).r;
-		col *= mix(0.58, 1.0, smoothstep(0.0, 1.8, wpos.y - g));
-	}
-	float metal = metal0;
-	if (cust.w > 1.2 && cust.w < 1.8) {
-		rough = mix(0.22, 0.12, wet);
-		metal = 0.35;
-		float fr = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
-		col += vec3(0.5, 0.62, 0.8) * fr * 0.4 * (1.0 - night);
-		col += vec3(0.6) * step(0.965, hash(floor(wpos.xz * 22.0 + wpos.y * 11.0))) * wet * 0.5;
-	}
-	ALBEDO = col;
-	ROUGHNESS = rough;
-	METALLIC = metal;
-	SPECULAR = rough < 0.45 ? 0.5 : 0.12;
-	EMISSION = emit;
-}
-"""
-const SHADER_WATER := """
-shader_type spatial;
-uniform float night = 0.0;
-uniform vec4 hinfo = vec4(1.0, 0.0, 1.0, 0.0);
-uniform sampler2D hmap : filter_linear, repeat_disable;
-varying vec3 wpos;
-void vertex() {
-	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	VERTEX.y += sin(wpos.x * 0.21 + TIME * 1.1) * 0.06 + cos(wpos.z * 0.17 + TIME * 0.8) * 0.06;
-}
-void fragment() {
-	float gh = texture(hmap, (wpos.xz + hinfo.y) / hinfo.x * hinfo.z + hinfo.w).r;
-	float depth = max(-0.45 - gh, 0.0);
-	vec3 day = mix(vec3(0.2, 0.52, 0.55), vec3(0.07, 0.27, 0.45), smoothstep(0.0, 2.5, depth));
-	vec3 dark = vec3(0.02, 0.06, 0.13);
-	float foam = (1.0 - smoothstep(0.0, 0.55, depth)) * (0.55 + 0.45 * sin(TIME * 1.5 + wpos.x * 2.1 + wpos.z * 1.7));
-	ALBEDO = mix(day, dark, night) + vec3(foam) * 0.55 * (1.0 - night * 0.7);
-	// olas: dos capas de ondas que se cruzan y mueven la normal (sin tocar la malla)
-	vec2 p = wpos.xz;
-	float a1 = p.x * 0.55 + p.y * 0.31 + TIME * 0.9;
-	float a2 = p.x * -0.27 + p.y * 0.62 - TIME * 0.7;
-	float a3 = p.x * 1.3 - p.y * 1.1 + TIME * 1.6;
-	vec2 g = vec2(cos(a1) * 0.55 - cos(a2) * 0.27 + cos(a3) * 0.5, cos(a1) * 0.31 + cos(a2) * 0.62 - cos(a3) * 0.4);
-	NORMAL = normalize(NORMAL + vec3(g.x, 0.0, g.y) * 0.1);
-	float fres = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 3.0);
-	ALBEDO = mix(ALBEDO, ALBEDO * 1.25 + vec3(0.03, 0.06, 0.08), fres * (1.0 - night));
-	ROUGHNESS = 0.12;
-	SPECULAR = 0.5;
-	METALLIC = 0.1;
-}
-"""
-const SHADER_TERRAIN := """
-shader_type spatial;
-uniform sampler2D dtex : filter_linear_mipmap, repeat_enable;
-uniform sampler2D ctex : filter_linear, repeat_enable;
-uniform float det = 1.0;
-uniform float cshadow = 0.0;
-varying vec3 wpos;
-varying vec3 wnrm;
-void vertex() {
-	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
-}
-void fragment() {
-	vec3 col = COLOR.rgb;
-	float rough = 0.95;
-	if (det > 0.0) {
-		float n1 = texture(dtex, wpos.xz * 0.31).r;
-		float n2 = texture(dtex, wpos.xz * 0.043).r;
-		col *= (0.78 + 0.44 * n1) * (0.88 + 0.24 * n2);
-		float slope = smoothstep(0.86, 0.7, wnrm.y);
-		col = mix(col, vec3(0.42, 0.39, 0.35) * (0.8 + 0.4 * n1), slope * 0.8);
-		float wb = 1.0 - smoothstep(0.0, 0.7, wpos.y + 0.45);
-		col *= 1.0 - 0.35 * wb;
-		rough = mix(rough, 0.5, wb);
-	}
-	if (cshadow > 0.0) {
-		col *= 1.0 - cshadow * 0.3 * smoothstep(0.5, 0.7, texture(ctex, wpos.xz * 0.0045 + vec2(TIME * 0.012, TIME * 0.006)).r);
-	}
-	ALBEDO = col;
-	ROUGHNESS = rough;
-	SPECULAR = 0.1;
-}
-"""
-const SHADER_CLOUD := """
-shader_type spatial;
-render_mode unshaded, cull_disabled, depth_draw_never, blend_mix, fog_disabled;
-uniform sampler2D ctex : filter_linear_mipmap, repeat_enable;
-uniform float cover = 0.5;
-uniform float night = 0.0;
-varying vec3 wpos;
-void vertex() {
-	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-}
-void fragment() {
-	float n = texture(ctex, wpos.xz * 0.0016 + vec2(TIME * 0.004, TIME * 0.0015)).r;
-	float d = n;
-	float a = smoothstep(1.0 - cover, 1.0 - cover + 0.22, d);
-	float dist = length(wpos.xz - CAMERA_POSITION_WORLD.xz);
-	a *= 1.0 - smoothstep(350.0, 800.0, dist);
-	ALBEDO = mix(vec3(1.0, 1.0, 1.0) * (1.0 - cover * 0.25), vec3(0.08, 0.1, 0.17), night);
-	ALPHA = a * 0.85;
-}
-"""
-const SHADER_GLOW := """
-shader_type spatial;
-render_mode unshaded, blend_add, cull_disabled, depth_draw_never, fog_disabled;
-varying float kind;
-void vertex() {
-	kind = INSTANCE_CUSTOM.x;
-	if (kind > 1.5) {
-		VERTEX = vec3(VERTEX.x, VERTEX.z, 0.0) * INSTANCE_CUSTOM.y;
-		MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
-	}
-}
-void fragment() {
-	float a;
-	if (kind < 0.5) {
-		float al = UV.y;
-		float lon = (al - 0.42) / 0.34;
-		float lat = (UV.x - 0.5) / (0.1 + 0.32 * al);
-		a = exp(-lon * lon) * exp(-lat * lat * 1.6);
-	} else if (kind < 1.5) {
-		float r = length(UV - 0.5) * 2.0;
-		a = pow(clamp(1.0 - r, 0.0, 1.0), 2.0);
-	} else {
-		float r = length(UV - 0.5) * 2.0;
-		a = pow(clamp(1.0 - r, 0.0, 1.0), 2.4) + 0.5 * pow(clamp(1.0 - r * 4.0, 0.0, 1.0), 2.0);
-	}
-	ALBEDO = COLOR.rgb;
-	ALPHA = a * COLOR.a;
-}
-"""
-const SHADER_OVERLAY := """
-shader_type spatial;
-render_mode unshaded, cull_disabled, depth_draw_never, blend_mix;
-void fragment() {
-	ALBEDO = COLOR.rgb;
-	ALPHA = COLOR.a;
-}
-"""
-func setup_render() -> void:
-	meshes.clear()
-	var box := BoxMesh.new()
-	meshes.append(box)
-	var roof := PrismMesh.new()
-	meshes.append(roof)
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.5
-	cyl.bottom_radius = 0.5
-	cyl.height = 1.0
-	cyl.radial_segments = 12
-	cyl.rings = 1
-	meshes.append(cyl)
-	var sph := SphereMesh.new()
-	sph.radius = 0.5
-	sph.height = 1.0
-	sph.radial_segments = 10
-	sph.rings = 6
-	meshes.append(sph)
-	var cone := CylinderMesh.new()
-	cone.top_radius = 0.0
-	cone.bottom_radius = 0.5
-	cone.height = 1.0
-	cone.radial_segments = 8
-	cone.rings = 1
-	meshes.append(cone)
-	meshes.append(make_corner_mesh())
-	var gcone := CylinderMesh.new()
-	gcone.top_radius = 0.0
-	gcone.bottom_radius = 0.5
-	gcone.height = 1.0
-	gcone.radial_segments = 5
-	gcone.rings = 1
-	meshes.append(gcone)
-	meshes.append(make_gable_mesh())
-	meshes.append(make_hip_mesh())
-	city_mat = ShaderMaterial.new()
-	var sh := Shader.new()
-	sh.code = SHADER_CITY
-	city_mat.shader = sh
-	for m in meshes:
-		m.surface_set_material(0, city_mat)
-	water_mat = ShaderMaterial.new()
-	var sw := Shader.new()
-	sw.code = SHADER_WATER
-	water_mat.shader = sw
-	overlay_mat = ShaderMaterial.new()
-	var so := Shader.new()
-	so.code = SHADER_OVERLAY
-	overlay_mat.shader = so
-	dtex = make_noise_tex(0.045, 11, 4)
-	ctex = make_noise_tex(0.02, 29, 5)
-	terrain_mat = ShaderMaterial.new()
-	var st2 := Shader.new()
-	st2.code = SHADER_TERRAIN
-	terrain_mat.shader = st2
-	cloud_mat = ShaderMaterial.new()
-	var sc2 := Shader.new()
-	sc2.code = SHADER_CLOUD
-	cloud_mat.shader = sc2
-	for m in [city_mat, terrain_mat]:
-		m.set_shader_parameter("dtex", dtex)
-		m.set_shader_parameter("ctex", ctex)
-	cloud_mat.set_shader_parameter("ctex", ctex)
-	env = Environment.new()
-	env.background_mode = Environment.BG_SKY
-	var sky := Sky.new()
-	sky_mat = ProceduralSkyMaterial.new()
-	sky.sky_material = sky_mat
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 1.0
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 0.82
-	env.glow_hdr_threshold = 1.3
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.7, 0.78, 0.9)
-	env.fog_density = 0.0007
-	env.fog_sky_affect = 0.3
-	env.fog_height = 8.0
-	env.fog_height_density = 0.004
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-	sun = DirectionalLight3D.new()
-	sun.shadow_enabled = true
-	sun.shadow_blur = 1.6
-	sun.light_specular = 0.35
-	sun.directional_shadow_max_distance = 170.0
-	add_child(sun)
-	moon = DirectionalLight3D.new()
-	moon.light_color = Color(0.55, 0.65, 1.0)
-	moon.light_energy = 0.0
-	moon.rotation_degrees = Vector3(-60, 140, 0)
-	add_child(moon)
-	terrain_node = MeshInstance3D.new()
-	terrain_node.material_override = terrain_mat
-	add_child(terrain_node)
-	cloud_node = MeshInstance3D.new()
-	var cp := PlaneMesh.new()
-	cp.size = Vector2(1800, 1800)
-	cp.subdivide_width = 1
-	cp.subdivide_depth = 1
-	cloud_node.mesh = cp
-	cloud_node.material_override = cloud_mat
-	cloud_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	cloud_node.position = Vector3(0, 170, 0)
-	add_child(cloud_node)
-	water_node = MeshInstance3D.new()
-	var wp := PlaneMesh.new()
-	wp.size = Vector2(N * CELL * 5.0, N * CELL * 5.0)
-	wp.subdivide_width = 90
-	wp.subdivide_depth = 90
-	water_node.mesh = wp
-	water_node.material_override = water_mat
-	water_node.position = Vector3(0, WATER_Y, 0)
-	add_child(water_node)
-	overlay_node = new_mm_node(meshes[M_BOX], overlay_mat)
-	preview_node = new_mm_node(meshes[M_BOX], overlay_mat)
-	chunk_nodes.clear()
-	chunk_dirty.resize(NCH * NCH)
-	chunk_dirty.fill(1)
-	for c in NCH * NCH:
-		var arr: Array = []
-		for m in NMESH:
-			var node := new_mm_node(meshes[m], null)
-			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if m != M_GRASS else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			arr.append(node)
-		chunk_nodes.append(arr)
-	apply_quality()
-func new_mm_node(mesh: Mesh, mat: Material) -> MultiMeshInstance3D:
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.use_custom_data = true
-	mm.mesh = mesh
-	mm.instance_count = 0
-	var node := MultiMeshInstance3D.new()
-	node.multimesh = mm
-	if mat != null:
-		node.material_override = mat
-		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(node)
-	return node
-func make_corner_mesh() -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var seg := 8
-	for k in seg:
-		var a0 := k * PI * 0.5 / seg
-		var a1 := (k + 1) * PI * 0.5 / seg
-		var p0 := Vector3(cos(a0), 1, sin(a0))
-		var p1 := Vector3(cos(a1), 1, sin(a1))
-		st.set_normal(Vector3.UP)
-		st.add_vertex(Vector3(0, 1, 0))
-		st.add_vertex(p0)
-		st.add_vertex(p1)
-		var n := Vector3(cos((a0 + a1) * 0.5), 0, sin((a0 + a1) * 0.5))
-		st.set_normal(n)
-		st.add_vertex(Vector3(p0.x, 0, p0.z))
-		st.add_vertex(p1)
-		st.add_vertex(p0)
-		st.add_vertex(Vector3(p0.x, 0, p0.z))
-		st.add_vertex(Vector3(p1.x, 0, p1.z))
-		st.add_vertex(p1)
-	return st.commit()
-func make_noise_tex(freq: float, sd: int, oct: int) -> ImageTexture:
-	var fn := FastNoiseLite.new()
-	fn.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	fn.fractal_type = FastNoiseLite.FRACTAL_FBM
-	fn.fractal_octaves = oct
-	fn.frequency = freq
-	fn.seed = sd
-	var im := fn.get_seamless_image(256, 256)
-	im.generate_mipmaps()
-	return ImageTexture.create_from_image(im)
-var water_simple_mat: StandardMaterial3D
-func apply_quality() -> void:
-	var q: int = opts["quality"]
-	RenderingServer.directional_shadow_atlas_set_size(2048 if q < 2 else 4096, true)
-	if sun:
-		sun.shadow_enabled = q >= 1 and opts["g_shadow"]
-	if env:
-		env.fog_enabled = opts["g_fog"]
-	if water_node:
-		if opts["g_water"]:
-			water_node.material_override = water_mat
-		else:
-			if water_simple_mat == null:
-				water_simple_mat = StandardMaterial3D.new()
-				water_simple_mat.albedo_color = Color(0.12, 0.38, 0.52)
-				water_simple_mat.roughness = 0.2
-			water_node.material_override = water_simple_mat
-	for nd in dyn_nodes:
-		nd.visible = opts["g_dyn"]
-	if sun:
-		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL if q < 2 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	if env:
-		env.glow_enabled = q >= 2
-		env.glow_intensity = 0.6
-		env.glow_bloom = 0.05
-	var vp := get_viewport()
-	if vp:
-		vp.scaling_3d_scale = [0.8, 1.0, 1.0][q]
-		vp.msaa_3d = Viewport.MSAA_2X if q >= 2 else Viewport.MSAA_DISABLED
-	apply_fx()
-var wfx: GPUParticles3D
-var wfx_kind: String = ""
-var wfx_r: float = 0.0
-var vig_layer: CanvasLayer
-var cloud_cover: float = -1.0
-func apply_fx() -> void:
-	if city_mat == null:
-		return
-	city_mat.set_shader_parameter("wind", 1.0 if opts["g_wind"] else 0.0)
-	city_mat.set_shader_parameter("ao_on", 1.0 if opts["g_ao"] else 0.0)
-	var dt: float = 1.0 if opts["g_detail"] else 0.0
-	city_mat.set_shader_parameter("det", dt)
-	terrain_mat.set_shader_parameter("det", dt)
-	cloud_node.visible = opts["g_clouds"]
-	cloud_cover = -1.0
-	env.adjustment_enabled = opts["g_grade"]
-	env.adjustment_saturation = 1.03
-	env.adjustment_contrast = 1.05
-	if vig_layer == null:
-		vig_layer = CanvasLayer.new()
-		vig_layer.layer = 2
-		var gt := GradientTexture2D.new()
-		var gr := Gradient.new()
-		gr.offsets = PackedFloat32Array([0.5, 0.7, 0.85, 1.0])
-		gr.colors = PackedColorArray([Color(0, 0, 0, 0), Color(0.03, 0.02, 0.05, 0.04), Color(0.03, 0.02, 0.05, 0.16), Color(0.03, 0.02, 0.05, 0.36)])
-		gt.gradient = gr
-		gt.fill = GradientTexture2D.FILL_RADIAL
-		gt.fill_from = Vector2(0.5, 0.5)
-		gt.fill_to = Vector2(1.0, 0.5)
-		gt.width = 128
-		gt.height = 128
-		var tr := TextureRect.new()
-		tr.texture = gt
-		tr.set_anchors_preset(Control.PRESET_FULL_RECT)
-		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tr.stretch_mode = TextureRect.STRETCH_SCALE
-		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		vig_layer.add_child(tr)
-		add_child(vig_layer)
-	vig_layer.visible = opts["g_grade"]
-func make_wfx() -> void:
-	wfx = GPUParticles3D.new()
-	wfx.visibility_aabb = AABB(Vector3(-140, -50, -140), Vector3(280, 80, 280))
-	wfx.local_coords = false
-	wfx.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(wfx)
-func config_wfx(kind: String) -> void:
-	var pm := ParticleProcessMaterial.new()
-	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	pm.emission_box_extents = Vector3(60, 1, 60)
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	if kind == "rain":
-		pm.direction = Vector3(0.12, -1.0, 0.05)
-		pm.spread = 1.5
-		pm.initial_velocity_min = 34.0
-		pm.initial_velocity_max = 40.0
-		pm.gravity = Vector3.ZERO
-		var bm := BoxMesh.new()
-		bm.size = Vector3(0.025, 1.2, 0.025)
-		mat.albedo_color = Color(0.82, 0.88, 1.0, 0.4)
-		bm.material = mat
-		wfx.draw_pass_1 = bm
-		wfx.amount = 1800
-		wfx.lifetime = 1.0
-	else:
-		pm.direction = Vector3(0.1, -1.0, 0.0)
-		pm.spread = 28.0
-		pm.initial_velocity_min = 2.5
-		pm.initial_velocity_max = 4.5
-		pm.gravity = Vector3.ZERO
-		pm.scale_min = 0.6
-		pm.scale_max = 1.4
-		var sm := SphereMesh.new()
-		sm.radius = 0.09
-		sm.height = 0.18
-		sm.radial_segments = 6
-		sm.rings = 3
-		mat.albedo_color = Color(1, 1, 1, 0.9)
-		sm.material = mat
-		wfx.draw_pass_1 = sm
-		wfx.amount = 1500
-		wfx.lifetime = 9.0
-	wfx.process_material = pm
-	wfx.preprocess = wfx.lifetime
-	wfx_r = 0.0
-func update_fx() -> void:
-	if cloud_node.visible:
-		cloud_node.position = Vector3(cam_target.x, 170.0, cam_target.z)
-		var cv := 0.45
-		if weather == "Nublado":
-			cv = 0.85
-		elif weather == "Lluvia" or weather == "Tormenta" or weather == "Nieve":
-			cv = 0.95
-		if cv != cloud_cover:
-			cloud_cover = cv
-			cloud_mat.set_shader_parameter("cover", cv)
-			city_mat.set_shader_parameter("cshadow", cv)
-			terrain_mat.set_shader_parameter("cshadow", cv)
-	elif cloud_cover != 0.0:
-		cloud_cover = 0.0
-		city_mat.set_shader_parameter("cshadow", 0.0)
-		terrain_mat.set_shader_parameter("cshadow", 0.0)
-	var want := ""
-	if opts["g_rain"] and opts["quality"] >= 1 and started:
-		if weather == "Lluvia" or weather == "Tormenta":
-			want = "rain"
-		elif weather == "Nieve":
-			want = "snow"
-	if want != wfx_kind:
-		wfx_kind = want
-		if want != "":
-			if wfx == null:
-				make_wfx()
-			config_wfx(want)
-		if wfx:
-			wfx.emitting = want != ""
-	if wfx and wfx.emitting:
-		wfx.global_position = Vector3(cam_target.x, 32.0, cam_target.z)
-		var r := clampf(cam_dist * 0.9, 30.0, 110.0)
-		if absf(r - wfx_r) > 5.0:
-			wfx_r = r
-			(wfx.process_material as ParticleProcessMaterial).emission_box_extents = Vector3(r, 1, r)
-func build_terrain() -> void:
-	terrain_dirty = false
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var s := season()
-	var grass: Color = [Color(0.42, 0.62, 0.28), Color(0.58, 0.55, 0.28), Color(0.62, 0.66, 0.6), Color(0.45, 0.68, 0.32)][s]
-	if weather == "Nieve":
-		grass = Color(0.9, 0.92, 0.95)
-	var half := N * CELL * 0.5
-	var vh := PackedFloat32Array()
-	vh.resize((N + 1) * (N + 1))
-	var vc := PackedColorArray()
-	vc.resize((N + 1) * (N + 1))
-	for z in N + 1:
-		for x in N + 1:
-			var hs := 0.0
-			var cnt := 0
-			var col := Color(0, 0, 0)
-			for o in [Vector2i(-1, -1), Vector2i(0, -1), Vector2i(-1, 0), Vector2i(0, 0)]:
-				var xx: int = x + o.x
-				var zz: int = z + o.y
-				if inb(xx, zz):
-					var i := idx(xx, zz)
-					hs += hgt[i]
-					cnt += 1
-					col += terrain_color(i, grass)
-			vh[z * (N + 1) + x] = hs / maxf(cnt, 1)
-			vc[z * (N + 1) + x] = col / maxf(cnt, 1)
-	for z in N:
-		for x in N:
-			var a := z * (N + 1) + x
-			var b := a + 1
-			var c := a + N + 1
-			var d := c + 1
-			var pa := Vector3(x * CELL - half, vh[a], z * CELL - half)
-			var pb := Vector3((x + 1) * CELL - half, vh[b], z * CELL - half)
-			var pc := Vector3(x * CELL - half, vh[c], (z + 1) * CELL - half)
-			var pd := Vector3((x + 1) * CELL - half, vh[d], (z + 1) * CELL - half)
-			st.set_color(vc[a]); st.add_vertex(pa)
-			st.set_color(vc[b]); st.add_vertex(pb)
-			st.set_color(vc[d]); st.add_vertex(pd)
-			st.set_color(vc[a]); st.add_vertex(pa)
-			st.set_color(vc[d]); st.add_vertex(pd)
-			st.set_color(vc[c]); st.add_vertex(pc)
-	var himg := Image.create(N + 1, N + 1, false, Image.FORMAT_RH)
-	for z in N + 1:
-		for x in N + 1:
-			himg.set_pixel(x, z, Color(vh[z * (N + 1) + x], 0.0, 0.0))
-	var htex := ImageTexture.create_from_image(himg)
-	city_mat.set_shader_parameter("hmap", htex)
-	water_mat.set_shader_parameter("hmap", htex)
-	water_mat.set_shader_parameter("hinfo", Vector4(N * CELL, half, float(N) / float(N + 1), 0.5 / float(N + 1)))
-	city_mat.set_shader_parameter("hinfo", Vector4(N * CELL, half, float(N) / float(N + 1), 0.5 / float(N + 1)))
-	st.generate_normals()
-	terrain_node.mesh = st.commit()
-	build_outer(grass)
-func terrain_color(i: int, grass: Color) -> Color:
-	var c: Color
-	match terr[i]:
-		T_WATER:
-			c = Color(0.55, 0.5, 0.38)
-		T_SAND:
-			c = Color(0.86, 0.78, 0.55)
-		T_ROCK:
-			c = Color(0.5, 0.48, 0.44)
-		_:
-			var v := float((cx(i) * 13 + cz(i) * 7) % 5) * 0.012
-			c = grass + Color(v, v, -v)
-	if not is_owned(i):
-		c = c.darkened(0.28)
-	return c
-var outer_nodes: Array = []
-func build_outer(grass: Color) -> void:
-	for n in outer_nodes:
-		n.queue_free()
-	outer_nodes.clear()
-	var size := N * CELL
-	var sides := [[Vector2i(-1, 0), 0], [Vector2i(1, 0), 0], [Vector2i(0, -1), 0], [Vector2i(0, 1), 0]]
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = grass.darkened(0.12)
-	mat.roughness = 1.0
-	for sd in sides:
-		var dir: Vector2i = sd[0]
-		var water := 0
-		for k in N:
-			var x := 0
-			var z := 0
-			if dir.x != 0:
-				x = 0 if dir.x < 0 else N - 1
-				z = k
-			else:
-				z = 0 if dir.y < 0 else N - 1
-				x = k
-			if terr[idx(x, z)] == T_WATER:
-				water += 1
-		if water > N / 3:
-			continue
-		var m := MeshInstance3D.new()
-		var pm := PlaneMesh.new()
-		pm.size = Vector2(size * 2.0, size * 2.0) if dir.x != 0 else Vector2(size, size * 2.0)
-		m.mesh = pm
-		m.material_override = mat
-		m.position = Vector3(dir.x * size * 1.5, -0.05, dir.y * size * 1.5)
-		if dir.y != 0:
-			pm.size = Vector2(size * 4.0, size * 2.0)
-		add_child(m)
-		outer_nodes.append(m)
-		for h in 4:
-			var hill := MeshInstance3D.new()
-			var sm := SphereMesh.new()
-			sm.radius = 1.0
-			sm.height = 2.0
-			hill.mesh = sm
-			var hm := StandardMaterial3D.new()
-			hm.albedo_color = grass.darkened(0.25).lerp(Color(0.5, 0.6, 0.7), 0.3)
-			hill.material_override = hm
-			var off := (h - 1.5) * size * 0.55
-			var p := Vector3(dir.x * size * 1.4, -6.0, dir.y * size * 1.4)
-			if dir.x != 0:
-				p.z = off
-			else:
-				p.x = off
-			hill.position = p
-			hill.scale = Vector3(size * 0.35, 30.0 + h * 6.0, size * 0.3)
-			add_child(hill)
-			outer_nodes.append(hill)
-func mark_dirty(i: int) -> void:
-	var x := cx(i)
-	var z := cz(i)
-	for o in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		var xx: int = clampi(x + o.x * 2, 0, N - 1)
-		var zz: int = clampi(z + o.y * 2, 0, N - 1)
-		chunk_dirty[(zz / CH) * NCH + xx / CH] = 1
-func mark_all_dirty() -> void:
-	chunk_dirty.fill(1)
-func update_chunks(max_n: int) -> void:
-	var done := 0
-	for c in NCH * NCH:
-		if chunk_dirty[c] == 1:
-			chunk_dirty[c] = 0
-			build_chunk(c)
-			done += 1
-			if done >= max_n:
-				return
-func build_chunk(c: int) -> void:
-	begin_buf()
-	var x0 := (c % NCH) * CH
-	var z0 := (c / NCH) * CH
-	for z in range(z0, z0 + CH):
-		for x in range(x0, x0 + CH):
-			emit_cell(idx(x, z))
-	var nodes: Array = chunk_nodes[c]
-	for m in NMESH:
-		var node: MultiMeshInstance3D = nodes[m]
-		var mm := node.multimesh
-		mm.instance_count = _counts[m]
-		if _counts[m] > 0:
-			mm.buffer = _bufs[m].slice(0, _counts[m] * 20)
-func begin_buf() -> void:
-	_counts.resize(NMESH)
-	_counts.fill(0)
-	while _bufs.size() < NMESH:
-		var pb := PackedFloat32Array()
-		pb.resize(2000)
-		_bufs.append(pb)
-func em(m: int, x: float, y: float, z: float, sx: float, sy: float, sz: float, rot: float, col: Color, c0: float = 0.0, c1: float = 0.0, c2: float = 0.0, c3: float = 0.0) -> void:
-	var c := cos(rot)
-	var s := sin(rot)
-	var oy := y + (sy * 0.5 if MESH_CENTERED[m] else 0.0)
-	var o: int = _counts[m] * 20
-	var b: PackedFloat32Array = _bufs[m]
-	if o + 20 > b.size():
-		b.resize(maxi(b.size() * 2, 2000))
-		_bufs[m] = b
-	b[o] = c * sx
-	b[o + 2] = s * sz
-	b[o + 3] = x
-	b[o + 5] = sy
-	b[o + 7] = oy
-	b[o + 8] = -s * sx
-	b[o + 10] = c * sz
-	b[o + 11] = z
-	b[o + 12] = col.r
-	b[o + 13] = col.g
-	b[o + 14] = col.b
-	b[o + 15] = col.a
-	b[o + 16] = c0
-	b[o + 17] = c1
-	b[o + 18] = c2
-	b[o + 19] = c3
-	b[o + 1] = 0.0
-	b[o + 4] = 0.0
-	b[o + 6] = 0.0
-	b[o + 9] = 0.0
-	_counts[m] += 1
 func hsh(i: int, k: int) -> float:
 	var v := (i * 73856093) ^ (k * 19349663)
 	v = (v ^ (v >> 13)) * 1274126177
 	return float(v & 0xffff) / 65535.0
-var lamps := {}
-func emit_cell(i: int) -> void:
-	var p := cell_pos(i)
-	lamps.erase(i)
-	if road[i] > 0:
-		emit_road(i, p)
-	elif bld[i] > 0:
-		if part[i] < 0 or part[i] == i:
-			emit_def(i, p)
-	elif zone[i] > 0:
-		if part[i] >= 0 and part[i] != i:
-			pass
-		elif anim_cells.has(i):
-			emit_lot(i, p)
-		else:
-			emit_zone(i, p)
-	elif tree[i] > 0:
-		emit_trees(i, p)
-	elif terr[i] == T_LAND and opts["g_grass"] and weather != "Nieve":
-		emit_grass(i, p)
-	if wire[i] & W_POWER and road[i] == 0 and bld[i] == 0 and zone[i] == 0:
-		emit_cable(i, p)
-	if wire[i] & W_LEVEE:
-		em(M_BOX, p.x, p.y, p.z, CELL, 1.4, CELL, 0.0, Color(0.55, 0.55, 0.52))
-	if flood[i] > 0.0:
-		em(M_BOX, p.x, p.y, p.z, CELL, 0.25, CELL, 0.0, Color(0.2, 0.4, 0.55), 0, 0, 0.1, 1)
-	if garbp[i] > 0.5 and road[i] == 0:
-		for k in mini(3, int(garbp[i])):
-			em(M_SPH, p.x + (hsh(i, k) - 0.5) * 2.2, p.y, p.z + (hsh(i, k + 5) - 0.5) * 2.2, 0.9, 0.6, 0.9, 0.0, Color(0.35, 0.3, 0.2))
-	if burn[i] > 0.99:
-		em(M_BOX, p.x, p.y, p.z, CELL * 0.8, 0.4, CELL * 0.8, 0.0, Color(0.12, 0.1, 0.1))
 func road_n(i: int) -> Array:
 	var x := cx(i)
 	var z := cz(i)
 	return [x < N - 1 and road[i + 1] > 0, x > 0 and road[i - 1] > 0, z < N - 1 and road[i + N] > 0, z > 0 and road[i - N] > 0]
-func emit_road(i: int, p: Vector3) -> void:
-	var t: int = road[i]
-	var col: Color = [Color(), Color(0.55, 0.45, 0.32), Color(0.25, 0.25, 0.27), Color(0.21, 0.21, 0.23), Color(0.19, 0.19, 0.21)][t]
-	var nb := road_n(i)
-	var e: bool = nb[0]
-	var w: bool = nb[1]
-	var s: bool = nb[2]
-	var n: bool = nb[3]
-	var cnt := int(e) + int(w) + int(s) + int(n)
-	var y := p.y
-	var bridge := terr[i] == T_WATER
-	if bridge:
-		y = 0.6
-		em(M_BOX, p.x, WATER_Y - 1.0, p.z, 0.8, 1.6 + y, 0.8, 0.0, Color(0.5, 0.5, 0.5))
-	var sidewalk := Color(0.62, 0.6, 0.56)
-	var corner := cnt == 2 and ((e and s) or (e and n) or (w and s) or (w and n)) and not bridge
-	if corner:
-		var cxo := 1.0 if e else -1.0
-		var czo := 1.0 if s else -1.0
-		var rot := 0.0
-		if cxo > 0 and czo > 0:
-			rot = PI
-		elif cxo < 0 and czo > 0:
-			rot = -PI * 0.5
-		elif cxo > 0 and czo < 0:
-			rot = PI * 0.5
-		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 1.02, 0.17, CELL * 1.02, rot, sidewalk)
-		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 0.86, 0.2, CELL * 0.86, rot, col)
-		return
-	em(M_BOX, p.x, y, p.z, CELL, 0.2, CELL, 0.0, col)
-	var horiz := (e or w) and not (s or n)
-	var vert := (s or n) and not (e or w)
-	if t >= 2 and not bridge:
-		if not n and (horiz or cnt <= 1):
-			em(M_BOX, p.x, y, p.z - CELL * 0.44, CELL, 0.26, CELL * 0.12, 0.0, sidewalk)
-		if not s and (horiz or cnt <= 1):
-			em(M_BOX, p.x, y, p.z + CELL * 0.44, CELL, 0.26, CELL * 0.12, 0.0, sidewalk)
-		if not e and (vert or cnt <= 1):
-			em(M_BOX, p.x + CELL * 0.44, y, p.z, CELL * 0.12, 0.26, CELL, 0.0, sidewalk)
-		if not w and (vert or cnt <= 1):
-			em(M_BOX, p.x - CELL * 0.44, y, p.z, CELL * 0.12, 0.26, CELL, 0.0, sidewalk)
-	if wire[i] & W_ROUND:
-		em(M_CYL, p.x, y, p.z, CELL * 0.45, 0.35, CELL * 0.45, 0.0, Color(0.3, 0.6, 0.3))
-		em(M_SPH, p.x, y + 0.3, p.z, 1.0, 1.4, 1.0, 0.0, Color(0.25, 0.5, 0.25))
-		return
-	var rot := 0.0 if horiz else PI * 0.5
-	if horiz or vert:
-		match t:
-			2:
-				if (cx(i) + cz(i)) % 2 == 0:
-					em(M_BOX, p.x, y, p.z, CELL * 0.45, 0.22, 0.12, rot, Color(0.9, 0.85, 0.6))
-			3:
-				em(M_BOX, p.x, y, p.z, CELL, 0.32, 0.5, rot, Color(0.35, 0.55, 0.3))
-				if hsh(i, 3) < 0.4:
-					em(M_SPH, p.x, y + 0.3, p.z, 0.9, 1.4, 0.9, 0.0, Color(0.28, 0.5, 0.25))
-			4:
-				em(M_BOX, p.x, y, p.z, CELL, 0.25, 0.25, rot, Color(0.85, 0.75, 0.2))
-				em(M_BOX, p.x, y, p.z, CELL, 0.45, 0.15, rot, Color(0.7, 0.7, 0.7))
-		if wire[i] & W_BIKE:
-			var off := Vector2(0, CELL * 0.33) if horiz else Vector2(CELL * 0.33, 0)
-			em(M_BOX, p.x + off.x, y, p.z + off.y, CELL if horiz else 0.6, 0.23, 0.6 if horiz else CELL, 0.0, Color(0.25, 0.6, 0.35))
-		if wire[i] & W_TRAM:
-			for sgn in [-0.12, 0.12]:
-				var o2 := Vector2(0, CELL * sgn) if horiz else Vector2(CELL * sgn, 0)
-				em(M_BOX, p.x + o2.x, y, p.z + o2.y, CELL if horiz else 0.1, 0.25, 0.1 if horiz else CELL, 0.0, Color(0.6, 0.6, 0.62))
-		if t >= 2 and (cx(i) + cz(i) * 3) % 3 == 0 and not bridge:
-			var lo := Vector2(0, -CELL * 0.45) if horiz else Vector2(-CELL * 0.45, 0)
-			var ao := Vector2(0, 0.8) if horiz else Vector2(0.8, 0)
-			em(M_BOX, p.x + lo.x, y, p.z + lo.y, 0.12, 2.9, 0.12, 0.0, Color(0.3, 0.3, 0.32))
-			em(M_BOX, p.x + lo.x + ao.x * 0.5, y + 2.85, p.z + lo.y + ao.y * 0.5, 0.09 if horiz else 0.8, 0.09, 0.8 if horiz else 0.09, 0.0, Color(0.3, 0.3, 0.32))
-			em(M_BOX, p.x + lo.x + ao.x, y + 2.78, p.z + lo.y + ao.y, 0.34, 0.1, 0.34, 0.0, Color(1.0, 0.85, 0.55), 0, 1.0)
-			lamps[i] = Vector3(p.x + lo.x + ao.x, y, p.z + lo.y + ao.y)
-		if t == 2 and opts["quality"] >= 1:
-			for side in [-1, 1]:
-				var j: int = i + (N * side if horiz else side)
-				if j >= 0 and j < N * N and zone[j] > 0 and lvl[j] >= 1 and hsh(i, side + 7) < 0.45:
-					var po := Vector2(0, side * CELL * 0.3) if horiz else Vector2(side * CELL * 0.3, 0)
-					em(M_BOX, p.x + po.x, y + 0.15, p.z + po.y, 1.6, 0.6, 0.8, rot, car_color(i * 3 + side))
-func car_color(k: int) -> Color:
-	var pal := [Color(0.85, 0.85, 0.87), Color(0.15, 0.15, 0.17), Color(0.7, 0.12, 0.1), Color(0.2, 0.3, 0.6), Color(0.55, 0.57, 0.6), Color(0.9, 0.75, 0.2), Color(0.25, 0.45, 0.3)]
-	return pal[absi(k) % pal.size()]
-func emit_cable(i: int, p: Vector3) -> void:
-	em(M_BOX, p.x, p.y, p.z, 0.2, 4.0, 0.2, 0.0, Color(0.45, 0.35, 0.25))
-	em(M_BOX, p.x, p.y + 3.6, p.z, 1.6, 0.12, 0.12, 0.0, Color(0.45, 0.35, 0.25))
-	var x := cx(i)
-	var z := cz(i)
-	if x < N - 1 and wire[i + 1] & W_POWER:
-		em(M_BOX, p.x + CELL * 0.5, p.y + 3.6, p.z, CELL, 0.05, 0.05, 0.0, Color(0.1, 0.1, 0.1))
-	if z < N - 1 and wire[i + N] & W_POWER:
-		em(M_BOX, p.x, p.y + 3.6, p.z + CELL * 0.5, 0.05, 0.05, CELL, 0.0, Color(0.1, 0.1, 0.1))
-func tree_colors(kind: int) -> Array:
-	var s := season()
-	var snowy := weather == "Nieve"
-	match kind:
-		1, 2:
-			if s == 1:
-				return [Color(0.8, 0.5, 0.15) if kind == 2 else Color(0.75, 0.45, 0.2), 1.0]
-			if s == 2:
-				return [Color(0.45, 0.35, 0.25), 0.45]
-			return [Color(0.3, 0.55, 0.22) if kind == 1 else Color(0.38, 0.58, 0.25), 1.0]
-		3:
-			if s == 3:
-				return [Color(0.58, 0.42, 0.85), 1.0]
-			if s == 2:
-				return [Color(0.42, 0.38, 0.3), 0.5]
-			return [Color(0.32, 0.55, 0.3), 1.0]
-		4:
-			return [Color(0.9, 0.92, 0.95) if snowy else Color(0.15, 0.38, 0.2), 1.0]
-		5:
-			if s == 0 or s == 3:
-				return [Color(0.92, 0.5, 0.7), 1.0]
-			return [Color(0.35, 0.55, 0.28), 0.9]
-		6:
-			return [Color(0.3, 0.6, 0.25), 1.0]
-		7:
-			return [Color(0.55, 0.7, 0.3) if s != 2 else Color(0.5, 0.5, 0.35), 1.0]
-	return [Color(0.3, 0.55, 0.25), 1.0]
 func vert_h(x: int, z: int) -> float:
 	var hs := 0.0
 	var cnt := 0
@@ -1589,55 +665,6 @@ func ground_y(wx: float, wz: float) -> float:
 	if u >= v:
 		return ha + (hb - ha) * u + (hd - hb) * v
 	return ha + (hc - ha) * v + (hd - hc) * u
-func emit_trees(i: int, p: Vector3) -> void:
-	var kind: int = tree[i]
-	var tc := tree_colors(kind)
-	var crown: Color = tc[0]
-	var full: float = tc[1]
-	var nt := 1 + int(hsh(i, 1) * 2.4)
-	for k in nt:
-		var ox := (hsh(i, k * 3 + 2) - 0.5) * CELL * 0.6
-		var oz := (hsh(i, k * 3 + 3) - 0.5) * CELL * 0.6
-		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.6
-		var x := p.x + ox
-		var z := p.z + oz
-		var gy := ground_y(x, z) - 0.12
-		match kind:
-			4:
-				em(M_BOX, x, gy, z, 0.25 * sc, 0.8 * sc, 0.25 * sc, 0.0, Color(0.35, 0.25, 0.15))
-				em(M_CONE, x, gy + 0.6 * sc, z, 1.7 * sc, 3.2 * sc, 1.7 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.08)
-			5:
-				em(M_CYL, x, gy, z, 0.6 * sc, 1.6 * sc, 0.6 * sc, 0.0, Color(0.45, 0.5, 0.35))
-				em(M_SPH, x, gy + 1.4 * sc, z, 2.2 * sc * full, 1.6 * sc * full, 2.2 * sc * full, 0.0, crown, 0.0, 0.0, 0.0, 2.15)
-			6:
-				em(M_BOX, x, gy, z, 0.22 * sc, 3.2 * sc, 0.22 * sc, 0.3, Color(0.5, 0.4, 0.25))
-				em(M_SPH, x, gy + 3.0 * sc, z, 2.2 * sc, 0.6 * sc, 2.2 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.3)
-			7:
-				em(M_BOX, x, gy, z, 0.3 * sc, 1.2 * sc, 0.3 * sc, 0.0, Color(0.35, 0.28, 0.2))
-				em(M_SPH, x, gy + 0.6 * sc, z, 2.6 * sc, 2.2 * sc, 2.6 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.18)
-			_:
-				em(M_BOX, x, gy, z, 0.25 * sc, 1.1 * sc, 0.25 * sc, 0.0, Color(0.35, 0.25, 0.15))
-				em(M_SPH, x, gy + 0.9 * sc, z, 1.9 * sc * full, 1.8 * sc * full, 1.9 * sc * full, 0.0, crown, 0.0, 0.0, 0.0, 2.16)
-func emit_grass(i: int, p: Vector3) -> void:
-	var h := hsh(i, 40)
-	if h > 0.17:
-		return
-	var gc: Color = [Color(0.3, 0.52, 0.2), Color(0.5, 0.46, 0.2), Color(0.5, 0.56, 0.5), Color(0.33, 0.56, 0.22)][season()]
-	for k in 2:
-		var x := p.x + (hsh(i, 41 + k) - 0.5) * CELL * 0.8
-		var z := p.z + (hsh(i, 44 + k) - 0.5) * CELL * 0.8
-		var hh := 0.35 + hsh(i, 47 + k) * 0.4
-		var v := 0.85 + hsh(i, 50 + k) * 0.35
-		em(M_GRASS, x, ground_y(x, z) - 0.04, z, 0.18, hh, 0.18, hsh(i, 53 + k) * 3.0, gc * v * 1.3, 0.0, 0.0, 0.0, 2.1)
-	if h < 0.03:
-		var fc: Color = [Color(0.95, 0.85, 0.25), Color(0.95, 0.95, 0.92), Color(0.9, 0.45, 0.6), Color(0.7, 0.5, 0.9)][int(hsh(i, 60) * 4.0) % 4]
-		var fx := p.x + (hsh(i, 61) - 0.5) * CELL * 0.6
-		var fz := p.z + (hsh(i, 62) - 0.5) * CELL * 0.6
-		em(M_GRASS, fx, ground_y(fx, fz) + 0.26, fz, 0.2, 0.16, 0.2, 0.0, fc, 0.0, 0.0, 0.0, 2.1)
-func zone_color(z: int) -> Color:
-	if opts["colorblind"]:
-		return [Color(), Color(0.95, 0.75, 0.2), Color(0.2, 0.5, 0.95), Color(0.6, 0.6, 0.6), Color(0.9, 0.5, 0.9)][z]
-	return [Color(), Color(0.45, 0.8, 0.4), Color(0.35, 0.55, 0.95), Color(0.95, 0.8, 0.3), Color(0.75, 0.55, 0.9)][z]
 func face_rot(i: int) -> float:
 	var nb := road_n(i)
 	if nb[2]:
@@ -1649,379 +676,6 @@ func face_rot(i: int) -> float:
 	if nb[1]:
 		return -PI * 0.5
 	return 0.0
-func emit_lot(i: int, p: Vector3) -> void:
-	em(M_BOX, p.x, p.y, p.z, CELL * 0.92, 0.08, CELL * 0.92, 0.0, zone_color(zone[i]).darkened(0.35))
-func emit_zone(i: int, p: Vector3) -> void:
-	var z: int = zone[i]
-	var l: int = lvl[i]
-	if l == 0:
-		emit_lot(i, p)
-		return
-	var v: int = vari[i]
-	var rot := face_rot(i)
-	var dark := burn[i] > 0.0
-	var big := part[i] == i
-	var w := CELL * (1.85 if big else 0.82)
-	var bx := p.x
-	var bz := p.z
-	if big:
-		bx += CELL * 0.5
-		bz += CELL * 0.5
-	em(M_BOX, bx, p.y, bz, w + CELL * 0.1, 0.12, w + CELL * 0.1, 0.0, (Color(0.36, 0.5, 0.28) if l == 1 else Color(0.5, 0.52, 0.45)) if z == Z_R else Color(0.55, 0.55, 0.55))
-	var y := p.y + 0.1
-	var wall := tint(res_wall(v), i)
-	if dark:
-		wall = wall.darkened(0.6)
-	match z:
-		Z_R:
-			emit_res(i, bx, y, bz, w, l, v, rot, wall, big)
-		Z_C:
-			emit_com(i, bx, y, bz, w, l, v, rot, dark, big)
-		Z_I:
-			emit_ind(i, bx, y, bz, w, l, v, rot, dark)
-		Z_M:
-			emit_com(i, bx, y, bz, w, mini(l, 2), v, rot, dark, false)
-			if l >= 2:
-				var h := 2.0 + l * 2.5
-				em(M_BOX, bx, y + 3.0, bz, w * 0.8, h, w * 0.8, rot, wall, 1.0)
-func tint(c: Color, i: int) -> Color:
-	var hh := fposmod(c.h + (hsh(i, 77) - 0.5) * 0.07, 1.0)
-	return Color.from_hsv(hh, clampf(c.s * (0.75 + hsh(i, 78) * 0.6), 0.0, 1.0), clampf(c.v * (0.86 + hsh(i, 79) * 0.2), 0.0, 1.0))
-func tower_col(v: int, i: int) -> Color:
-	var gp := [Color(0.45, 0.62, 0.78), Color(0.35, 0.58, 0.55), Color(0.66, 0.6, 0.5), Color(0.3, 0.34, 0.42), Color(0.78, 0.74, 0.68), Color(0.5, 0.52, 0.72), Color(0.72, 0.5, 0.42)]
-	return tint(gp[(v / 3 + i) % gp.size()], i)
-func res_wall(v: int) -> Color:
-	var pal := [Color(0.92, 0.88, 0.8), Color(0.85, 0.72, 0.6), Color(0.95, 0.93, 0.88), Color(0.78, 0.55, 0.45), Color(0.88, 0.82, 0.65), Color(0.7, 0.75, 0.78), Color(0.95, 0.85, 0.75), Color(0.65, 0.6, 0.55)]
-	return pal[v % pal.size()]
-func emit_ind(i: int, x: float, y: float, z: float, w: float, l: int, v: int, rot: float, dark: bool) -> void:
-	var c := tint(COL_BRICK if v % 2 == 0 else Color(0.55, 0.6, 0.62), i)
-	var im := -1.0 if v % 2 == 0 else -5.0
-	if dark:
-		c = c.darkened(0.6)
-	match l:
-		1:
-			em(M_BOX, x, y, z, w * 0.9, 2.6, w * 0.8, rot, c, 0, 0, 0, im)
-			em(M_ROOF, x, y + 2.6, z, w * 0.9, 0.8, w * 0.8, rot, Color(0.45, 0.47, 0.5), 0, 0, 0, -5)
-		2:
-			em(M_BOX, x, y, z, w * 0.9, 3.4, w * 0.9, rot, c, 0.4, 0, 0, im)
-			em(M_CYL, x + w * 0.3, y, z + w * 0.3, 0.8, 5.0, 0.8, 0.0, Color(0.42, 0.38, 0.36))
-		3:
-			em(M_BOX, x - w * 0.15, y, z, w * 0.6, 4.0, w * 0.9, rot, c, 0.4, 0, 0, im)
-			em(M_CYL, x + w * 0.3, y, z - w * 0.2, 1.4, 3.5, 1.4, 0.0, Color(0.8, 0.8, 0.82))
-			em(M_CYL, x + w * 0.3, y, z + w * 0.25, 1.4, 3.5, 1.4, 0.0, Color(0.8, 0.8, 0.82))
-			em(M_CYL, x - w * 0.3, y, z - w * 0.3, 0.8, 6.5, 0.8, 0.0, Color(0.42, 0.38, 0.36))
-		4:
-			em(M_BOX, x, y, z, w * 0.95, 6.0, w * 0.95, rot, c, 0.5, 0, 0, im)
-			em(M_CYL, x - w * 0.3, y, z - w * 0.3, 1.0, 8.5, 1.0, 0.0, Color(0.42, 0.38, 0.36))
-			em(M_CYL, x + w * 0.3, y, z - w * 0.3, 1.0, 7.5, 1.0, 0.0, Color(0.42, 0.38, 0.36))
-			em(M_BOX, x, y + 6.0, z, w * 0.5, 1.5, w * 0.4, rot, c.darkened(0.2))
-func emit_def(i: int, p: Vector3) -> void:
-	var d: Dictionary = DEF[bld[i]]
-	var sz: int = d["sz"]
-	var w := sz * CELL
-	var x := p.x + (sz - 1) * CELL * 0.5
-	var z := p.z + (sz - 1) * CELL * 0.5
-	var y := p.y
-	var col: Color = d["col"]
-	if burn[i] > 0.0:
-		col = col.darkened(0.6)
-	var sh: String = d["sh"]
-	var rot := face_rot(i)
-	if d["c"] == "wonder":
-		var prog: int = wonder_progress.get(i, 0)
-		if prog < WONDER_STEPS:
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.6, 0.55, 0.45))
-			var h := 2.0 + prog * 3.0
-			em(M_BOX, x, y, z, w * 0.6, h, w * 0.6, 0.0, col.darkened(0.3))
-			for k in 4:
-				var a := k * PI * 0.5 + 0.785
-				em(M_BOX, x + cos(a) * w * 0.38, y, z + sin(a) * w * 0.38, 0.2, h + 1.0, 0.2, 0.0, Color(0.85, 0.6, 0.2))
-			em(M_BOX, x + w * 0.3, y, z - w * 0.3, 0.3, h + 8.0, 0.3, 0.0, Color(0.95, 0.75, 0.1))
-			em(M_BOX, x + w * 0.1, y + h + 7.6, z - w * 0.3, w * 0.5, 0.3, 0.3, 0.0, Color(0.95, 0.75, 0.1))
-			return
-	var ground := Color(0.55, 0.55, 0.52)
-	match sh:
-		"cinema":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			bx(x, y, z, rot, 0, -0.05 * w, 0, w * 0.86, 5.2, w * 0.78, col)
-			bx(x, y, z, rot, 0, -0.05 * w, 5.2, w * 0.9, 0.3, w * 0.82, Color(0.12, 0.12, 0.13))
-			bx(x, y, z, rot, 0, 0.42 * w, 2.6, w * 0.92, 0.7, 0.55, Color(0.95, 0.85, 0.45), 0, 0.9)
-			bx(x, y, z, rot, 0, 0.43 * w, 2.45, w * 0.88, 0.12, 0.5, Color(1.0, 0.92, 0.65), 0, 0, 2.2)
-			bx(x, y, z, rot, 0.36 * w, 0.39 * w, 3.3, 0.25, 2.8, 0.55, Color(1.0, 0.25, 0.2), 0, 0, 1.6)
-			bx(x, y, z, rot, -0.27 * w, 0.351 * w, 0.5, 0.65, 1.3, 0.04, Color(0.2, 0.25, 0.55), 0, 0.5)
-			bx(x, y, z, rot, 0.27 * w, 0.351 * w, 0.5, 0.65, 1.3, 0.04, Color(0.65, 0.15, 0.1), 0, 0.5)
-			bx(x, y, z, rot, 0, 0.351 * w, 0.05, 1.0, 2.0, 0.03, COL_GLASS, 0, 0, 0, -8)
-		"civic":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			em(M_BOX, x, y, z, w * 0.8, 3.2, w * 0.7, rot, col, 0.8)
-			em(M_BOX, x, y + 3.2, z, w * 0.84, 0.3, w * 0.74, rot, col.darkened(0.25))
-			em(M_BOX, x + w * 0.38, y, z + w * 0.38, 0.1, 4.5, 0.1, 0.0, Color(0.8, 0.8, 0.8))
-			em(M_BOX, x + w * 0.38 + 0.45, y + 3.9, z + w * 0.38, 0.9, 0.5, 0.05, 0.0, Color(0.45, 0.7, 0.95))
-		"tower":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			em(M_BOX, x, y, z, w * 0.75, 4.0 + sz * 5.0, w * 0.55, rot, col, 1.0)
-			em(M_BOX, x, y, z, w * 0.4, 7.0 + sz * 6.0, w * 0.4, rot, col.darkened(0.08), 1.0)
-		"campus":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.4, 0.62, 0.32))
-			em(M_BOX, x, y, z - w * 0.25, w * 0.7, 6.0, w * 0.25, 0.0, col, 1.0)
-			em(M_BOX, x - w * 0.3, y, z + w * 0.15, w * 0.2, 4.5, w * 0.45, 0.0, col, 1.0)
-			em(M_BOX, x + w * 0.3, y, z + w * 0.15, w * 0.2, 4.5, w * 0.45, 0.0, col, 1.0)
-			em(M_BOX, x, y + 6.0, z - w * 0.25, 2.0, 4.0, 2.0, 0.0, col.lightened(0.1))
-		"cabildo":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.66, 0.6))
-			em(M_BOX, x, y, z, w * 0.8, 5.0, w * 0.45, rot, col, 0.9)
-			em(M_ROOF, x, y + 5.0, z, w * 0.8, 1.2, w * 0.45, rot, Color(0.6, 0.3, 0.2))
-			em(M_BOX, x, y, z, 2.2, 10.0, 2.2, rot, col)
-			em(M_CONE, x, y + 10.0, z, 2.4, 2.5, 2.4, 0.0, Color(0.55, 0.3, 0.2))
-		"park":
-			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, col)
-			em(M_BOX, x, y, z, w * 0.9, 0.17, 0.8, 0.0, Color(0.8, 0.75, 0.6))
-			em(M_BOX, x, y, z, 0.8, 0.17, w * 0.9, 0.0, Color(0.8, 0.75, 0.6))
-			for k in sz * 3:
-				var ax := x + (hsh(i, k) - 0.5) * w * 0.8
-				var az := z + (hsh(i, k + 9) - 0.5) * w * 0.8
-				em(M_BOX, ax, y, az, 0.25, 1.0, 0.25, 0.0, Color(0.35, 0.25, 0.15))
-				em(M_SPH, ax, y + 0.8, az, 2.0, 2.0, 2.0, 0.0, tree_colors(1 + k % 3)[0])
-			if sz >= 2:
-				em(M_CYL, x, y, z, 2.0, 0.6, 2.0, 0.0, Color(0.7, 0.7, 0.72))
-				em(M_CYL, x, y + 0.6, z, 0.5, 1.4, 0.5, 0.0, Color(0.6, 0.75, 0.95), 0, 0, 0.2)
-		"pitch":
-			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, Color(0.25, 0.58, 0.28))
-			em(M_BOX, x, y, z, w * 0.75, 0.16, w * 0.55, rot, Color(0.3, 0.7, 0.32))
-			em(M_BOX, x, y, z, 0.12, 0.17, w * 0.55, rot, Color(0.95, 0.95, 0.95))
-			for sgn in [-1, 1]:
-				em(M_BOX, x + sgn * w * 0.36 * cos(rot), y, z - sgn * w * 0.36 * sin(rot), 0.2, 1.0, 1.8, rot, Color(0.95, 0.95, 0.95))
-		"parrilla":
-			em(M_BOX, x, y, z, w * 0.9, 0.15, w * 0.9, 0.0, Color(0.7, 0.65, 0.55))
-			em(M_BOX, x, y, z, 2.2, 1.3, 1.2, rot, Color(0.65, 0.32, 0.2))
-			em(M_BOX, x, y + 1.3, z, 0.6, 1.6, 0.6, rot, Color(0.55, 0.28, 0.18))
-			em(M_BOX, x + 1.0, y, z + 1.2, 1.6, 0.8, 0.8, 0.0, Color(0.5, 0.35, 0.2))
-		"calesita":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.66, 0.58))
-			em(M_CYL, x, y, z, 3.2, 0.4, 3.2, 0.0, Color(0.95, 0.9, 0.7))
-			em(M_CYL, x, y + 0.4, z, 0.3, 2.2, 0.3, 0.0, Color(0.9, 0.85, 0.3))
-			em(M_CONE, x, y + 2.6, z, 3.6, 1.6, 3.6, 0.0, col, 0, 0.5)
-		"stadium":
-			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, ground)
-			em(M_CYL, x, y, z, w * 0.92, 5.5, w * 0.8, 0.0, col, 0.3)
-			em(M_CYL, x, y + 5.5, z, w * 0.7, 0.2, w * 0.58, 0.0, Color(0.3, 0.65, 0.3))
-			for k in 4:
-				var a := k * PI * 0.5 + 0.785
-				em(M_BOX, x + cos(a) * w * 0.45, y, z + sin(a) * w * 0.4, 0.4, 12.0, 0.4, 0.0, Color(0.7, 0.7, 0.72))
-				em(M_BOX, x + cos(a) * w * 0.45, y + 12.0, z + sin(a) * w * 0.4, 2.0, 1.0, 0.4, a, Color(1, 1, 0.9), 0, 1.5)
-		"wheel":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			em(M_BOX, x - 1.5, y, z, 0.4, 8.0, 0.4, 0.3, Color(0.8, 0.8, 0.82))
-			em(M_BOX, x + 1.5, y, z, 0.4, 8.0, 0.4, -0.3, Color(0.8, 0.8, 0.82))
-			for k in 12:
-				var a := k * TAU / 12.0
-				em(M_BOX, x + cos(a) * 6.0, y + 8.0 + sin(a) * 6.0, z, 0.9, 0.9, 0.9, 0.0, [col, Color(0.95, 0.85, 0.2), Color(0.3, 0.6, 0.95)][k % 3], 0, 0.6)
-		"cathedral":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.68, 0.62))
-			em(M_BOX, x, y, z, w * 0.4, 7.0, w * 0.75, rot, col, 0.5)
-			em(M_ROOF, x, y + 7.0, z, w * 0.4, 2.5, w * 0.75, rot, Color(0.4, 0.4, 0.45))
-			for sgn in [-1, 1]:
-				var tx: float = x + sgn * w * 0.18
-				em(M_BOX, tx, y, z + w * 0.35, 2.0, 11.0, 2.0, 0.0, col)
-				em(M_CONE, tx, y + 11.0, z + w * 0.35, 2.2, 4.0, 2.2, 0.0, Color(0.35, 0.4, 0.45))
-		"lighthouse":
-			em(M_CYL, x, y, z, 2.4, 0.5, 2.4, 0.0, Color(0.5, 0.5, 0.5))
-			for k in 5:
-				em(M_CYL, x, y + 0.5 + k * 2.2, z, 1.6 - k * 0.1, 2.2, 1.6 - k * 0.1, 0.0, Color(0.95, 0.95, 0.95) if k % 2 == 0 else Color(0.8, 0.15, 0.15))
-			em(M_CYL, x, y + 11.5, z, 1.2, 1.2, 1.2, 0.0, Color(1, 0.95, 0.7), 0, 2.0)
-		"clock":
-			em(M_BOX, x, y, z, w * 0.9, 0.15, w * 0.9, 0.0, Color(0.7, 0.68, 0.6))
-			em(M_BOX, x, y, z, 1.6, 9.0, 1.6, rot, col)
-			em(M_BOX, x, y + 7.2, z, 1.75, 1.2, 1.75, rot, Color(0.95, 0.95, 0.9), 0, 0.8)
-			em(M_CONE, x, y + 9.0, z, 2.0, 1.8, 2.0, 0.0, Color(0.3, 0.35, 0.3))
-		"beach":
-			em(M_BOX, x, y, z, w, 0.12, w, 0.0, Color(0.92, 0.85, 0.6))
-			for k in 3:
-				var ax := x + (hsh(i, k) - 0.5) * w * 0.7
-				var az := z + (hsh(i, k + 4) - 0.5) * w * 0.7
-				em(M_BOX, ax, y, az, 0.08, 1.6, 0.08, 0.0, Color(0.9, 0.9, 0.9))
-				em(M_CONE, ax, y + 1.4, az, 1.8, 0.5, 1.8, 0.0, [Color(0.9, 0.3, 0.3), Color(0.2, 0.5, 0.9), Color(0.95, 0.8, 0.2)][k])
-		"plant":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			em(M_BOX, x - w * 0.12, y, z, w * 0.55, 5.0, w * 0.7, rot, col, 0.3)
-			em(M_CYL, x + w * 0.28, y, z - w * 0.25, 1.3, 12.0, 1.3, 0.0, col.darkened(0.2))
-			em(M_CYL, x + w * 0.28, y, z + w * 0.15, 1.3, 10.0, 1.3, 0.0, col.darkened(0.2))
-		"solar":
-			em(M_BOX, x, y, z, w * 0.98, 0.12, w * 0.98, 0.0, Color(0.45, 0.55, 0.35))
-			for k in 4:
-				em(M_BOX, x, y + 0.6, z - w * 0.36 + k * w * 0.24, w * 0.85, 0.12, w * 0.16, 0.0, col, 0, 0, 0.05)
-		"windmill":
-			em(M_CYL, x, y, z, 0.6, 11.0, 0.6, 0.0, col)
-			em(M_BOX, x, y + 11.0, z + 0.4, 0.4, 7.0, 0.15, 0.0, col)
-			em(M_BOX, x, y + 13.5, z + 0.4, 6.0, 0.4, 0.15, 0.7, col)
-		"dam":
-			em(M_BOX, x, y - 2.0, z, w, 6.0, w * 0.35, rot, col)
-			em(M_BOX, x, y, z + w * 0.3, w * 0.5, 3.0, w * 0.3, rot, col.darkened(0.15), 0.4)
-		"pump":
-			em(M_BOX, x, y, z, w * 0.7, 2.2, w * 0.7, 0.0, col, 0.3)
-			em(M_CYL, x + 1.0, y, z + 1.0, 0.7, 3.0, 0.7, 0.0, Color(0.6, 0.6, 0.65))
-		"watertower":
-			for k in 4:
-				var a := k * PI * 0.5 + 0.785
-				em(M_BOX, x + cos(a) * 1.0, y, z + sin(a) * 1.0, 0.2, 6.0, 0.2, 0.0, Color(0.5, 0.5, 0.52))
-			em(M_SPH, x, y + 5.5, z, 3.2, 3.0, 3.2, 0.0, col)
-		"landfill":
-			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, Color(0.45, 0.4, 0.3))
-			for k in 4:
-				em(M_SPH, x + (hsh(i, k) - 0.5) * w * 0.6, y, z + (hsh(i, k + 3) - 0.5) * w * 0.6, 4.0, 1.8, 3.5, 0.0, Color(0.42, 0.36, 0.28))
-		"metro":
-			em(M_BOX, x, y, z, w * 0.9, 0.15, w * 0.9, 0.0, ground)
-			em(M_BOX, x, y, z, 2.4, 1.6, 2.4, rot, Color(0.85, 0.85, 0.85), 0.5)
-			em(M_BOX, x, y + 1.6, z, 1.0, 1.0, 0.2, rot, col, 0, 0, 0.6)
-		"station":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			em(M_BOX, x, y, z, w * 0.8, 4.0, w * 0.4, rot, col, 0.6)
-			em(M_ROOF, x, y + 4.0, z, w * 0.85, 1.6, w * 0.45, rot, Color(0.4, 0.4, 0.42))
-			em(M_BOX, x, y + 5.2, z, 1.0, 1.0, 0.3, rot, Color(0.95, 0.95, 0.9), 0, 0.6)
-		"port":
-			em(M_BOX, x, y, z, w, 0.4, w, 0.0, Color(0.5, 0.48, 0.45))
-			em(M_BOX, x - w * 0.25, y, z, w * 0.35, 3.0, w * 0.6, 0.0, col)
-			for k in 3:
-				em(M_BOX, x + w * 0.2, y + 0.4 + k * 1.0, z - w * 0.2 + k * 0.2, 2.5, 1.0, 1.0, 0.0, [Color(0.8, 0.3, 0.2), Color(0.2, 0.4, 0.8), Color(0.2, 0.6, 0.3)][k])
-			em(M_BOX, x + w * 0.35, y, z + w * 0.3, 0.5, 10.0, 0.5, 0.0, Color(0.95, 0.7, 0.1))
-			em(M_BOX, x + w * 0.35 - 2.0, y + 10.0, z + w * 0.3, 5.0, 0.4, 0.4, 0.0, Color(0.95, 0.7, 0.1))
-		"airport":
-			em(M_BOX, x, y, z, w, 0.12, w, 0.0, Color(0.45, 0.5, 0.4))
-			em(M_BOX, x, y, z + w * 0.15, w * 0.95, 0.16, w * 0.22, 0.0, Color(0.25, 0.25, 0.27))
-			em(M_BOX, x, y, z + w * 0.15, w * 0.9, 0.17, 0.25, 0.0, Color(0.95, 0.95, 0.95))
-			em(M_BOX, x - w * 0.15, y, z - w * 0.28, w * 0.5, 3.5, w * 0.25, 0.0, col, 1.0)
-			em(M_CYL, x + w * 0.3, y, z - w * 0.3, 1.2, 9.0, 1.2, 0.0, Color(0.8, 0.8, 0.82))
-			em(M_CYL, x + w * 0.3, y + 9.0, z - w * 0.3, 2.2, 1.6, 2.2, 0.0, Color(0.4, 0.55, 0.65), 0, 0.6)
-		"pier":
-			em(M_BOX, x, 0.2, z, w * 0.4, 0.3, w * 1.2, rot, col)
-			em(M_BOX, x, 0.5, z, 1.4, 2.0, 1.4, rot, Color(0.8, 0.75, 0.6))
-		"parking":
-			em(M_BOX, x, y, z, w * 0.95, 0.16, w * 0.95, 0.0, col)
-			for k in 4:
-				em(M_BOX, x - 1.0 + (k % 2) * 2.0, y + 0.16, z - 0.8 + (k / 2) * 1.6, 1.5, 0.6, 0.75, 0.0, car_color(i + k))
-		"mall":
-			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, Color(0.3, 0.3, 0.32))
-			em(M_BOX, x, y, z, w * 0.8, 6.0, w * 0.7, rot, col, 0.6)
-			em(M_BOX, x, y + 6.0, z, w * 0.5, 0.8, 0.3, rot, Color(0.95, 0.3, 0.4), 0, 1.2)
-		"gated":
-			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, Color(0.4, 0.62, 0.32))
-			for sgn in [-1, 1]:
-				em(M_BOX, x + sgn * w * 0.48, y, z, 0.25, 1.4, w * 0.96, 0.0, Color(0.85, 0.82, 0.75))
-				em(M_BOX, x, y, z + sgn * w * 0.48, w * 0.96, 1.4, 0.25, 0.0, Color(0.85, 0.82, 0.75))
-			for k in 4:
-				var hx := x + (k % 2 - 0.5) * w * 0.45
-				var hz := z + (k / 2 - 0.5) * w * 0.45
-				em(M_BOX, hx, y, hz, 2.6, 2.0, 2.2, 0.0, col, 0.6)
-				em(M_ROOF, hx, y + 2.0, hz, 2.8, 1.0, 2.3, 0.0, Color(0.6, 0.3, 0.2))
-			em(M_BOX, x + 1.5, y, z + 1.0, 2.0, 0.12, 1.2, 0.0, Color(0.3, 0.65, 0.9), 0, 0, 0.15)
-		"farm":
-			for k in 4:
-				em(M_BOX, x, y, z - w * 0.36 + k * w * 0.24, w * 0.95, 0.2, w * 0.22, 0.0, [Color(0.75, 0.65, 0.3), Color(0.45, 0.6, 0.25)][k % 2])
-			em(M_BOX, x + w * 0.3, y, z + w * 0.3, 2.4, 2.4, 2.0, 0.0, Color(0.7, 0.2, 0.15))
-			em(M_ROOF, x + w * 0.3, y + 2.4, z + w * 0.3, 2.6, 1.2, 2.1, 0.0, Color(0.4, 0.35, 0.3))
-		"w_tower":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.7, 0.72))
-			em(M_CYL, x, y, z, 3.0, 30.0, 3.0, 0.0, col, 0.8)
-			em(M_CYL, x, y + 30.0, z, 5.0, 3.0, 5.0, 0.0, Color(0.5, 0.6, 0.75), 1.2)
-			em(M_CONE, x, y + 33.0, z, 1.2, 10.0, 1.2, 0.0, Color(0.85, 0.85, 0.9), 0, 0.8)
-		"w_park":
-			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, Color(0.3, 0.6, 0.28))
-			em(M_CYL, x, y, z, w * 0.4, 0.2, w * 0.4, 0.0, Color(0.2, 0.45, 0.65), 0, 0, 0.1)
-			for k in 14:
-				var a := k * TAU / 14.0
-				var ax := x + cos(a) * w * 0.38
-				var az := z + sin(a) * w * 0.38
-				em(M_BOX, ax, y, az, 0.3, 1.2, 0.3, 0.0, Color(0.35, 0.25, 0.15))
-				em(M_SPH, ax, y + 1.0, az, 2.4, 2.4, 2.4, 0.0, tree_colors(3 if k % 3 == 0 else 1)[0])
-			em(M_BOX, x, y, z, 1.0, 6.0, 1.0, 0.0, Color(0.95, 0.95, 0.95))
-		"w_stadium":
-			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, ground)
-			em(M_CYL, x, y, z, w * 0.95, 9.0, w * 0.85, 0.0, col, 0.4)
-			em(M_CYL, x, y + 9.0, z, w * 0.72, 0.2, w * 0.62, 0.0, Color(0.3, 0.65, 0.3))
-			em(M_CYL, x, y + 9.0, z, w * 0.98, 0.6, w * 0.88, 0.0, Color(0.45, 0.65, 0.95))
-		"w_palace":
-			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, Color(0.75, 0.72, 0.65))
-			em(M_BOX, x, y, z, w * 0.85, 8.0, w * 0.5, rot, col, 0.9)
-			em(M_SPH, x, y + 8.0, z, 7.0, 8.0, 7.0, 0.0, Color(0.55, 0.7, 0.65))
-			em(M_CONE, x, y + 15.0, z, 1.0, 4.0, 1.0, 0.0, Color(0.9, 0.8, 0.3))
-			for sgn in [-1, 1]:
-				em(M_BOX, x + sgn * w * 0.38, y, z, 3.0, 11.0, 3.0, 0.0, col)
-		_:
-			em(M_BOX, x, y, z, w * 0.8, 3.0, w * 0.8, 0.0, col)
-func build_overlay() -> void:
-	var mm := overlay_node.multimesh
-	if view_mode == "":
-		mm.instance_count = 0
-		return
-	begin_buf()
-	for i in N * N:
-		var c := overlay_color(i)
-		if c.a <= 0.0:
-			continue
-		var p := cell_pos(i)
-		em(M_BOX, p.x, maxf(p.y, 0.0) + 0.5, p.z, CELL * 0.96, 0.1, CELL * 0.96, 0.0, c)
-	mm.instance_count = _counts[M_BOX]
-	if _counts[M_BOX] > 0:
-		mm.buffer = _bufs[M_BOX].slice(0, _counts[M_BOX] * 20)
-func heat(v: float, a: float = 0.55) -> Color:
-	v = clampf(v, 0.0, 1.0)
-	if opts["colorblind"]:
-		return Color(0.15 + v * 0.8, 0.45 + v * 0.1, 0.95 - v * 0.85, a)
-	return Color(minf(1.0, v * 2.0), minf(1.0, (1.0 - v) * 2.0), 0.15, a)
-func overlay_color(i: int) -> Color:
-	var built := zone[i] > 0 or bld[i] > 0
-	match view_mode:
-		"power":
-			if built:
-				return Color(1, 0.9, 0.2, 0.55) if powered[i] else Color(0.9, 0.15, 0.1, 0.6)
-			if wire[i] & W_POWER:
-				return Color(1, 0.8, 0.2, 0.4)
-		"water":
-			if built:
-				return Color(0.2, 0.6, 1.0, 0.55) if watered[i] else Color(0.9, 0.15, 0.1, 0.6)
-			if wire[i] & W_PIPE:
-				return Color(0.3, 0.7, 1.0, 0.5)
-		"pollution":
-			if pollution[i] > 0.05:
-				return Color(0.45, 0.3, 0.1, clampf(pollution[i], 0.0, 0.8))
-		"crime":
-			if built and zone[i] > 0:
-				return heat(crime[i])
-		"land":
-			if terr[i] != T_WATER:
-				var v := landv[i]
-				return Color(0.2, 0.4 + v * 0.6, 0.2, 0.45)
-		"traffic":
-			if road[i] > 0:
-				return heat(tload[i] / road_cap(i), 0.75)
-		"happy":
-			if zone[i] == Z_R or zone[i] == Z_M:
-				return heat(1.0 - happy[i])
-		"fire":
-			return Color(0.95, 0.3, 0.1, clampf(cov[CV_FIRE][i], 0.0, 1.0) * 0.6) if cov[CV_FIRE][i] > 0.02 else Color(0, 0, 0, 0)
-		"police":
-			return Color(0.2, 0.3, 0.95, clampf(cov[CV_POL][i], 0.0, 1.0) * 0.6) if cov[CV_POL][i] > 0.02 else Color(0, 0, 0, 0)
-		"health":
-			return Color(0.95, 0.95, 0.95, clampf(cov[CV_HEALTH][i], 0.0, 1.0) * 0.6) if cov[CV_HEALTH][i] > 0.02 else Color(0, 0, 0, 0)
-		"edu":
-			var e := maxf(cov[CV_EDU1][i], maxf(cov[CV_EDU2][i], cov[CV_EDU3][i]))
-			return Color(0.95, 0.8, 0.2, clampf(e, 0.0, 1.0) * 0.6) if e > 0.02 else Color(0, 0, 0, 0)
-		"transit":
-			return Color(0.3, 0.8, 0.9, clampf(cov[CV_TRANSIT][i], 0.0, 1.0) * 0.6) if cov[CV_TRANSIT][i] > 0.02 else Color(0, 0, 0, 0)
-		"garbage":
-			if garbp[i] > 0.1:
-				return Color(0.5, 0.35, 0.1, 0.7)
-			if built and cov[CV_GARB][i] > 0.02:
-				return Color(0.3, 0.7, 0.3, 0.35)
-		"districts":
-			var r := region_of(i)
-			if not is_owned(i):
-				return Color(0, 0, 0, 0.35)
-			var dc: Color = [Color(0, 0, 0, 0), Color(0.9, 0.5, 0.2, 0.35), Color(0.2, 0.8, 0.3, 0.35), Color(0.3, 0.5, 0.95, 0.35), Color(0.9, 0.2, 0.7, 0.35)][district[r]]
-			if (cx(i) % REG == 0 or cz(i) % REG == 0):
-				return Color(1, 1, 1, 0.6)
-			return dc
-	return Color(0, 0, 0, 0)
 func road_cap(i: int) -> float:
 	if wire[i] & W_ROUND:
 		return float(ROUND_CAP)
@@ -2029,1030 +683,6 @@ func road_cap(i: int) -> float:
 	if weather == "Nieve":
 		c *= 0.7
 	return maxf(c, 1.0)
-var sun_rot := Vector3(999, 0, 0)
-func update_light() -> void:
-	hour = fmod(6.0 + day_timer / DAY_SECONDS * 24.0, 24.0)
-	var sunrise := 6.25
-	var sunset := 20.0
-	var up := 0.0
-	if hour > sunrise and hour < sunset:
-		up = sin((hour - sunrise) / (sunset - sunrise) * PI)
-	var nf := 1.0 - clampf(up * 4.0, 0.0, 1.0)
-	night = nf
-	var az := lerpf(-70.0, 250.0, clampf((hour - sunrise) / (sunset - sunrise), 0.0, 1.0))
-	var srot := Vector3(-maxf(up * 62.0, 4.0), az, 0.0)
-	if srot.distance_to(sun_rot) > 0.8:
-		sun_rot = srot
-		sun.rotation_degrees = srot
-	var gold := clampf(1.0 - up * 2.2, 0.0, 1.0) * (1.0 - nf)
-	sun.light_color = Color(1.0, 0.96, 0.9).lerp(Color(1.0, 0.56, 0.26), gold)
-	var cloudy := 0.0
-	if weather == "Lluvia" or weather == "Tormenta" or weather == "Nieve":
-		cloudy = 0.55
-	elif weather == "Nublado":
-		cloudy = 0.3
-	sun.light_energy = 1.0 * (1.0 - nf) * (1.0 - cloudy * 0.6)
-	env.tonemap_exposure = lerpf(0.8, 0.98, nf)
-	sun.visible = nf < 0.98
-	moon.light_energy = 0.28 * nf
-	var top := Color(0.22, 0.45, 0.85).lerp(Color(0.02, 0.03, 0.09), nf).lerp(Color(0.45, 0.5, 0.56), cloudy * (1.0 - nf))
-	var hor := Color(0.68, 0.8, 0.95).lerp(Color(0.06, 0.08, 0.16), nf).lerp(Color(0.95, 0.6, 0.35), gold * 0.8)
-	sky_mat.sky_top_color = top
-	sky_mat.sky_horizon_color = hor
-	sky_mat.ground_horizon_color = hor
-	sky_mat.ground_bottom_color = top.darkened(0.3)
-	sky_mat.sun_angle_max = 30.0
-	env.ambient_light_energy = lerpf(0.55, 0.35, nf)
-	env.fog_light_color = hor
-	env.fog_density = 0.0007 + cloudy * 0.0012 + (0.0005 if hour > 5.5 and hour < 8.0 else 0.0)
-	city_mat.set_shader_parameter("night", nf)
-	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
-	water_mat.set_shader_parameter("night", nf)
-	cloud_mat.set_shader_parameter("night", nf)
-	city_mat.set_shader_parameter("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
-	env.glow_intensity = lerpf(0.22, 0.9, nf)
-const COL_WHITE := Color(0.93, 0.92, 0.88)
-const COL_CREAM := Color(0.9, 0.83, 0.68)
-const COL_BRICK := Color(0.68, 0.35, 0.26)
-const COL_WOOD := Color(0.66, 0.43, 0.25)
-const COL_CONC := Color(0.64, 0.64, 0.62)
-const COL_BLACK := Color(0.13, 0.13, 0.14)
-const COL_GLASS := Color(0.2, 0.25, 0.3)
-const COL_STONE := Color(0.82, 0.76, 0.64)
-func make_faces_mesh(faces: Array) -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for f in faces:
-		var hint: Vector3 = f[0]
-		var pts: Array = f[1]
-		var p0: Vector3 = pts[0]
-		var p1: Vector3 = pts[1]
-		var p2: Vector3 = pts[2]
-		var n := (p1 - p0).cross(p2 - p0).normalized()
-		if n.dot(hint) < 0.0:
-			n = -n
-		for k in range(1, pts.size() - 1):
-			var b: Vector3 = pts[k]
-			var c: Vector3 = pts[k + 1]
-			if (b - p0).cross(c - p0).dot(n) > 0.0:
-				var tmp := b
-				b = c
-				c = tmp
-			st.set_normal(n)
-			st.add_vertex(p0)
-			st.set_normal(n)
-			st.add_vertex(b)
-			st.set_normal(n)
-			st.add_vertex(c)
-	return st.commit()
-func make_gable_mesh() -> ArrayMesh:
-	var t := 0.08
-	var f: Array = []
-	for sg in [-1.0, 1.0]:
-		var s: float = sg
-		f.append([Vector3(s, 0.5, 0), [Vector3(s * 0.5, 0, -0.5), Vector3(0, 1, -0.5), Vector3(0, 1, 0.5), Vector3(s * 0.5, 0, 0.5)]])
-		f.append([Vector3(-s, -0.5, 0), [Vector3(s * 0.5, -t, -0.5), Vector3(0, 1 - t, -0.5), Vector3(0, 1 - t, 0.5), Vector3(s * 0.5, -t, 0.5)]])
-		f.append([Vector3(s, 0, 0), [Vector3(s * 0.5, 0, -0.5), Vector3(s * 0.5, 0, 0.5), Vector3(s * 0.5, -t, 0.5), Vector3(s * 0.5, -t, -0.5)]])
-		for zg in [-0.5, 0.5]:
-			var zz: float = zg
-			f.append([Vector3(0, 0, zz), [Vector3(s * 0.5, 0, zz), Vector3(0, 1, zz), Vector3(0, 1 - t, zz), Vector3(s * 0.5, -t, zz)]])
-	return make_faces_mesh(f)
-func make_hip_mesh() -> ArrayMesh:
-	var r := 0.22
-	var f: Array = []
-	for sg in [-1.0, 1.0]:
-		var s: float = sg
-		f.append([Vector3(s, 0.6, 0), [Vector3(s * 0.5, 0, -0.5), Vector3(s * 0.5, 0, 0.5), Vector3(0, 1, r), Vector3(0, 1, -r)]])
-		f.append([Vector3(0, 0.6, s), [Vector3(-0.5, 0, s * 0.5), Vector3(0.5, 0, s * 0.5), Vector3(0, 1, s * r)]])
-	f.append([Vector3(0, -1, 0), [Vector3(-0.5, 0, -0.5), Vector3(0.5, 0, -0.5), Vector3(0.5, 0, 0.5), Vector3(-0.5, 0, 0.5)]])
-	return make_faces_mesh(f)
-func lp(x: float, z: float, rot: float, a: float, b: float) -> Vector2:
-	var c := cos(rot)
-	var s := sin(rot)
-	return Vector2(x + a * c + b * s, z - a * s + b * c)
-func bx(x: float, y: float, z: float, rot: float, a: float, b: float, yb: float, sx: float, sy: float, sz: float, col: Color, c0: float = 0.0, c1: float = 0.0, c2: float = 0.0, c3: float = 0.0) -> void:
-	var q := lp(x, z, rot, a, b)
-	em(M_BOX, q.x, y + yb, q.y, sx, sy, sz, rot, col, c0, c1, c2, c3)
-func gable(x: float, y: float, z: float, rot: float, a: float, b: float, lx: float, lz: float, h: float, wallc: Color, roofc: Color, along_x: bool, rm: float = -4.0, wm: float = 0.0) -> void:
-	var q := lp(x, z, rot, a, b)
-	var r := rot + (PI * 0.5 if along_x else 0.0)
-	var wx := lz if along_x else lx
-	var wz := lx if along_x else lz
-	em(M_ROOF, q.x, y, q.y, wx * 0.98, h, wz * 0.98, r, wallc, 0, 0, 0, wm)
-	em(M_GABLE, q.x, y + 0.02, q.y, wx * 1.16, h * 1.12, wz * 1.08, r, roofc, 0, 0, 0, rm)
-func hip(x: float, y: float, z: float, rot: float, a: float, b: float, lx: float, lz: float, h: float, roofc: Color) -> void:
-	var q := lp(x, z, rot, a, b)
-	if lx > lz:
-		em(M_HIP, q.x, y, q.y, lz, h, lx, rot + PI * 0.5, roofc, 0, 0, 0, -4.0)
-	else:
-		em(M_HIP, q.x, y, q.y, lx, h, lz, rot, roofc, 0, 0, 0, -4.0)
-func bush(x: float, y: float, z: float, r: float, i: int, k: int) -> void:
-	var g := Color(0.2, 0.42, 0.18).lerp(Color(0.32, 0.5, 0.2), hsh(i, k))
-	em(M_SPH, x, y, z, r, r * 0.8, r, 0.0, g, 0, 0, 0, 2.04)
-func pine(x: float, y: float, z: float, h: float, i: int) -> void:
-	em(M_BOX, x, y, z, 0.12, h * 0.25, 0.12, 0.0, Color(0.35, 0.24, 0.16))
-	em(M_CONE, x, y + h * 0.2, z, h * 0.38, h * 0.8, h * 0.38, 0.0, Color(0.16, 0.34, 0.2).lerp(Color(0.25, 0.42, 0.2), hsh(i, 9)), 0, 0, 0, 2.03)
-func parked_car(x: float, y: float, z: float, rot: float, a: float, b: float, i: int) -> void:
-	var q := lp(x, z, rot, a, b)
-	var cc: Color = [Color(0.92, 0.92, 0.93), Color(0.1, 0.1, 0.12), Color(0.55, 0.57, 0.6), Color(0.6, 0.1, 0.1)][int(hsh(i, 31) * 4.0) % 4]
-	em(M_BOX, q.x, y + 0.15, q.y, 0.9, 0.42, 1.95, rot, cc, 0, 0, 0, 1.5)
-	em(M_SPH, q.x, y + 0.5, q.y, 0.8, 0.42, 1.05, rot, Color(0.07, 0.09, 0.12), 0, 0, 0, 1.5)
-func garden(i: int, x: float, y: float, z: float, rot: float, s: float) -> void:
-	var q := lp(x, z, rot, -0.42 * s, 0.38 * s)
-	bush(q.x, y, q.y, 0.6 + hsh(i, 3) * 0.3, i, 3)
-	q = lp(x, z, rot, 0.42 * s, -0.4 * s)
-	if hsh(i, 4) < 0.5:
-		pine(q.x, y, q.y, 2.2 + hsh(i, 5) * 1.2, i)
-	else:
-		bush(q.x, y, q.y, 0.7, i, 6)
-func emit_house(i: int, x: float, y: float, z: float, s: float, v: int, rot: float, wall: Color) -> void:
-	var hd: bool = opts["quality"] >= 1
-	var tile: Color = [Color(0.62, 0.27, 0.18), Color(0.45, 0.25, 0.18), Color(0.28, 0.22, 0.2), Color(0.72, 0.36, 0.2)][int(hsh(i, 11) * 4.0) % 4]
-	var white := tint(COL_WHITE if hsh(i, 12) < 0.6 else COL_CREAM, i)
-	var k := (v + int(hsh(i, 13) * 8.0)) % 8
-	match k:
-		0:
-			bx(x, y, z, rot, -0.12 * s, -0.08 * s, 0, 0.62 * s, 3.4, 0.5 * s, white, 0.6)
-			gable(x, y + 3.4, z, rot, -0.12 * s, -0.08 * s, 0.62 * s, 0.5 * s, 1.5, white, tile, true)
-			bx(x, y, z, rot, 0.2 * s, 0.1 * s, 0, 0.34 * s, 3.4, 0.5 * s, white, 0.6)
-			gable(x, y + 3.4, z, rot, 0.2 * s, 0.1 * s, 0.34 * s, 0.5 * s, 1.7, white, tile, false)
-			bx(x, y, z, rot, 0.2 * s, 0.35 * s, 0, 0.32, 0.95, 0.05, Color(0.3, 0.2, 0.14), 0, 0, 0, -2)
-			bx(x, y, z, rot, -0.14 * s, 0.24 * s, 1.75, 0.46 * s, 0.1, 0.2 * s, tile, 0, 0, 0, -4)
-			if hd:
-				for pa in [-0.34, -0.14, 0.06]:
-					var pf: float = pa
-					bx(x, y, z, rot, pf * s, 0.32 * s, 0, 0.1, 1.75, 0.1, Color(0.4, 0.26, 0.18))
-				bx(x, y, z, rot, -0.14 * s, 0.33 * s, 0, 0.42 * s, 0.45, 0.05, COL_WHITE)
-				bx(x, y, z, rot, 0.2 * s, 0.42 * s, 0, 0.6, 0.14, 0.25, COL_CONC)
-			bx(x, y, z, rot, -0.34 * s, -0.12 * s, 3.4, 0.32, 2.3, 0.32, COL_BRICK, 0, 0, 0, -1)
-		1:
-			bx(x, y, z, rot, 0, -0.06 * s, 0, 0.7 * s, 2.2, 0.48 * s, white, 0.55)
-			gable(x, y + 2.2, z, rot, 0, -0.06 * s, 0.7 * s, 0.48 * s, 1.6, white, tile, true)
-			bx(x, y, z, rot, 0.17 * s, 0.22 * s, 0, 0.22 * s, 1.9, 0.1 * s, white)
-			gable(x, y + 1.9, z, rot, 0.17 * s, 0.22 * s, 0.22 * s, 0.12 * s, 0.6, white, tile, false)
-			bx(x, y, z, rot, 0.17 * s, 0.275 * s, 0, 0.3, 0.9, 0.04, Color(0.55, 0.3, 0.16), 0, 0, 0, -2)
-			bx(x, y, z, rot, -0.2 * s, 0.24 * s, 1.6, 0.3 * s, 0.08, 0.16 * s, tile, 0, 0, 0, -4)
-			if hd:
-				bx(x, y, z, rot, -0.33 * s, 0.31 * s, 0, 0.08, 1.6, 0.08, COL_WHITE)
-				bx(x, y, z, rot, -0.07 * s, 0.31 * s, 0, 0.08, 1.6, 0.08, COL_WHITE)
-				bx(x, y, z, rot, -0.2 * s, 0.32 * s, 0, 0.3 * s, 0.42, 0.04, COL_WHITE)
-				bx(x, y, z, rot, 0.27 * s, 0.28 * s, 1.25, 0.1, 0.16, 0.08, Color(1.0, 0.82, 0.5), 0, 1.0)
-			bx(x, y, z, rot, 0.22 * s, -0.12 * s, 2.2, 0.3, 2.0, 0.3, COL_BRICK, 0, 0, 0, -1)
-		2:
-			bx(x, y, z, rot, 0, 0, 0, 0.78 * s, 2.2, 0.6 * s, white, 0.55)
-			hip(x, y + 2.2, z, rot, 0, 0, 0.9 * s, 0.72 * s, 0.85, tile)
-			bx(x, y, z, rot, 0.1 * s, -0.08 * s, 2.2, 0.48 * s, 2.1, 0.4 * s, white, 0.55)
-			hip(x, y + 4.3, z, rot, 0.1 * s, -0.08 * s, 0.6 * s, 0.52 * s, 1.2, tile)
-			bx(x, y, z, rot, -0.15 * s, 0.301 * s, 0, 0.3, 0.95, 0.04, Color(0.5, 0.3, 0.17), 0, 0, 0, -2)
-			if hd:
-				bx(x, y, z, rot, -0.15 * s, 0.4 * s, 0, 0.9, 0.06, 0.6, COL_CONC)
-		3:
-			bx(x, y, z, rot, -0.12 * s, -0.08 * s, 0, 0.52 * s, 2.4, 0.5 * s, COL_CONC, 0, 0, 0, -3)
-			bx(x, y, z, rot, -0.12 * s, 0.171 * s, 0.15, 0.46 * s, 2.0, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.24 * s, -0.08 * s, 0, 0.3 * s, 2.4, 0.5 * s, white)
-			bx(x, y, z, rot, 0.24 * s, 0.171 * s, 0, 0.26 * s, 1.9, 0.03, COL_WOOD, 0, 0, 0, -2)
-			bx(x, y, z, rot, 0.04 * s, 0.02 * s, 2.4, 0.84 * s, 2.2, 0.62 * s, white)
-			bx(x, y, z, rot, -0.12 * s, 0.331 * s, 2.6, 0.44 * s, 1.75, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.27 * s, 0.332 * s, 2.5, 0.26 * s, 2.0, 0.04, COL_WOOD, 0, 0, 0, -2)
-			bx(x, y, z, rot, 0.04 * s, 0.02 * s, 4.6, 0.86 * s, 0.14, 0.64 * s, white.darkened(0.06))
-			if hd:
-				bx(x, y, z, rot, 0.24 * s, 0.4 * s, 0, 0.28 * s, 0.04, 0.16 * s, Color(0.78, 0.77, 0.74))
-				parked_car(x, y, z, rot, 0.24 * s, 0.44 * s, i)
-		4:
-			bx(x, y, z, rot, 0.08 * s, -0.02 * s, 0, 0.62 * s, 2.3, 0.56 * s, tint(COL_BRICK, i), 0.4, 0, 0, -1)
-			bx(x, y, z, rot, 0.08 * s, -0.06 * s, 2.3, 0.56 * s, 2.0, 0.44 * s, COL_BLACK, 0, 0, 0, -5)
-			bx(x, y, z, rot, 0.08 * s, 0.161 * s, 2.45, 0.5 * s, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.08 * s, -0.04 * s, 4.3, 0.74 * s, 0.16, 0.6 * s, Color(0.1, 0.1, 0.11))
-			bx(x, y, z, rot, -0.38 * s, 0.14 * s, 2.0, 0.26 * s, 0.08, 0.5 * s, Color(0.1, 0.1, 0.11))
-			if hd:
-				bx(x, y, z, rot, -0.48 * s, 0.37 * s, 0, 0.08, 2.0, 0.08, Color(0.1, 0.1, 0.11))
-				bx(x, y, z, rot, -0.48 * s, -0.08 * s, 0, 0.08, 2.0, 0.08, Color(0.1, 0.1, 0.11))
-				parked_car(x, y, z, rot, -0.37 * s, 0.14 * s, i)
-				for la in [-0.1, 0.12, 0.32]:
-					var lf: float = la
-					bx(x, y, z, rot, lf * s, 0.272 * s, 0, 0.12, 0.08, 0.06, Color(1.0, 0.8, 0.5), 0, 1.0)
-		5:
-			bx(x, y, z, rot, 0.05 * s, 0, 0, 0.7 * s, 2.3, 0.56 * s, white)
-			bx(x, y, z, rot, 0.05 * s, 0.281 * s, 0.1, 0.4 * s, 1.9, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, -0.34 * s, -0.04 * s, 0, 0.22 * s, 5.4, 0.36 * s, Color(0.27, 0.24, 0.23), 0, 0, 0, -1)
-			bx(x, y, z, rot, 0.12 * s, -0.02 * s, 2.3, 0.44 * s, 1.5, 0.52 * s, COL_BLACK, 0, 0, 0, -5)
-			gable(x, y + 3.8, z, rot, 0.12 * s, -0.02 * s, 0.44 * s, 0.52 * s, 1.8, COL_BLACK, COL_BLACK, false, -5.0, -5.0)
-			var q := lp(x, z, rot, 0.12 * s, 0.245 * s)
-			em(M_BOX, q.x, y + 2.45, q.y, 0.36 * s, 1.3, 0.04, rot, COL_GLASS, 0, 0, 0, -8)
-			em(M_ROOF, q.x, y + 3.8, q.y, 0.36 * s, 1.55, 0.04, rot, COL_GLASS, 0, 0, 0, -8)
-			if hd:
-				bx(x, y, z, rot, -0.05 * s, 0.4 * s, 0, 0.6 * s, 0.1, 0.2 * s, Color(0.55, 0.38, 0.24), 0, 0, 0, -2)
-		6:
-			bx(x, y, z, rot, -0.08 * s, -0.12 * s, 0, 0.66 * s, 2.4, 0.44 * s, COL_STONE, 0, 0, 0, -7)
-			bx(x, y, z, rot, -0.08 * s, 0.101 * s, 0.1, 0.5 * s, 2.0, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.02 * s, -0.06 * s, 2.4, 0.7 * s, 2.0, 0.5 * s, white)
-			bx(x, y, z, rot, -0.24 * s, -0.06 * s, 2.4, 0.22 * s, 2.0, 0.52 * s, COL_WOOD, 0, 0, 0, -2)
-			bx(x, y, z, rot, 0.1 * s, 0.191 * s, 2.55, 0.42 * s, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.02 * s, 0.0, 4.4, 0.78 * s, 0.25, 0.62 * s, white)
-			bx(x, y, z, rot, 0.24 * s, 0.33 * s, 0, 0.42 * s, 0.1, 0.24 * s, Color(0.72, 0.58, 0.42), 0, 0, 0, -2)
-			bx(x, y, z, rot, 0.24 * s, 0.33 * s, 0, 0.34 * s, 0.14, 0.17 * s, Color(0.22, 0.72, 0.8), 0, 0, 0.25)
-		_:
-			bx(x, y, z, rot, 0, -0.06 * s, 0, 0.86 * s, 2.2, 0.46 * s, white, 0.5)
-			hip(x, y + 2.2, z, rot, 0, -0.06 * s, 0.98 * s, 0.6 * s, 1.1, tile)
-			bx(x, y, z, rot, -0.2 * s, 0.181 * s, 0.05, 0.22 * s, 1.8, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.22 * s, 0.24 * s, 1.75, 0.24 * s, 0.06, 0.14 * s, COL_WHITE)
-			if hd:
-				for la in [-0.36, -0.02, 0.36]:
-					var lf: float = la
-					bx(x, y, z, rot, lf * s, 0.18 * s, 1.5, 0.1, 0.16, 0.08, Color(1.0, 0.8, 0.5), 0, 1.0)
-	if hd:
-		garden(i, x, y, z, rot, s)
-func emit_res(i: int, x: float, y: float, z: float, w: float, l: int, v: int, rot: float, wall: Color, big: bool) -> void:
-	var gc := tower_col(v, i)
-	var hd: bool = opts["quality"] >= 1
-	var vk := (v + int(hsh(i, 21) * 4.0)) % 4
-	match l:
-		1:
-			emit_house(i, x, y, z, w, v, rot, wall)
-		2, 3:
-			var h := (4.5 + (v % 3)) if l == 2 else (8.0 + (v % 4) * 1.3)
-			if vk == 0:
-				var bc := tint(COL_BRICK, i)
-				bx(x, y, z, rot, 0, 0, 0, w * 0.84, h, w * 0.84, bc, 1.0, 0, 0, -1)
-				bx(x, y, z, rot, 0, 0, 0, w * 0.86, 1.1, w * 0.86, Color(0.15, 0.19, 0.23), 0, 0.55)
-				var k := 2.5
-				while k < h - 0.3:
-					bx(x, y, z, rot, 0, 0, k, w * 0.86, 0.16, w * 0.86, COL_WHITE)
-					k += 2.5
-				bx(x, y, z, rot, 0, 0, h, w * 0.9, 0.3, w * 0.9, COL_WHITE)
-				if l == 3 or v % 2 == 0:
-					var q := lp(x, z, rot, w * 0.2, -w * 0.15)
-					if hd:
-						for lg in 4:
-							em(M_BOX, q.x + (0.5 if lg % 2 == 0 else -0.5), y + h, q.y + (0.5 if lg < 2 else -0.5), 0.1, 1.2, 0.1, 0.0, Color(0.25, 0.22, 0.2))
-					em(M_CYL, q.x, y + h + 1.2, q.y, 1.5, 1.4, 1.5, 0.0, Color(0.48, 0.36, 0.26), 0, 0, 0, -2)
-					em(M_CONE, q.x, y + h + 2.6, q.y, 1.6, 0.6, 1.6, 0.0, Color(0.25, 0.22, 0.2))
-			elif vk == 1:
-				bx(x, y, z, rot, 0, 0, 0, w * 0.76, h, w * 0.76, COL_BLACK, 1.0, 0, 0, -5)
-				var k := 0.0
-				while k < h + 0.1:
-					bx(x, y, z, rot, 0, 0.02 * w, k, w * 0.94, 0.26, w * 0.9, COL_WHITE.darkened(0.04), 0, 0, 0, -3)
-					if hd and k > 0.1:
-						bx(x, y, z, rot, 0, 0.44 * w, k + 0.26, w * 0.9, 0.22, 0.25, Color(0.3, 0.48, 0.22), 0, 0, 0, 2.02)
-					k += 2.5
-				if hd:
-					for pk in 5:
-						bx(x, y, z, rot, (pk - 2) * w * 0.15, -w * 0.1, h + 1.6, 0.1, 0.1, w * 0.5, COL_BLACK)
-					bx(x, y, z, rot, -w * 0.3, -w * 0.1, h, 0.12, 1.6, 0.12, COL_BLACK)
-					bx(x, y, z, rot, w * 0.3, -w * 0.1, h, 0.12, 1.6, 0.12, COL_BLACK)
-			elif vk == 2:
-				bx(x, y, z, rot, 0, 0, 0, w * 0.86, 1.8, w * 0.86, COL_STONE, 0, 0, 0, -7)
-				bx(x, y, z, rot, 0.12 * w, 0.431 * w, 0.05, w * 0.5, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
-				bx(x, y, z, rot, 0, 0, 1.8, w * 0.84, h - 1.8, w * 0.84, tint(Color(0.74, 0.4, 0.24), i), 0, 0, 0, -6)
-				bx(x, y, z, rot, 0, 0, h, w * 0.87, 0.25, w * 0.87, COL_STONE)
-			else:
-				bx(x, y, z, rot, 0, 0, 0, w * 0.82, h, w * 0.82, wall, 1.0)
-				bx(x, y, z, rot, 0, 0, 0, w * 0.84, 1.1, w * 0.84, Color(0.15, 0.19, 0.23), 0, 0.55)
-				var k := 2.6
-				while k < h - 0.5:
-					bx(x, y, z, rot, 0, 0, k, w * 0.86, 0.12, w * 0.86, wall.darkened(0.15))
-					bx(x, y, z, rot, 0, w * 0.45, k + 0.12, w * 0.5, 0.28, 0.5, wall.lightened(0.1))
-					k += 2.5
-				bx(x, y, z, rot, 0, 0, h, w * 0.88, 0.25, w * 0.88, wall.darkened(0.2))
-				if hd:
-					bx(x, y, z, rot, -w * 0.2, w * 0.18, h + 0.25, 0.9, 0.35, 0.5, Color(0.3, 0.55, 0.28), 0, 0, 0, 2.02)
-					bx(x, y, z, rot, w * 0.15, -w * 0.1, h + 0.25, 0.8, 0.5, 0.8, Color(0.55, 0.57, 0.6))
-		4:
-			var kind := v % 4
-			if kind == 0:
-				var h := 16.0 + (v % 5) * 2.0
-				em(M_BOX, x, y, z, w * 0.75, h, w * 0.75, rot, wall, 1.0, 0, 0, -7)
-				em(M_BOX, x, y + h, z, w * 0.5, 2.0, w * 0.5, rot, wall.darkened(0.1), 0.8, 0, 0, -7)
-				em(M_BOX, x, y, z, w * 0.78, 1.4, w * 0.78, rot, Color(0.14, 0.18, 0.22), 0, 0.55)
-				em(M_BOX, x, y + h - 0.3, z, w * 0.8, 0.4, w * 0.8, rot, wall.lightened(0.12))
-				em(M_CYL, x, y + h + 2.0, z, 1.2, 1.5, 1.2, 0.0, Color(0.4, 0.4, 0.42))
-			elif kind == 1:
-				var h := 22.0 + (v % 3) * 3.0
-				var sc := tint(Color(0.8, 0.7, 0.54), i)
-				em(M_BOX, x, y, z, w * 0.8, h * 0.5, w * 0.8, rot, sc, 1.0, 0, 0, -7)
-				em(M_BOX, x, y + h * 0.5, z, w * 0.84, 0.35, w * 0.84, rot, sc.lightened(0.15))
-				em(M_BOX, x, y + h * 0.5, z, w * 0.62, h * 0.3, w * 0.62, rot, sc, 1.0, 0, 0, -7)
-				em(M_BOX, x, y + h * 0.8, z, w * 0.66, 0.3, w * 0.66, rot, sc.lightened(0.15))
-				em(M_BOX, x, y + h * 0.8, z, w * 0.44, h * 0.2, w * 0.44, rot, sc, 1.0, 0, 0, -7)
-				em(M_BOX, x, y + h, z, w * 0.3, 1.4, w * 0.3, rot, Color(1.0, 0.85, 0.6), 0, 0.7)
-				em(M_CONE, x, y + h + 1.4, z, w * 0.2, h * 0.22, w * 0.2, rot, Color(0.75, 0.75, 0.78), 0, 0, 0, 1.5)
-			elif kind == 2:
-				var h := 22.0 + (v % 3) * 2.5
-				em(M_CYL, x, y, z, w * 0.7, h, w * 0.7, 0.0, gc, 1.3)
-				em(M_CYL, x, y + h, z, w * 0.74, 0.4, w * 0.74, 0.0, Color(0.8, 0.82, 0.85))
-			else:
-				var h := 18.0
-				bx(x, y, z, rot, -w * 0.22, 0, 0, w * 0.36, h, w * 0.5, gc, 1.3)
-				bx(x, y, z, rot, w * 0.22, 0, 0, w * 0.36, h + 3.0, w * 0.5, gc, 1.3)
-				em(M_BOX, x, y + h * 0.6, z, w * 0.2, 1.2, w * 0.3, rot, Color(0.5, 0.6, 0.7), 1.3)
-func emit_com(i: int, x: float, y: float, z: float, w: float, l: int, v: int, rot: float, dark: bool, big: bool) -> void:
-	var wallc: Color = tint([Color(0.85, 0.85, 0.9), Color(0.9, 0.8, 0.7), Color(0.7, 0.75, 0.85), Color(0.95, 0.9, 0.85)][v % 4], i)
-	var gcm := tower_col(v + 2, i)
-	if dark:
-		wallc = wallc.darkened(0.6)
-	var awn: Color = [Color(0.8, 0.2, 0.2), Color(0.2, 0.5, 0.8), Color(0.2, 0.6, 0.3), Color(0.9, 0.6, 0.1)][v % 4]
-	var fx := sin(rot) * w * 0.45
-	var fz := cos(rot) * w * 0.45
-	match l:
-		1:
-			em(M_BOX, x, y, z, w * 0.85, 2.4, w * 0.85, rot, wallc, 0.7, 0, 0, -1.0 if v % 3 == 0 else 0.0)
-			bx(x, y, z, rot, 0, w * 0.426, 0.1, w * 0.7, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
-			em(M_BOX, x + fx, y + 1.9, z + fz, w * 0.85, 0.12, 0.9, rot, awn)
-			if v % 2 == 0:
-				for k in 2:
-					em(M_CYL, x + fx * 1.25 + (k - 0.5) * 1.2 * cos(rot), y, z + fz * 1.25 - (k - 0.5) * 1.2 * sin(rot), 0.5, 0.6, 0.5, 0.0, Color(0.9, 0.9, 0.9))
-		2:
-			var bm := -1.0 if v % 2 == 0 else -7.0
-			em(M_BOX, x, y, z, w * 0.88, 5.0, w * 0.88, rot, tint(COL_BRICK, i) if v % 2 == 0 else wallc, 1.0, 0, 0, bm)
-			bx(x, y, z, rot, 0, w * 0.441, 0.05, w * 0.8, 1.8, 0.03, COL_GLASS, 0, 0, 0, -8)
-			em(M_BOX, x + fx, y + 2.0, z + fz, w * 0.88, 0.12, 1.0, rot, awn)
-			em(M_BOX, x, y + 5.0, z, w * 0.92, 0.3, w * 0.92, rot, COL_WHITE)
-			em(M_BOX, x, y + 5.3, z, w * 0.6, 0.8, w * 0.2, rot, awn, 0, 0.6)
-		3:
-			var h := 12.0 + (v % 3) * 2.0
-			em(M_BOX, x, y, z, w * 0.88, 3.0, w * 0.88, rot, COL_STONE, 0, 0, 0, -7)
-			bx(x, y, z, rot, 0, w * 0.441, 0.1, w * 0.78, 2.6, 0.03, COL_GLASS, 0, 0, 0, -8)
-			em(M_BOX, x, y + 3.0, z, w * 0.82, h - 3.0, w * 0.82, rot, gcm, 1.4)
-			em(M_BOX, x, y + h, z, w * 0.6, 1.0, w * 0.6, rot, Color(0.4, 0.4, 0.45))
-		4:
-			var h := 28.0 + (v % 4) * 4.0
-			if big:
-				h += 10.0
-			em(M_BOX, x, y, z, w * 0.88, 4.0, w * 0.88, rot, COL_STONE, 0.8, 0, 0, -7)
-			em(M_BOX, x, y + 4.0, z, w * 0.75, h * 0.72 - 4.0, w * 0.75, rot, gcm.darkened(0.15), 1.5)
-			em(M_BOX, x, y + h * 0.72, z, w * 0.79, 0.4, w * 0.79, rot, Color(0.75, 0.77, 0.8))
-			em(M_BOX, x, y + h * 0.72, z, w * 0.58, h * 0.28, w * 0.58, rot, gcm.darkened(0.1), 1.5)
-			if v % 2 == 0:
-				em(M_BOX, x, y + h, z, w * 0.4, 2.5, w * 0.4, rot, Color(0.8, 0.82, 0.85), 0, 0.5)
-				em(M_CONE, x, y + h + 2.5, z, w * 0.3, 6.0, w * 0.3, rot, Color(0.78, 0.8, 0.84), 0, 0, 0, 1.5)
-				em(M_BOX, x, y + h + 8.0, z, 0.2, 4.0, 0.2, 0.0, Color(0.9, 0.2, 0.2), 0, 0, 1.0)
-			else:
-				em(M_BOX, x, y + h, z, w * 0.5, 3.0, w * 0.5, rot, Color(0.35, 0.45, 0.55), 1.2)
-				em(M_BOX, x, y + h + 3.0, z, 0.25, 5.0, 0.25, 0.0, Color(0.9, 0.2, 0.2), 0, 0, 1.0)
-var cam: Camera3D
-var cam_target := Vector3.ZERO
-var cam_goal := Vector3.ZERO
-var cam_yaw: float = 0.6
-var cam_pitch: float = 0.85
-var cam_dist: float = 150.0
-var cam_dist_goal: float = 150.0
-var cam_follow = null
-var cam_moving_t: float = 0.0
-var intro_t: float = -1.0
-var intro_full: bool = false
-var tool := {"k": "look"}
-var touches := {}
-var gesture: String = ""
-var press_pos := Vector2.ZERO
-var press_time: float = 0.0
-var drag_a: int = -1
-var drag_b: int = -1
-var hover_cell: int = -1
-var multi_d0: float = 0.0
-var multi_a0: float = 0.0
-var multi_mid0 := Vector2.ZERO
-var mouse_btn: int = 0
-var last_mouse := Vector2.ZERO
-var stops := {}
-var line_edit := {}
-var sim_dirty: bool = true
-const DRAG_TOOLS := ["road", "zone", "dezone", "demolish", "cable", "pipe", "bike", "tram", "levee", "trees"]
-const LINE_TOOLS := ["road", "cable", "pipe", "bike", "tram", "levee"]
-const LINE_COST := {"bus": 200, "tram": 600, "metro": 2000, "train": 1500, "ferry": 800}
-const LINE_NAMES := {"bus": "Colectivo", "tram": "Tranvía", "metro": "Subte", "train": "Tren", "ferry": "Ferry"}
-func setup_camera() -> void:
-	cam = Camera3D.new()
-	cam.far = 3000.0
-	cam.fov = 55.0
-	add_child(cam)
-	cam.current = true
-func update_camera(delta: float) -> void:
-	if intro_t >= 0.0:
-		update_intro(delta)
-		return
-	if cam_follow != null:
-		var fp = cam_follow.call()
-		if fp == null:
-			cam_follow = null
-		else:
-			cam_goal = fp
-	var half := N * CELL * 0.55
-	cam_goal.x = clampf(cam_goal.x, -half, half)
-	cam_goal.z = clampf(cam_goal.z, -half, half)
-	cam_dist_goal = clampf(cam_dist_goal, 8.0 if drive != null else 14.0, 480.0)
-	cam_pitch = clampf(cam_pitch, 0.22, 1.32)
-	var k := 1.0 - exp(-delta * 12.0)
-	cam_target = cam_target.lerp(cam_goal, k)
-	cam_dist = lerpf(cam_dist, cam_dist_goal, k)
-	place_camera()
-func place_camera() -> void:
-	var off := Vector3(sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), cos(cam_yaw) * cos(cam_pitch)) * cam_dist
-	cam.position = cam_target + off
-	cam.look_at(cam_target, Vector3.UP)
-	if sun and not OS.has_feature("android"):
-		sun.directional_shadow_max_distance = clampf(cam_dist * 2.2, 80.0, 420.0)
-func start_intro(full: bool) -> void:
-	intro_full = full
-	intro_t = 0.0
-func update_intro(delta: float) -> void:
-	intro_t += delta
-	var dur := 9.0 if intro_full else 3.5
-	var t := clampf(intro_t / dur, 0.0, 1.0)
-	var e := t * t * (3.0 - 2.0 * t)
-	var a := cam_yaw + (1.0 - e) * (2.4 if intro_full else 0.8)
-	var d := lerpf(420.0 if intro_full else 300.0, cam_dist_goal, e)
-	var pt := lerpf(1.1, cam_pitch, e)
-	var off := Vector3(sin(a) * cos(pt), sin(pt), cos(a) * cos(pt)) * d
-	cam.position = cam_goal + off
-	cam.look_at(cam_goal, Vector3.UP)
-	cam_target = cam_goal
-	cam_dist = cam_dist_goal
-	if t >= 1.0:
-		intro_t = -1.0
-		if not card_queue.is_empty() and not card_panel.visible:
-			next_card()
-func skip_intro() -> void:
-	if intro_t >= 0.0:
-		intro_t = 999.0
-func screen_ground(pos: Vector2) -> Vector3:
-	var o := cam.project_ray_origin(pos)
-	var d := cam.project_ray_normal(pos)
-	if absf(d.y) < 0.0001:
-		return Vector3(INF, 0, INF)
-	var y := 0.0
-	var p := Vector3.ZERO
-	for it in 2:
-		var t := (y - o.y) / d.y
-		if t < 0:
-			return Vector3(INF, 0, INF)
-		p = o + d * t
-		var c := world_to_cell(p)
-		if inb(c.x, c.y):
-			y = maxf(hgt[idx(c.x, c.y)], 0.0)
-	return p
-func screen_cell(pos: Vector2) -> int:
-	var p := screen_ground(pos)
-	if p.x == INF:
-		return -1
-	var c := world_to_cell(p)
-	if not inb(c.x, c.y):
-		return -1
-	return idx(c.x, c.y)
-var finger_pos: Vector2 = Vector2.ZERO
-var drag_acc: float = 0.0
-var scrolls: Array = []
-var scroll_act: ScrollContainer = null
-var scroll_coast: ScrollContainer = null
-var scroll_vel: float = 0.0
-func scroll_at(p: Vector2) -> ScrollContainer:
-	for s in scrolls:
-		var sc: ScrollContainer = s
-		if sc.is_visible_in_tree():
-			var r := sc.get_global_rect()
-			if Rect2(r.position * ui_scale, r.size * ui_scale).has_point(p):
-				return sc
-	return null
-func slider_under(n: Node, p: Vector2) -> bool:
-	for c in n.get_children():
-		if c is Slider:
-			var r: Rect2 = c.get_global_rect()
-			if Rect2(r.position * ui_scale, r.size * ui_scale).has_point(p):
-				return true
-		if slider_under(c, p):
-			return true
-	return false
-func scroll_input(ev: InputEvent) -> void:
-	if ev is InputEventScreenTouch:
-		if ev.pressed:
-			scroll_act = scroll_at(ev.position)
-			scroll_coast = null
-			if scroll_act != null and slider_under(scroll_act, ev.position):
-				scroll_act = null
-		else:
-			scroll_coast = scroll_act
-			scroll_act = null
-	elif ev is InputEventScreenDrag and scroll_act != null and drag_acc > 14.0 * ui_scale:
-		var d: Vector2 = ev.relative / ui_scale
-		var horiz: bool = scroll_act.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED
-		var amt: float = d.x if horiz else d.y
-		scroll_move(scroll_act, horiz, -amt)
-		scroll_vel = lerpf(scroll_vel, -amt / maxf(get_process_delta_time(), 0.004), 0.5)
-func scroll_move(sc: ScrollContainer, horiz: bool, amt: float) -> void:
-	if horiz:
-		sc.scroll_horizontal += roundi(amt)
-	else:
-		sc.scroll_vertical += roundi(amt)
-func scroll_coast_step(delta: float) -> void:
-	if scroll_coast == null:
-		return
-	if absf(scroll_vel) < 30.0 or not scroll_coast.is_visible_in_tree():
-		scroll_coast = null
-		scroll_vel = 0.0
-		return
-	scroll_move(scroll_coast, scroll_coast.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED, scroll_vel * delta)
-	scroll_vel *= pow(0.04, delta)
-func _unhandled_input(event: InputEvent) -> void:
-	if intro_t >= 0.0:
-		if event is InputEventScreenTouch or (event is InputEventMouseButton and event.pressed):
-			skip_intro()
-		return
-	if photo_mode and event is InputEventScreenTouch and event.pressed and touches.is_empty():
-		pass
-	if event is InputEventScreenTouch:
-		on_touch(event.index, event.position, event.pressed)
-	elif event is InputEventScreenDrag:
-		on_drag(event.index, event.position)
-	elif event is InputEventMouseButton:
-		if event.device == -1:
-			return
-		on_mouse_button(event)
-	elif event is InputEventMouseMotion:
-		if event.device == -1:
-			return
-		on_mouse_motion(event)
-	elif event is InputEventKey and event.pressed:
-		on_key(event)
-var ui_touch := {}
-func over_ui(pos: Vector2) -> bool:
-	for fb in fan_btns:
-		if fb.visible and fb.modulate.a > 0.05:
-			var fr: Rect2 = fb.get_global_rect()
-			if Rect2(fr.position * ui_scale, fr.size * ui_scale).has_point(pos):
-				return true
-	for c in [hud_col, hud_right, build_btn, bottom_box, side_box, sheet, info_panel, mode_bar, drive_bar, follow_panel, tut_panel, card_panel, start_panel]:
-		var cc: Control = c
-		if cc.visible:
-			var r := cc.get_global_rect()
-			var rr := Rect2(r.position * ui_scale, r.size * ui_scale)
-			if rr.has_point(pos):
-				return true
-	return false
-func on_touch(index: int, pos: Vector2, pressed: bool) -> void:
-	if pressed:
-		if over_ui(pos):
-			ui_touch[index] = true
-			return
-		ui_touch.erase(index)
-	elif ui_touch.has(index):
-		ui_touch.erase(index)
-		return
-	elif not touches.has(index):
-		return
-	if pressed:
-		touches[index] = pos
-		if touches.size() == 1:
-			gesture = ""
-			press_pos = pos
-			press_time = Time.get_ticks_msec() / 1000.0
-			drag_a = screen_cell(pos)
-			drag_b = drag_a
-		elif touches.size() == 2:
-			if gesture == "draw":
-				clear_preview()
-			gesture = "multi"
-			var ps: Array = touches.values()
-			multi_d0 = (ps[0] - ps[1]).length()
-			multi_a0 = (ps[1] - ps[0]).angle()
-			multi_mid0 = (ps[0] + ps[1]) * 0.5
-	else:
-		touches.erase(index)
-		if touches.is_empty():
-			if gesture == "":
-				tap_at(pos)
-			elif gesture == "draw":
-				commit_drag()
-			gesture = ""
-		elif gesture == "multi":
-			gesture = "done"
-func on_drag(index: int, pos: Vector2) -> void:
-	if ui_touch.has(index) or not touches.has(index):
-		return
-	var prev: Vector2 = touches[index]
-	touches[index] = pos
-	cam_moving_t = 0.4
-	if touches.size() == 1:
-		if gesture == "":
-			if (pos - press_pos).length() > 14.0:
-				if tool["k"] in DRAG_TOOLS:
-					gesture = "draw"
-				else:
-					gesture = "pan"
-		if gesture == "draw":
-			var c := screen_cell(pos)
-			if c >= 0 and c != drag_b:
-				drag_b = c
-				show_preview()
-		elif gesture == "pan":
-			pan_screen(prev, pos)
-	elif touches.size() == 2 and gesture == "multi":
-		var ps: Array = touches.values()
-		var d: float = (ps[0] - ps[1]).length()
-		var a: float = (ps[1] - ps[0]).angle()
-		var mid: Vector2 = (ps[0] + ps[1]) * 0.5
-		if multi_d0 > 10.0:
-			cam_dist_goal *= multi_d0 / maxf(d, 1.0)
-			cam_dist = cam_dist_goal
-		crumb("dos dedos (zoom %d)" % int(cam_dist_goal))
-		var da := wrapf(a - multi_a0, -PI, PI)
-		cam_yaw += da
-		var dm := mid - multi_mid0
-		if absf(dm.y) > absf(dm.x) * 1.5 and absf(d - multi_d0) < 12.0:
-			cam_pitch += dm.y * 0.004
-		else:
-			pan_screen(multi_mid0, mid)
-		multi_d0 = d
-		multi_a0 = a
-		multi_mid0 = mid
-func pan_screen(from: Vector2, to: Vector2) -> void:
-	var a := screen_ground(from)
-	var b := screen_ground(to)
-	if a.x == INF or b.x == INF:
-		return
-	var d := a - b
-	d.y = 0
-	cam_goal += d
-	cam_target += d
-	cam_follow = null
-func on_mouse_button(ev: InputEventMouseButton) -> void:
-	if ev.button_index == MOUSE_BUTTON_WHEEL_UP and ev.pressed:
-		if ev.shift_pressed:
-			cam_pitch += 0.06
-		else:
-			cam_dist_goal *= 0.88
-		return
-	if ev.button_index == MOUSE_BUTTON_WHEEL_DOWN and ev.pressed:
-		if ev.shift_pressed:
-			cam_pitch -= 0.06
-		else:
-			cam_dist_goal *= 1.13
-		return
-	if ev.pressed:
-		mouse_btn = ev.button_index
-		last_mouse = ev.position
-		if ev.button_index == MOUSE_BUTTON_LEFT:
-			on_touch(0, ev.position, true)
-	else:
-		if ev.button_index == MOUSE_BUTTON_LEFT and touches.has(0):
-			on_touch(0, ev.position, false)
-		mouse_btn = 0
-func on_mouse_motion(ev: InputEventMouseMotion) -> void:
-	if mouse_btn == MOUSE_BUTTON_LEFT:
-		on_drag(0, ev.position)
-	elif mouse_btn == MOUSE_BUTTON_RIGHT:
-		pan_screen(last_mouse, ev.position)
-	elif mouse_btn == MOUSE_BUTTON_MIDDLE:
-		cam_yaw -= (ev.position.x - last_mouse.x) * 0.006
-		cam_pitch += (ev.position.y - last_mouse.y) * 0.005
-	else:
-		var c := screen_cell(ev.position)
-		if c != hover_cell:
-			hover_cell = c
-			if tool["k"] == "def":
-				drag_a = c
-				drag_b = c
-				show_preview()
-	last_mouse = ev.position
-func on_key(ev: InputEventKey) -> void:
-	var step := cam_dist * 0.08
-	var fw := Vector3(-sin(cam_yaw), 0, -cos(cam_yaw))
-	var rt := Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
-	match ev.keycode:
-		KEY_W, KEY_UP:
-			cam_goal += fw * step
-		KEY_S, KEY_DOWN:
-			cam_goal -= fw * step
-		KEY_A, KEY_LEFT:
-			cam_goal -= rt * step
-		KEY_D, KEY_RIGHT:
-			cam_goal += rt * step
-		KEY_Q:
-			cam_yaw += 0.15
-		KEY_E:
-			cam_yaw -= 0.15
-		KEY_R:
-			cam_pitch += 0.08
-		KEY_F:
-			cam_pitch -= 0.08
-		KEY_EQUAL, KEY_KP_ADD:
-			cam_dist_goal *= 0.85
-		KEY_MINUS, KEY_KP_SUBTRACT:
-			cam_dist_goal *= 1.15
-		KEY_SPACE:
-			set_speed(0 if speed > 0 else 1)
-		KEY_1:
-			set_speed(1)
-		KEY_2:
-			set_speed(2)
-		KEY_3:
-			set_speed(3)
-		KEY_ESCAPE:
-			set_tool({"k": "look"})
-func line_cells(a: int, b: int) -> Array:
-	var out: Array = []
-	if a < 0 or b < 0:
-		return out
-	var x0 := cx(a)
-	var z0 := cz(a)
-	var x1 := cx(b)
-	var z1 := cz(b)
-	var dx := x1 - x0
-	var dz := z1 - z0
-	var adx := absi(dx)
-	var adz := absi(dz)
-	var diag := adx >= 2 and adz >= 2 and maxf(adx, adz) / maxf(minf(adx, adz), 1.0) <= 2.2
-	if not diag:
-		if adx >= adz:
-			z1 = z0
-		else:
-			x1 = x0
-		var sx := signi(x1 - x0)
-		var sz := signi(z1 - z0)
-		var x := x0
-		var z := z0
-		out.append(idx(x, z))
-		while x != x1 or z != z1:
-			x += sx
-			z += sz
-			out.append(idx(x, z))
-		return out
-	var sx2 := signi(dx)
-	var sz2 := signi(dz)
-	var x := x0
-	var z := z0
-	out.append(idx(x, z))
-	var steps := adx + adz
-	for k in steps:
-		var fx := float(absi(x - x0) + 1) / float(adx) if adx > 0 else 99.0
-		var fz := float(absi(z - z0) + 1) / float(adz) if adz > 0 else 99.0
-		if x != x1 and (fx <= fz or z == z1):
-			x += sx2
-		elif z != z1:
-			z += sz2
-		out.append(idx(x, z))
-	return out
-func rect_cells(a: int, b: int) -> Array:
-	var out: Array = []
-	if a < 0 or b < 0:
-		return out
-	for z in range(mini(cz(a), cz(b)), maxi(cz(a), cz(b)) + 1):
-		for x in range(mini(cx(a), cx(b)), maxi(cx(a), cx(b)) + 1):
-			out.append(idx(x, z))
-	return out
-func drag_cells() -> Array:
-	if tool["k"] in LINE_TOOLS:
-		return line_cells(drag_a, drag_b)
-	return rect_cells(drag_a, drag_b)
-func clear_preview() -> void:
-	preview_node.multimesh.instance_count = 0
-	set_cost_hint("")
-func show_preview() -> void:
-	begin_buf()
-	var cost := 0.0
-	var cells: Array = []
-	if tool["k"] == "def":
-		var d: Dictionary = DEF[tool["id"]]
-		cells = def_cells(drag_a, d["sz"])
-		var ok := can_place_def(drag_a, tool["id"]) == ""
-		for c in cells:
-			var p := cell_pos(c)
-			em(M_BOX, p.x, maxf(p.y, 0.0) + 0.2, p.z, CELL * 0.95, 0.6, CELL * 0.95, 0.0, Color(0.2, 0.9, 0.3, 0.45) if ok else Color(0.95, 0.2, 0.15, 0.45))
-		cost = d["cost"]
-	else:
-		cells = drag_cells()
-		for c in cells:
-			var cc := cell_cost(c)
-			var p := cell_pos(c)
-			em(M_BOX, p.x, maxf(p.y, 0.0) + 0.3, p.z, CELL * 0.95, 0.4, CELL * 0.95, 0.0, Color(0.2, 0.9, 0.3, 0.45) if cc >= 0.0 else Color(0.95, 0.2, 0.15, 0.4))
-			if cc > 0.0:
-				cost += cc
-	var mm := preview_node.multimesh
-	mm.instance_count = _counts[M_BOX]
-	if _counts[M_BOX] > 0:
-		mm.buffer = _bufs[M_BOX].slice(0, _counts[M_BOX] * 20)
-	set_cost_hint(("Costo: " + fmt_money(cost)) if cost > 0 else "")
-func cell_cost(i: int) -> float:
-	if i < 0:
-		return -1.0
-	if not is_owned(i):
-		return -1.0
-	var k: String = tool["k"]
-	match k:
-		"road":
-			var t: int = tool["t"]
-			if bld[i] > 0 or (zone[i] > 0 and lvl[i] > 0):
-				return -1.0
-			if road[i] >= t:
-				return 0.0
-			if terr[i] == T_WATER:
-				if t == 1:
-					return -1.0
-				return ROAD_COST[t] * 3.0
-			var c: float = ROAD_COST[t] - ROAD_COST[road[i]]
-			if terr[i] == T_ROCK:
-				c *= 2.0
-			return c
-		"zone":
-			if road[i] > 0 or bld[i] > 0 or terr[i] == T_WATER or terr[i] == T_ROCK:
-				return -1.0
-			if zone[i] == tool["z"]:
-				return 0.0
-			return float(ZONE_COST)
-		"dezone":
-			return 0.0 if zone[i] > 0 else -1.0
-		"demolish":
-			if terr[i] == T_ROCK:
-				return 25.0
-			if road[i] > 0 or bld[i] > 0 or zone[i] > 0 or tree[i] > 0 or wire[i] > 0:
-				return 2.0
-			return -1.0
-		"cable":
-			if terr[i] == T_WATER:
-				return -1.0
-			return 0.0 if wire[i] & W_POWER else 3.0
-		"pipe":
-			if terr[i] == T_WATER:
-				return -1.0
-			return 0.0 if wire[i] & W_PIPE else 3.0
-		"bike":
-			if road[i] < 2 or road[i] == 4:
-				return -1.0
-			return 0.0 if wire[i] & W_BIKE else 6.0
-		"tram":
-			if road[i] < 3 or road[i] == 4:
-				return -1.0
-			return 0.0 if wire[i] & W_TRAM else 25.0
-		"levee":
-			if terr[i] == T_WATER or road[i] > 0 or bld[i] > 0 or zone[i] > 0:
-				return -1.0
-			return 0.0 if wire[i] & W_LEVEE else 40.0
-		"trees":
-			if road[i] > 0 or bld[i] > 0 or zone[i] > 0 or terr[i] == T_WATER or tree[i] > 0:
-				return -1.0
-			return 6.0
-	return -1.0
-func commit_drag() -> void:
-	clear_preview()
-	var cells := drag_cells()
-	apply_cells(cells)
-var undo_rec: Dictionary = {}
-func do_undo() -> void:
-	if undo_rec.is_empty():
-		toast("No hay nada para deshacer")
-		return
-	if undo_rec.has("def"):
-		var a: int = undo_rec["def"]
-		if bld[a] > 0:
-			remove_def(a)
-	else:
-		for r in undo_rec["cells"]:
-			var c: int = r[0]
-			road[c] = r[1]
-			zone[c] = r[2]
-			lvl[c] = r[3]
-			wire[c] = r[4]
-			tree[c] = r[5]
-			part[c] = r[6]
-			occ[c] = r[7]
-			vari[c] = r[8]
-			mark_dirty(c)
-	if not creative:
-		money += float(undo_rec["money"])
-	undo_rec = {}
-	sim_dirty = true
-	sfx("demolish")
-	toast("Deshecho")
-func apply_cells(cells: Array) -> void:
-	var total := 0.0
-	for c in cells:
-		var cc := cell_cost(c)
-		if cc > 0.0:
-			total += cc
-	if not creative and total > money:
-		toast("No alcanza la plata: necesitás " + fmt_money(total))
-		sfx("error")
-		return
-	var k: String = tool["k"]
-	var changed := 0
-	var rec: Array = []
-	for c in cells:
-		if cell_cost(c) >= 0.0:
-			rec.append([c, road[c], zone[c], lvl[c], wire[c], tree[c], part[c], occ[c], vari[c]])
-	for c in cells:
-		var cc := cell_cost(c)
-		if cc < 0.0:
-			continue
-		match k:
-			"road":
-				if road[c] < tool["t"]:
-					road[c] = tool["t"]
-					tree[c] = 0
-					if zone[c] > 0:
-						zone[c] = 0
-						lvl[c] = 0
-					count_add("roads")
-					changed += 1
-			"zone":
-				if zone[c] != tool["z"]:
-					zone[c] = tool["z"]
-					lvl[c] = 0
-					occ[c] = 0.0
-					part[c] = -1
-					vari[c] = randi() % 64
-					count_add("zones")
-					if tool["z"] == Z_R:
-						count_add("zoneR")
-					if tool["z"] == Z_C:
-						count_add("zoneC")
-					changed += 1
-			"dezone":
-				clear_zone(c)
-				changed += 1
-			"demolish":
-				demolish_cell(c)
-				flatten_cell(c)
-				changed += 1
-			"cable":
-				wire[c] |= W_POWER
-				changed += 1
-			"pipe":
-				wire[c] |= W_PIPE
-				changed += 1
-			"bike":
-				wire[c] |= W_BIKE
-				changed += 1
-			"tram":
-				wire[c] |= W_TRAM
-				changed += 1
-			"levee":
-				wire[c] |= W_LEVEE
-				tree[c] = 0
-				changed += 1
-			"trees":
-				tree[c] = pick_tree_kind(c, RandomNumberGenerator.new())
-				count_add("trees")
-				changed += 1
-		mark_dirty(c)
-	if changed > 0:
-		if not creative:
-			money -= total
-		sim_dirty = true
-		undo_rec = {} if k == "demolish" else {"cells": rec, "money": total}
-		sfx("build" if k != "demolish" else "demolish")
-		vibrate()
-		if k == "road":
-			unlock_ach("first_road")
-			if opts["autoround"]:
-				auto_rounds(cells)
-func clear_zone(c: int) -> void:
-	var a := anchor_of(c)
-	if zone[c] > 0 and part[c] >= 0:
-		unmerge(a)
-	zone[c] = 0
-	lvl[c] = 0
-	occ[c] = 0.0
-	part[c] = -1
-	anim_cells.erase(c)
-func unmerge(a: int) -> void:
-	for dz in 2:
-		for dx in 2:
-			var j := a + dz * N + dx
-			if j < N * N and part[j] == a:
-				part[j] = -1
-				lvl[j] = mini(lvl[j], 3)
-				mark_dirty(j)
-func flatten_cell(c: int) -> void:
-	if terr[c] == T_ROCK:
-		terr[c] = T_LAND
-		hgt[c] = 0.0
-		terrain_dirty = true
-		mark_dirty(c)
-func demolish_cell(c: int) -> void:
-	if bld[c] > 0:
-		remove_def(anchor_of(c))
-	clear_zone(c)
-	if road[c] > 0:
-		road[c] = 0
-		stops.erase(c)
-		wire[c] &= ~(W_BIKE | W_TRAM | W_ROUND)
-	tree[c] = 0
-	wire[c] = 0
-	burn[c] = 0.0
-	garbp[c] = 0.0
-func remove_def(a: int) -> void:
-	var d: Dictionary = DEF[bld[a]]
-	var sz: int = d["sz"]
-	for dz in sz:
-		for dx in sz:
-			var j := a + dz * N + dx
-			if j < N * N and anchor_of(j) == a:
-				bld[j] = 0
-				part[j] = -1
-				burn[j] = 0.0
-				mark_dirty(j)
-	wonder_progress.erase(a)
-	for ln in lines:
-		ln["stops"] = ln["stops"].filter(func(s): return s != a)
-	sim_dirty = true
 func def_cells(a: int, sz: int) -> Array:
 	var out: Array = []
 	if a < 0:
@@ -3064,344 +694,89 @@ func def_cells(a: int, sz: int) -> Array:
 			if inb(x0 + dx, z0 + dz):
 				out.append(idx(x0 + dx, z0 + dz))
 	return out
-func can_place_def(a: int, id: int) -> String:
-	if a < 0:
-		return "Fuera del mapa"
-	var d: Dictionary = DEF[id]
-	var sz: int = d["sz"]
-	var cells := def_cells(a, sz)
-	if cells.size() < sz * sz:
-		return "No entra"
-	if not creative and d["st"] > max_stage:
-		return "Se desbloquea en etapa " + STAGES[d["st"]][0]
-	if d.get("unique", false):
-		for i in N * N:
-			if bld[i] == id:
-				return "Ya tenés uno"
-	if scenario == 1 and id == 42:
-		return "En este escenario no hay carbón"
-	var need: String = d.get("need", "")
-	var has_shore := false
-	var has_sand := false
-	for c in cells:
-		if not is_owned(c):
-			return "Esa zona no es tuya. Comprala en Herramientas."
-		if road[c] > 0 or bld[c] > 0 or (zone[c] > 0 and lvl[c] > 0):
-			return "Está ocupado"
-		if terr[c] == T_WATER and need != "shore":
-			return "Es agua"
-		if terr[c] == T_ROCK:
-			return "Es un cerro"
-		if flood[c] > 0.0:
-			return "Está inundado, esperá que baje el agua"
-		if near_water(c, 1):
-			has_shore = true
-		if terr[c] == T_SAND:
-			has_sand = true
-	if need == "shore" and not has_shore:
-		return "Tiene que ir en la costa"
-	if need == "sand" and not has_sand:
-		return "Tiene que ir en la arena"
-	if not creative and money < d["cost"]:
-		return "No alcanza la plata"
-	return ""
-func place_def(a: int, id: int) -> bool:
-	var err := can_place_def(a, id)
-	if err != "":
-		toast(err)
-		sfx("error")
-		return false
-	var d: Dictionary = DEF[id]
-	var sz: int = d["sz"]
-	var cells := def_cells(a, sz)
-	var anchor: int = cells[0]
-	for c in cells:
-		clear_zone(c)
-		bld[c] = id
-		part[c] = anchor if sz > 1 else -1
-		tree[c] = 0
-		mark_dirty(c)
-	vari[anchor] = randi() % 64
-	if id == 66 and not cine_told:
-		cine_told = true
-		queue_card({"title": "🎬 ¡Abrió el cine!", "text": "Cada pocos días se estrena una película (Scream, Chucky, It, Avengers, Star Wars y muchas más). Durante 24 horas sus protagonistas salen a las calles haciendo lo que hacen en la película.", "btns": [["¡Genial!", Callable()]]})
-	if d["c"] == "wonder":
-		wonder_progress[anchor] = 0
-	if not creative:
-		money -= d["cost"]
-	count_add("builds")
-	undo_rec = {"def": anchor, "money": 0.0 if creative else float(d["cost"])}
-	match d["c"]:
-		"serv":
-			count_add("serv")
-		"park":
-			count_add("park")
-	if d.has("pw"):
-		count_add("power")
-	if d.has("wt"):
-		count_add("water")
-	if d.has("gb"):
-		count_add("garb")
-	if id == 53:
-		unlock_ach("metro")
-	if id == 56:
-		unlock_ach("airport")
-	if id == 55:
-		unlock_ach("port")
-	if id == 35:
-		unlock_ach("stadium")
-	if not road_near(anchor, sz):
-		toast(d["n"] + " necesita una calle cerca para funcionar")
-	sim_dirty = true
-	sfx("build")
-	vibrate()
-	anim_cells[anchor] = 1.2
-	return true
-func tap_at(pos: Vector2) -> void:
-	var c := screen_cell(pos)
-	var k: String = tool["k"]
-	if k in DRAG_TOOLS:
-		if c >= 0:
-			apply_cells([c])
-		return
-	match k:
-		"look":
-			var pk := pick_ped(pos)
-			if not pk.is_empty():
-				follow_citizen(pk)
-			elif c >= 0:
-				show_info(c)
-		"def":
-			if hover_cell != c or not preview_node.multimesh.instance_count:
-				pass
-			place_def(c, tool["id"])
-			clear_preview()
-		"round":
-			toggle_round(c)
-		"stop":
-			place_stop(c, tool["kind"])
-		"line":
-			pick_line_stop(c)
-		"buy":
-			ask_buy_region(c)
-		"district":
-			if c >= 0:
-				open_district(region_of(c))
-		"follow":
-			pass
-func block_fill(c: int) -> Array:
-	if c < 0:
-		return []
-	var ok := func(j: int) -> bool:
-		return road[j] == 0 and bld[j] == 0 and terr[j] != T_WATER and terr[j] != T_ROCK and is_owned(j)
-	if not ok.call(c):
-		return [c]
-	var seen := {c: true}
-	var q: Array = [c]
-	var head := 0
-	while head < q.size():
-		var j: int = q[head]
-		head += 1
-		if q.size() > 90:
-			break
-		for o in [1, -1, N, -N]:
-			var k: int = j + o
-			if k < 0 or k >= N * N:
-				continue
-			if (o == 1 or o == -1) and cz(k) != cz(j):
-				continue
-			if seen.has(k) or not ok.call(k):
-				continue
-			seen[k] = true
-			q.append(k)
-	if q.size() > 90:
-		var out: Array = []
-		for dz in range(-1, 2):
-			for dx in range(-1, 2):
-				if inb(cx(c) + dx, cz(c) + dz):
-					out.append(idx(cx(c) + dx, cz(c) + dz))
-		return out
-	return q
-func auto_rounds(cells: Array) -> void:
-	for c in cells:
-		if road[c] != 3 or (wire[c] & W_ROUND):
-			continue
-		var nb := road_n(c)
-		if not (nb[0] and nb[1] and nb[2] and nb[3]):
-			continue
-		var near := false
-		for dz in range(-2, 3):
-			for dx in range(-2, 3):
-				var x := cx(c) + dx
-				var z := cz(c) + dz
-				if inb(x, z) and (wire[idx(x, z)] & W_ROUND):
-					near = true
-		if not near:
-			wire[c] |= W_ROUND
-			mark_dirty(c)
-func toggle_round(c: int) -> void:
-	if c < 0 or road[c] < 2:
-		toast("La rotonda va en un cruce de calles")
-		return
-	var nb := road_n(c)
-	var cnt := int(nb[0]) + int(nb[1]) + int(nb[2]) + int(nb[3])
-	if cnt < 3:
-		toast("La rotonda va en un cruce de 3 o 4 calles")
-		return
-	if not creative and money < 150:
-		toast("No alcanza la plata")
-		return
-	wire[c] ^= W_ROUND
-	if not creative:
-		money -= 150
-	mark_dirty(c)
-	sim_dirty = true
-	sfx("build")
-func place_stop(c: int, kind: String) -> void:
-	if c < 0 or road[c] == 0:
-		toast("La parada va sobre una calle")
-		return
-	if kind == "tram" and not (wire[c] & W_TRAM):
-		toast("La parada de tranvía va sobre vías de tranvía")
-		return
-	if stops.has(c):
-		toast("Ya hay una parada")
-		return
-	if not creative and money < 60:
-		toast("No alcanza la plata")
-		return
-	stops[c] = kind
-	if not creative:
-		money -= 60
-	sim_dirty = true
-	sfx("build")
-	toast("Parada puesta. Para armar la línea tocá Transporte > Nueva línea.")
-func stop_kind_at(c: int) -> String:
-	if stops.has(c):
-		return stops[c]
-	if bld[c] > 0:
-		var d: Dictionary = DEF[bld[c]]
-		return d.get("stop", "")
-	return ""
-func pick_line_stop(c: int) -> void:
-	if c < 0:
-		return
-	var kind: String = line_edit.get("kind", "bus")
-	var found := -1
-	for dz in range(-1, 2):
-		for dx in range(-1, 2):
-			var x := cx(c) + dx
-			var z := cz(c) + dz
-			if not inb(x, z):
-				continue
-			var j := idx(x, z)
-			if stop_kind_at(j) == kind:
-				found = anchor_of(j)
-				break
-		if found >= 0:
-			break
-	if found < 0:
-		toast("Tocá una parada de " + LINE_NAMES[kind])
-		return
-	line_edit["stops"].append(found)
-	toast("Paradas en la línea: %d" % line_edit["stops"].size())
-	sfx("click")
-func ask_buy_region(c: int) -> void:
-	if c < 0:
-		return
-	var r := region_of(c)
-	if owned[r] == 1:
-		toast("Esta zona ya es tuya")
-		return
-	var rx := r % NREG
-	var rz := r / NREG
-	var adj := false
-	for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		var xx: int = rx + o.x
-		var zz: int = rz + o.y
-		if xx >= 0 and zz >= 0 and xx < NREG and zz < NREG and owned[zz * NREG + xx] == 1:
-			adj = true
-	if not adj:
-		toast("Solo podés comprar zonas pegadas a las tuyas")
-		return
-	var cost := region_price()
-	confirm("¿Comprar %s por %s?" % [DISTRICT_NAMES[r], fmt_money(cost)], func():
-		if money < cost and not creative:
-			toast("No alcanza la plata")
-			return
-		if not creative:
-			money -= cost
-		owned[r] = 1
-		terrain_dirty = true
-		mark_all_dirty()
-		sfx("cheer")
-		toast("¡Compraste " + DISTRICT_NAMES[r] + "!")
-		var all := true
-		for k in NREG * NREG:
-			if owned[k] == 0:
-				all = false
-		if all:
-			unlock_ach("regions"))
-func region_price() -> float:
+func near_road_cell(a: int, r: int) -> int:
+	var x := cx(a)
+	var z := cz(a)
+	for dz in range(-r, r + 2):
+		for dx in range(-r, r + 2):
+			if inb(x + dx, z + dz) and road[idx(x + dx, z + dz)] > 0:
+				return idx(x + dx, z + dz)
+	return -1
+func bike_near(i: int) -> bool:
+	for dz in range(-3, 4):
+		for dx in range(-3, 4):
+			var x := cx(i) + dx
+			var z := cz(i) + dz
+			if inb(x, z) and wire[idx(x, z)] & W_BIKE:
+				return true
+	return false
+func zone_cap(z: int, l: int) -> int:
+	match z:
+		Z_R:
+			return CAP_R[l]
+		Z_C:
+			return CAP_C[l]
+		Z_I:
+			return CAP_I[l]
+		Z_M:
+			return CAP_MR[l]
+	return 0
+func zone_count(z: int) -> int:
 	var n := 0
-	for k in NREG * NREG:
-		n += owned[k]
-	return 4000.0 * pow(float(n - 3), 1.25)
-func finish_line() -> void:
-	var kind: String = line_edit.get("kind", "bus")
-	var st: Array = line_edit.get("stops", [])
-	if st.size() < 2:
-		toast("La línea necesita al menos 2 paradas")
-		return
-	var cost: int = LINE_COST[kind]
-	if not creative and money < cost:
-		toast("No alcanza la plata")
-		return
-	if not creative:
-		money -= cost
-	var num := 1
-	for ln in lines:
-		num = maxi(num, ln["num"] + 1)
-	var ln := {"kind": kind, "stops": st.duplicate(), "pts": [], "t": 0.0, "num": num, "col": Color.from_hsv(fmod(num * 0.17, 1.0), 0.75, 0.9)}
-	lines.append(ln)
-	route_line(ln)
-	line_edit = {}
-	set_tool({"k": "look"})
-	count_add("line")
-	sim_dirty = true
-	sfx("cheer")
-	toast("¡Línea %d de %s en marcha!" % [num, LINE_NAMES[kind]])
-	add_news("Se inauguró la línea %d de %s" % [num, LINE_NAMES[kind]])
-	if lines.size() >= 3:
-		unlock_ach("lines3")
-func set_speed(s: int) -> void:
-	speed = s
-	refresh_speed_buttons()
-func vibrate() -> void:
-	if opts["vibrate"]:
-		Input.vibrate_handheld(18)
+	for i in zone_list:
+		if zone[i] == z:
+			n += 1
+	return n
+func def_center(a: int) -> Vector3:
+	var p := cell_pos(a)
+	if bld[a] > 0:
+		var sz: int = DEF[bld[a]]["sz"]
+		p.x += (sz - 1) * CELL * 0.5
+		p.z += (sz - 1) * CELL * 0.5
+	return p
+func place_plaza() -> void:
+	var c := N / 2
+	for z in range(c - 2, c + 2):
+		for x in range(c - 2, c + 2):
+			var i := idx(x, z)
+			if terr[i] == T_WATER:
+				return
+	for z in range(c - 2, c + 2):
+		for x in range(c - 2, c + 2):
+			var i := idx(x, z)
+			if x == c - 2 or x == c + 1 or z == c - 2 or z == c + 1:
+				road[i] = 2
+			tree[i] = 0
+			terr[i] = T_LAND if terr[i] == T_ROCK else terr[i]
+			hgt[i] = 0.0
+	var a := idx(c - 1, c - 1)
+	for dz in 2:
+		for dx in 2:
+			var j := a + dz * N + dx
+			bld[j] = 31
+			part[j] = a
+	for x in range(N / 2 - 6, c - 2):
+		var i := idx(x, c - 1)
+		if terr[i] != T_WATER:
+			road[i] = maxi(road[i], 3)
+			tree[i] = 0
+# ================================================================ src/sim.gd
+# Simulación: redes, servicios, felicidad, crecimiento, economía y días.
+const ROAD_UPK := [0.0, 0.03, 0.08, 0.2, 0.5]
+const CAP_MJ := [0, 3, 6, 12, 24]
+const REQUESTS := [
+	["una plaza cerca", CV_PARK], ["más policía", CV_POL], ["una salita", CV_HEALTH],
+	["una escuela", CV_EDU1], ["un colectivo", CV_TRANSIT], ["bomberos cerca", CV_FIRE],
+]
+var trips_total: int = 0
+var trips_green: int = 0
 var sim_acc: float = 0.0
-var sim_stage: int = -1
 var sim_cycle: int = 0
-var zone_list := PackedInt32Array()
-var anchors: Array = []
-var comp := PackedInt32Array()
-var unemployment: float = 0.0
 var jobs_c: int = 0
 var jobs_i: int = 0
 var jobs_cap: int = 0
-var trade_ok: bool = false
-var commute := PackedFloat32Array()
-var car_paths: Array = []
-var power_frac: float = 1.0
-var water_frac: float = 1.0
-var last_budget := {}
 var class_mult: float = 1.0
-var classes := [0, 0, 0]
 var epidemic_days: int = 0
-var green_power: float = 0.0
-var hp_bonus: float = 0.0
-const WHY_TEXT := ["", "contaminación", "inseguridad", "cortes de luz", "falta de agua", "basura en la calle", "mucho tránsito", "falta de salud", "falta de escuelas", "impuestos altos", "falta de trabajo", "falta de verde", "inundación o incendio"]
 func speed_mult() -> float:
 	return [0.0, 1.0, 2.0, 4.0][speed]
 func sim_process(delta: float) -> void:
@@ -3592,14 +967,6 @@ func compute_networks() -> void:
 			continue
 		if DEF[bld[a]].get("trade", false) and def_active(a):
 			trade_ok = true
-func near_road_cell(a: int, r: int) -> int:
-	var x := cx(a)
-	var z := cz(a)
-	for dz in range(-r, r + 2):
-		for dx in range(-r, r + 2):
-			if inb(x + dx, z + dz) and road[idx(x + dx, z + dz)] > 0:
-				return idx(x + dx, z + dz)
-	return -1
 func stamp(layer: PackedFloat32Array, cxi: int, czi: int, r: float, amount: float) -> PackedFloat32Array:
 	var ri := int(ceil(r))
 	for dz in range(-ri, ri + 1):
@@ -3827,14 +1194,6 @@ func compute_traffic() -> void:
 		trips_total += trips
 		trips_green += int(green)
 	counters["green_share"] = green / maxf(trips, 1)
-func bike_near(i: int) -> bool:
-	for dz in range(-3, 4):
-		for dx in range(-3, 4):
-			var x := cx(i) + dx
-			var z := cz(i) + dz
-			if inb(x, z) and wire[idx(x, z)] & W_BIKE:
-				return true
-	return false
 func compute_happiness() -> void:
 	var hc: PackedFloat32Array = cov[CV_HEALTH]
 	var e1: PackedFloat32Array = cov[CV_EDU1]
@@ -3931,17 +1290,6 @@ func compute_happiness() -> void:
 		cnt += 1
 	avg_happy = sum_h / cnt if cnt > 0 else 0.65
 	class_mult = cls_tax / cnt if cnt > 0 else 1.0
-func zone_cap(z: int, l: int) -> int:
-	match z:
-		Z_R:
-			return CAP_R[l]
-		Z_C:
-			return CAP_C[l]
-		Z_I:
-			return CAP_I[l]
-		Z_M:
-			return CAP_MR[l]
-	return 0
 func grow_zones() -> void:
 	if zone_list.is_empty():
 		return
@@ -4805,36 +2153,2483 @@ func advice() -> String:
 	if best > 0:
 		return "Lo que más molesta a la gente: " + WHY_TEXT[best] + "."
 	return "La ciudad anda bien. ¡Seguí creciendo!"
-func zone_count(z: int) -> int:
+# ================================================================ src/build.gd
+# Herramientas de construir, demoler, rotondas, paradas y líneas.
+const LINE_TOOLS := ["road", "cable", "pipe", "bike", "tram", "levee"]
+func line_cells(a: int, b: int) -> Array:
+	var out: Array = []
+	if a < 0 or b < 0:
+		return out
+	var x0 := cx(a)
+	var z0 := cz(a)
+	var x1 := cx(b)
+	var z1 := cz(b)
+	var dx := x1 - x0
+	var dz := z1 - z0
+	var adx := absi(dx)
+	var adz := absi(dz)
+	var diag := adx >= 2 and adz >= 2 and maxf(adx, adz) / maxf(minf(adx, adz), 1.0) <= 2.2
+	if not diag:
+		if adx >= adz:
+			z1 = z0
+		else:
+			x1 = x0
+		var sx := signi(x1 - x0)
+		var sz := signi(z1 - z0)
+		var x := x0
+		var z := z0
+		out.append(idx(x, z))
+		while x != x1 or z != z1:
+			x += sx
+			z += sz
+			out.append(idx(x, z))
+		return out
+	var sx2 := signi(dx)
+	var sz2 := signi(dz)
+	var x := x0
+	var z := z0
+	out.append(idx(x, z))
+	var steps := adx + adz
+	for k in steps:
+		var fx := float(absi(x - x0) + 1) / float(adx) if adx > 0 else 99.0
+		var fz := float(absi(z - z0) + 1) / float(adz) if adz > 0 else 99.0
+		if x != x1 and (fx <= fz or z == z1):
+			x += sx2
+		elif z != z1:
+			z += sz2
+		out.append(idx(x, z))
+	return out
+func rect_cells(a: int, b: int) -> Array:
+	var out: Array = []
+	if a < 0 or b < 0:
+		return out
+	for z in range(mini(cz(a), cz(b)), maxi(cz(a), cz(b)) + 1):
+		for x in range(mini(cx(a), cx(b)), maxi(cx(a), cx(b)) + 1):
+			out.append(idx(x, z))
+	return out
+func drag_cells() -> Array:
+	if tool["k"] in LINE_TOOLS:
+		return line_cells(drag_a, drag_b)
+	return rect_cells(drag_a, drag_b)
+func cell_cost(i: int) -> float:
+	if i < 0:
+		return -1.0
+	if not is_owned(i):
+		return -1.0
+	var k: String = tool["k"]
+	match k:
+		"road":
+			var t: int = tool["t"]
+			if bld[i] > 0 or (zone[i] > 0 and lvl[i] > 0):
+				return -1.0
+			if road[i] >= t:
+				return 0.0
+			if terr[i] == T_WATER:
+				if t == 1:
+					return -1.0
+				return ROAD_COST[t] * 3.0
+			var c: float = ROAD_COST[t] - ROAD_COST[road[i]]
+			if terr[i] == T_ROCK:
+				c *= 2.0
+			return c
+		"zone":
+			if road[i] > 0 or bld[i] > 0 or terr[i] == T_WATER or terr[i] == T_ROCK:
+				return -1.0
+			if zone[i] == tool["z"]:
+				return 0.0
+			return float(ZONE_COST)
+		"dezone":
+			return 0.0 if zone[i] > 0 else -1.0
+		"demolish":
+			if terr[i] == T_ROCK:
+				return 25.0
+			if road[i] > 0 or bld[i] > 0 or zone[i] > 0 or tree[i] > 0 or wire[i] > 0:
+				return 2.0
+			return -1.0
+		"cable":
+			if terr[i] == T_WATER:
+				return -1.0
+			return 0.0 if wire[i] & W_POWER else 3.0
+		"pipe":
+			if terr[i] == T_WATER:
+				return -1.0
+			return 0.0 if wire[i] & W_PIPE else 3.0
+		"bike":
+			if road[i] < 2 or road[i] == 4:
+				return -1.0
+			return 0.0 if wire[i] & W_BIKE else 6.0
+		"tram":
+			if road[i] < 3 or road[i] == 4:
+				return -1.0
+			return 0.0 if wire[i] & W_TRAM else 25.0
+		"levee":
+			if terr[i] == T_WATER or road[i] > 0 or bld[i] > 0 or zone[i] > 0:
+				return -1.0
+			return 0.0 if wire[i] & W_LEVEE else 40.0
+		"trees":
+			if road[i] > 0 or bld[i] > 0 or zone[i] > 0 or terr[i] == T_WATER or tree[i] > 0:
+				return -1.0
+			return 6.0
+	return -1.0
+func commit_drag() -> void:
+	clear_preview()
+	var cells := drag_cells()
+	apply_cells(cells)
+var undo_rec: Dictionary = {}
+func do_undo() -> void:
+	if undo_rec.is_empty():
+		toast("No hay nada para deshacer")
+		return
+	if undo_rec.has("def"):
+		var a: int = undo_rec["def"]
+		if bld[a] > 0:
+			remove_def(a)
+	else:
+		for r in undo_rec["cells"]:
+			var c: int = r[0]
+			road[c] = r[1]
+			zone[c] = r[2]
+			lvl[c] = r[3]
+			wire[c] = r[4]
+			tree[c] = r[5]
+			part[c] = r[6]
+			occ[c] = r[7]
+			vari[c] = r[8]
+			mark_dirty(c)
+	if not creative:
+		money += float(undo_rec["money"])
+	undo_rec = {}
+	sim_dirty = true
+	sfx("demolish")
+	toast("Deshecho")
+func apply_cells(cells: Array) -> void:
+	var total := 0.0
+	for c in cells:
+		var cc := cell_cost(c)
+		if cc > 0.0:
+			total += cc
+	if not creative and total > money:
+		toast("No alcanza la plata: necesitás " + fmt_money(total))
+		sfx("error")
+		return
+	var k: String = tool["k"]
+	var changed := 0
+	var rec: Array = []
+	for c in cells:
+		if cell_cost(c) >= 0.0:
+			rec.append([c, road[c], zone[c], lvl[c], wire[c], tree[c], part[c], occ[c], vari[c]])
+	for c in cells:
+		var cc := cell_cost(c)
+		if cc < 0.0:
+			continue
+		match k:
+			"road":
+				if road[c] < tool["t"]:
+					road[c] = tool["t"]
+					tree[c] = 0
+					if zone[c] > 0:
+						zone[c] = 0
+						lvl[c] = 0
+					count_add("roads")
+					changed += 1
+			"zone":
+				if zone[c] != tool["z"]:
+					zone[c] = tool["z"]
+					lvl[c] = 0
+					occ[c] = 0.0
+					part[c] = -1
+					vari[c] = randi() % 64
+					count_add("zones")
+					if tool["z"] == Z_R:
+						count_add("zoneR")
+					if tool["z"] == Z_C:
+						count_add("zoneC")
+					changed += 1
+			"dezone":
+				clear_zone(c)
+				changed += 1
+			"demolish":
+				demolish_cell(c)
+				flatten_cell(c)
+				changed += 1
+			"cable":
+				wire[c] |= W_POWER
+				changed += 1
+			"pipe":
+				wire[c] |= W_PIPE
+				changed += 1
+			"bike":
+				wire[c] |= W_BIKE
+				changed += 1
+			"tram":
+				wire[c] |= W_TRAM
+				changed += 1
+			"levee":
+				wire[c] |= W_LEVEE
+				tree[c] = 0
+				changed += 1
+			"trees":
+				tree[c] = pick_tree_kind(c, RandomNumberGenerator.new())
+				count_add("trees")
+				changed += 1
+		mark_dirty(c)
+	if changed > 0:
+		if not creative:
+			money -= total
+		sim_dirty = true
+		undo_rec = {} if k == "demolish" else {"cells": rec, "money": total}
+		sfx("build" if k != "demolish" else "demolish")
+		vibrate()
+		if k == "road":
+			unlock_ach("first_road")
+			if opts["autoround"]:
+				auto_rounds(cells)
+func clear_zone(c: int) -> void:
+	var a := anchor_of(c)
+	if zone[c] > 0 and part[c] >= 0:
+		unmerge(a)
+	zone[c] = 0
+	lvl[c] = 0
+	occ[c] = 0.0
+	part[c] = -1
+	anim_cells.erase(c)
+func unmerge(a: int) -> void:
+	for dz in 2:
+		for dx in 2:
+			var j := a + dz * N + dx
+			if j < N * N and part[j] == a:
+				part[j] = -1
+				lvl[j] = mini(lvl[j], 3)
+				mark_dirty(j)
+func flatten_cell(c: int) -> void:
+	if terr[c] == T_ROCK:
+		terr[c] = T_LAND
+		hgt[c] = 0.0
+		terrain_dirty = true
+		mark_dirty(c)
+func demolish_cell(c: int) -> void:
+	if bld[c] > 0:
+		remove_def(anchor_of(c))
+	clear_zone(c)
+	if road[c] > 0:
+		road[c] = 0
+		stops.erase(c)
+		wire[c] &= ~(W_BIKE | W_TRAM | W_ROUND)
+	tree[c] = 0
+	wire[c] = 0
+	burn[c] = 0.0
+	garbp[c] = 0.0
+func remove_def(a: int) -> void:
+	var d: Dictionary = DEF[bld[a]]
+	var sz: int = d["sz"]
+	for dz in sz:
+		for dx in sz:
+			var j := a + dz * N + dx
+			if j < N * N and anchor_of(j) == a:
+				bld[j] = 0
+				part[j] = -1
+				burn[j] = 0.0
+				mark_dirty(j)
+	wonder_progress.erase(a)
+	for ln in lines:
+		ln["stops"] = ln["stops"].filter(func(s): return s != a)
+	sim_dirty = true
+func can_place_def(a: int, id: int) -> String:
+	if a < 0:
+		return "Fuera del mapa"
+	var d: Dictionary = DEF[id]
+	var sz: int = d["sz"]
+	var cells := def_cells(a, sz)
+	if cells.size() < sz * sz:
+		return "No entra"
+	if not creative and d["st"] > max_stage:
+		return "Se desbloquea en etapa " + STAGES[d["st"]][0]
+	if d.get("unique", false):
+		for i in N * N:
+			if bld[i] == id:
+				return "Ya tenés uno"
+	if scenario == 1 and id == 42:
+		return "En este escenario no hay carbón"
+	var need: String = d.get("need", "")
+	var has_shore := false
+	var has_sand := false
+	for c in cells:
+		if not is_owned(c):
+			return "Esa zona no es tuya. Comprala en Herramientas."
+		if road[c] > 0 or bld[c] > 0 or (zone[c] > 0 and lvl[c] > 0):
+			return "Está ocupado"
+		if terr[c] == T_WATER and need != "shore":
+			return "Es agua"
+		if terr[c] == T_ROCK:
+			return "Es un cerro"
+		if flood[c] > 0.0:
+			return "Está inundado, esperá que baje el agua"
+		if near_water(c, 1):
+			has_shore = true
+		if terr[c] == T_SAND:
+			has_sand = true
+	if need == "shore" and not has_shore:
+		return "Tiene que ir en la costa"
+	if need == "sand" and not has_sand:
+		return "Tiene que ir en la arena"
+	if not creative and money < d["cost"]:
+		return "No alcanza la plata"
+	return ""
+func place_def(a: int, id: int) -> bool:
+	var err := can_place_def(a, id)
+	if err != "":
+		toast(err)
+		sfx("error")
+		return false
+	var d: Dictionary = DEF[id]
+	var sz: int = d["sz"]
+	var cells := def_cells(a, sz)
+	var anchor: int = cells[0]
+	for c in cells:
+		clear_zone(c)
+		bld[c] = id
+		part[c] = anchor if sz > 1 else -1
+		tree[c] = 0
+		mark_dirty(c)
+	vari[anchor] = randi() % 64
+	if id == 66 and not cine_told:
+		cine_told = true
+		queue_card({"title": "🎬 ¡Abrió el cine!", "text": "Cada pocos días se estrena una película (Scream, Chucky, It, Avengers, Star Wars y muchas más). Durante 24 horas sus protagonistas salen a las calles haciendo lo que hacen en la película.", "btns": [["¡Genial!", Callable()]]})
+	if d["c"] == "wonder":
+		wonder_progress[anchor] = 0
+	if not creative:
+		money -= d["cost"]
+	count_add("builds")
+	undo_rec = {"def": anchor, "money": 0.0 if creative else float(d["cost"])}
+	match d["c"]:
+		"serv":
+			count_add("serv")
+		"park":
+			count_add("park")
+	if d.has("pw"):
+		count_add("power")
+	if d.has("wt"):
+		count_add("water")
+	if d.has("gb"):
+		count_add("garb")
+	if id == 53:
+		unlock_ach("metro")
+	if id == 56:
+		unlock_ach("airport")
+	if id == 55:
+		unlock_ach("port")
+	if id == 35:
+		unlock_ach("stadium")
+	if not road_near(anchor, sz):
+		toast(d["n"] + " necesita una calle cerca para funcionar")
+	sim_dirty = true
+	sfx("build")
+	vibrate()
+	anim_cells[anchor] = 1.2
+	return true
+func block_fill(c: int) -> Array:
+	if c < 0:
+		return []
+	var ok := func(j: int) -> bool:
+		return road[j] == 0 and bld[j] == 0 and terr[j] != T_WATER and terr[j] != T_ROCK and is_owned(j)
+	if not ok.call(c):
+		return [c]
+	var seen := {c: true}
+	var q: Array = [c]
+	var head := 0
+	while head < q.size():
+		var j: int = q[head]
+		head += 1
+		if q.size() > 90:
+			break
+		for o in [1, -1, N, -N]:
+			var k: int = j + o
+			if k < 0 or k >= N * N:
+				continue
+			if (o == 1 or o == -1) and cz(k) != cz(j):
+				continue
+			if seen.has(k) or not ok.call(k):
+				continue
+			seen[k] = true
+			q.append(k)
+	if q.size() > 90:
+		var out: Array = []
+		for dz in range(-1, 2):
+			for dx in range(-1, 2):
+				if inb(cx(c) + dx, cz(c) + dz):
+					out.append(idx(cx(c) + dx, cz(c) + dz))
+		return out
+	return q
+func auto_rounds(cells: Array) -> void:
+	for c in cells:
+		if road[c] != 3 or (wire[c] & W_ROUND):
+			continue
+		var nb := road_n(c)
+		if not (nb[0] and nb[1] and nb[2] and nb[3]):
+			continue
+		var near := false
+		for dz in range(-2, 3):
+			for dx in range(-2, 3):
+				var x := cx(c) + dx
+				var z := cz(c) + dz
+				if inb(x, z) and (wire[idx(x, z)] & W_ROUND):
+					near = true
+		if not near:
+			wire[c] |= W_ROUND
+			mark_dirty(c)
+func toggle_round(c: int) -> void:
+	if c < 0 or road[c] < 2:
+		toast("La rotonda va en un cruce de calles")
+		return
+	var nb := road_n(c)
+	var cnt := int(nb[0]) + int(nb[1]) + int(nb[2]) + int(nb[3])
+	if cnt < 3:
+		toast("La rotonda va en un cruce de 3 o 4 calles")
+		return
+	if not creative and money < 150:
+		toast("No alcanza la plata")
+		return
+	wire[c] ^= W_ROUND
+	if not creative:
+		money -= 150
+	mark_dirty(c)
+	sim_dirty = true
+	sfx("build")
+func place_stop(c: int, kind: String) -> void:
+	if c < 0 or road[c] == 0:
+		toast("La parada va sobre una calle")
+		return
+	if kind == "tram" and not (wire[c] & W_TRAM):
+		toast("La parada de tranvía va sobre vías de tranvía")
+		return
+	if stops.has(c):
+		toast("Ya hay una parada")
+		return
+	if not creative and money < 60:
+		toast("No alcanza la plata")
+		return
+	stops[c] = kind
+	if not creative:
+		money -= 60
+	sim_dirty = true
+	sfx("build")
+	toast("Parada puesta. Para armar la línea tocá Transporte > Nueva línea.")
+func stop_kind_at(c: int) -> String:
+	if stops.has(c):
+		return stops[c]
+	if bld[c] > 0:
+		var d: Dictionary = DEF[bld[c]]
+		return d.get("stop", "")
+	return ""
+func pick_line_stop(c: int) -> void:
+	if c < 0:
+		return
+	var kind: String = line_edit.get("kind", "bus")
+	var found := -1
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var x := cx(c) + dx
+			var z := cz(c) + dz
+			if not inb(x, z):
+				continue
+			var j := idx(x, z)
+			if stop_kind_at(j) == kind:
+				found = anchor_of(j)
+				break
+		if found >= 0:
+			break
+	if found < 0:
+		toast("Tocá una parada de " + LINE_NAMES[kind])
+		return
+	line_edit["stops"].append(found)
+	toast("Paradas en la línea: %d" % line_edit["stops"].size())
+	sfx("click")
+func ask_buy_region(c: int) -> void:
+	if c < 0:
+		return
+	var r := region_of(c)
+	if owned[r] == 1:
+		toast("Esta zona ya es tuya")
+		return
+	var rx := r % NREG
+	var rz := r / NREG
+	var adj := false
+	for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var xx: int = rx + o.x
+		var zz: int = rz + o.y
+		if xx >= 0 and zz >= 0 and xx < NREG and zz < NREG and owned[zz * NREG + xx] == 1:
+			adj = true
+	if not adj:
+		toast("Solo podés comprar zonas pegadas a las tuyas")
+		return
+	var cost := region_price()
+	confirm("¿Comprar %s por %s?" % [DISTRICT_NAMES[r], fmt_money(cost)], func():
+		if money < cost and not creative:
+			toast("No alcanza la plata")
+			return
+		if not creative:
+			money -= cost
+		owned[r] = 1
+		terrain_dirty = true
+		mark_all_dirty()
+		sfx("cheer")
+		toast("¡Compraste " + DISTRICT_NAMES[r] + "!")
+		var all := true
+		for k in NREG * NREG:
+			if owned[k] == 0:
+				all = false
+		if all:
+			unlock_ach("regions"))
+func region_price() -> float:
 	var n := 0
-	for i in zone_list:
-		if zone[i] == z:
-			n += 1
-	return n
-var dyn_nodes: Array = []
+	for k in NREG * NREG:
+		n += owned[k]
+	return 4000.0 * pow(float(n - 3), 1.25)
+func finish_line() -> void:
+	var kind: String = line_edit.get("kind", "bus")
+	var st: Array = line_edit.get("stops", [])
+	if st.size() < 2:
+		toast("La línea necesita al menos 2 paradas")
+		return
+	var cost: int = LINE_COST[kind]
+	if not creative and money < cost:
+		toast("No alcanza la plata")
+		return
+	if not creative:
+		money -= cost
+	var num := 1
+	for ln in lines:
+		num = maxi(num, ln["num"] + 1)
+	var ln := {"kind": kind, "stops": st.duplicate(), "pts": [], "t": 0.0, "num": num, "col": Color.from_hsv(fmod(num * 0.17, 1.0), 0.75, 0.9)}
+	lines.append(ln)
+	route_line(ln)
+	line_edit = {}
+	set_tool({"k": "look"})
+	count_add("line")
+	sim_dirty = true
+	sfx("cheer")
+	toast("¡Línea %d de %s en marcha!" % [num, LINE_NAMES[kind]])
+	add_news("Se inauguró la línea %d de %s" % [num, LINE_NAMES[kind]])
+	if lines.size() >= 3:
+		unlock_ach("lines3")
+func set_speed(s: int) -> void:
+	speed = s
+	refresh_speed_buttons()
+func vibrate() -> void:
+	if opts["vibrate"]:
+		Input.vibrate_handheld(18)
+func road_next_to(i: int, tram: bool) -> int:
+	if road[i] > 0 and (not tram or wire[i] & W_TRAM):
+		return i
+	for r in range(1, 3):
+		for dz in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var x := cx(i) + dx
+				var z := cz(i) + dz
+				if inb(x, z):
+					var j := idx(x, z)
+					if road[j] > 0 and (not tram or wire[j] & W_TRAM):
+						return j
+	return -1
+func road_path(from: int, to: int, tram: bool) -> Array:
+	var a := road_next_to(from, tram)
+	var b := road_next_to(to, tram)
+	if a < 0 or b < 0:
+		return []
+	if a == b:
+		return [a]
+	var prev := {a: a}
+	var q: Array = [a]
+	var head := 0
+	while head < q.size() and head < 20000:
+		var c: int = q[head]
+		head += 1
+		if c == b:
+			break
+		for o in [1, -1, N, -N]:
+			var j: int = c + o
+			if j < 0 or j >= N * N or prev.has(j) or road[j] == 0:
+				continue
+			if (o == 1 or o == -1) and cz(j) != cz(c):
+				continue
+			if tram and not (wire[j] & W_TRAM):
+				continue
+			prev[j] = c
+			q.append(j)
+	if not prev.has(b):
+		return []
+	var path: Array = [b]
+	var c2: int = b
+	while c2 != a:
+		c2 = prev[c2]
+		path.push_front(c2)
+	return path
+func route_line(ln: Dictionary) -> void:
+	var pts: Array = []
+	var stop_k: Array = []
+	var st: Array = ln["stops"]
+	var kind: String = ln["kind"]
+	var n := st.size()
+	if n < 2:
+		ln["pts"] = []
+		return
+	for s in n:
+		var a: int = st[s]
+		var b: int = st[(s + 1) % n]
+		stop_k.append(pts.size())
+		if kind == "bus" or kind == "tram":
+			var path := road_path(a, b, kind == "tram")
+			if path.is_empty():
+				ln["pts"] = []
+				ln["broken"] = true
+				return
+			for c in path:
+				var pp := cell_pos(c)
+				if terr[c] == T_WATER:
+					pp.y = 0.6
+				pts.append(pp)
+		else:
+			var pa := def_center(a)
+			var pb := def_center(b)
+			var y := -4.0
+			if kind == "train":
+				y = 7.0
+			elif kind == "ferry":
+				y = WATER_Y
+			pa.y = y
+			pb.y = y
+			var steps := maxi(2, int(pa.distance_to(pb) / CELL))
+			for k in steps:
+				pts.append(pa.lerp(pb, float(k) / steps))
+	ln["pts"] = pts
+	ln["stopk"] = stop_k
+	ln["broken"] = false
+	ln["dwell"] = 0.0
+	rebuild_rails()
+func reroute_all() -> void:
+	for ln in lines:
+		route_line(ln)
+var cine_told: bool = false
+# ================================================================ src/render.gd
+# Cómo se dibuja la ciudad: mallas, chunks, terreno, agua, luz y clima.
+const CH := 32
+const M_CORNER := 5
+const M_GRASS := 6
+const M_GABLE := 7
+const M_HIP := 8
+const MESH_CENTERED := [true, true, true, true, true, false, true, false, false]
+var city_mat: ShaderMaterial
+var water_mat: ShaderMaterial
+var overlay_mat: ShaderMaterial
+var terrain_mat: ShaderMaterial
+var cloud_mat: ShaderMaterial
+var cloud_node: MeshInstance3D
+var dtex: ImageTexture
+var ctex: ImageTexture
+var terrain_node: MeshInstance3D
+var water_node: MeshInstance3D
+var chunk_nodes: Array = []
+var overlay_node: MultiMeshInstance3D
+var moon: DirectionalLight3D
+var env: Environment
+var sky_mat: ProceduralSkyMaterial
+const SHADER_CITY := preload("res://shaders/city.gdshader")
+const SHADER_WATER := preload("res://shaders/water.gdshader")
+const SHADER_TERRAIN := preload("res://shaders/terrain.gdshader")
+const SHADER_CLOUD := preload("res://shaders/cloud.gdshader")
+const SHADER_GLOW := preload("res://shaders/glow.gdshader")
+const SHADER_OVERLAY := preload("res://shaders/overlay.gdshader")
+func setup_render() -> void:
+	meshes.clear()
+	var box := BoxMesh.new()
+	meshes.append(box)
+	var roof := PrismMesh.new()
+	meshes.append(roof)
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.5
+	cyl.bottom_radius = 0.5
+	cyl.height = 1.0
+	cyl.radial_segments = 12
+	cyl.rings = 1
+	meshes.append(cyl)
+	var sph := SphereMesh.new()
+	sph.radius = 0.5
+	sph.height = 1.0
+	sph.radial_segments = 10
+	sph.rings = 6
+	meshes.append(sph)
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 0.5
+	cone.height = 1.0
+	cone.radial_segments = 8
+	cone.rings = 1
+	meshes.append(cone)
+	meshes.append(make_corner_mesh())
+	var gcone := CylinderMesh.new()
+	gcone.top_radius = 0.0
+	gcone.bottom_radius = 0.5
+	gcone.height = 1.0
+	gcone.radial_segments = 5
+	gcone.rings = 1
+	meshes.append(gcone)
+	meshes.append(make_gable_mesh())
+	meshes.append(make_hip_mesh())
+	city_mat = ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = SHADER_CITY.code
+	city_mat.shader = sh
+	for m in meshes:
+		m.surface_set_material(0, city_mat)
+	water_mat = ShaderMaterial.new()
+	var sw := Shader.new()
+	sw.code = SHADER_WATER.code
+	water_mat.shader = sw
+	overlay_mat = ShaderMaterial.new()
+	var so := Shader.new()
+	so.code = SHADER_OVERLAY.code
+	overlay_mat.shader = so
+	dtex = make_noise_tex(0.045, 11, 4)
+	ctex = make_noise_tex(0.02, 29, 5)
+	terrain_mat = ShaderMaterial.new()
+	var st2 := Shader.new()
+	st2.code = SHADER_TERRAIN.code
+	terrain_mat.shader = st2
+	cloud_mat = ShaderMaterial.new()
+	var sc2 := Shader.new()
+	sc2.code = SHADER_CLOUD.code
+	cloud_mat.shader = sc2
+	for m in [city_mat, terrain_mat]:
+		m.set_shader_parameter("dtex", dtex)
+		m.set_shader_parameter("ctex", ctex)
+	cloud_mat.set_shader_parameter("ctex", ctex)
+	env = Environment.new()
+	env.background_mode = Environment.BG_SKY
+	var sky := Sky.new()
+	sky_mat = ProceduralSkyMaterial.new()
+	sky.sky_material = sky_mat
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_energy = 1.0
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 0.82
+	env.glow_hdr_threshold = 1.3
+	env.fog_enabled = true
+	env.fog_light_color = Color(0.7, 0.78, 0.9)
+	env.fog_density = 0.0007
+	env.fog_sky_affect = 0.3
+	env.fog_height = 8.0
+	env.fog_height_density = 0.004
+	var we := WorldEnvironment.new()
+	we.environment = env
+	add_child(we)
+	sun = DirectionalLight3D.new()
+	sun.shadow_enabled = true
+	sun.shadow_blur = 1.6
+	sun.light_specular = 0.35
+	sun.directional_shadow_max_distance = 170.0
+	add_child(sun)
+	moon = DirectionalLight3D.new()
+	moon.light_color = Color(0.55, 0.65, 1.0)
+	moon.light_energy = 0.0
+	moon.rotation_degrees = Vector3(-60, 140, 0)
+	add_child(moon)
+	terrain_node = MeshInstance3D.new()
+	terrain_node.material_override = terrain_mat
+	add_child(terrain_node)
+	cloud_node = MeshInstance3D.new()
+	var cp := PlaneMesh.new()
+	cp.size = Vector2(1800, 1800)
+	cp.subdivide_width = 1
+	cp.subdivide_depth = 1
+	cloud_node.mesh = cp
+	cloud_node.material_override = cloud_mat
+	cloud_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	cloud_node.position = Vector3(0, 170, 0)
+	add_child(cloud_node)
+	water_node = MeshInstance3D.new()
+	var wp := PlaneMesh.new()
+	wp.size = Vector2(N * CELL * 5.0, N * CELL * 5.0)
+	wp.subdivide_width = 90
+	wp.subdivide_depth = 90
+	water_node.mesh = wp
+	water_node.material_override = water_mat
+	water_node.position = Vector3(0, WATER_Y, 0)
+	add_child(water_node)
+	overlay_node = new_mm_node(meshes[M_BOX], overlay_mat)
+	preview_node = new_mm_node(meshes[M_BOX], overlay_mat)
+	chunk_nodes.clear()
+	chunk_dirty.resize(NCH * NCH)
+	chunk_dirty.fill(1)
+	for c in NCH * NCH:
+		var arr: Array = []
+		for m in NMESH:
+			var node := new_mm_node(meshes[m], null)
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if m != M_GRASS else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			arr.append(node)
+		chunk_nodes.append(arr)
+	apply_quality()
+func new_mm_node(mesh: Mesh, mat: Material) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.use_custom_data = true
+	mm.mesh = mesh
+	mm.instance_count = 0
+	var node := MultiMeshInstance3D.new()
+	node.multimesh = mm
+	if mat != null:
+		node.material_override = mat
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(node)
+	return node
+func make_corner_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var seg := 8
+	for k in seg:
+		var a0 := k * PI * 0.5 / seg
+		var a1 := (k + 1) * PI * 0.5 / seg
+		var p0 := Vector3(cos(a0), 1, sin(a0))
+		var p1 := Vector3(cos(a1), 1, sin(a1))
+		st.set_normal(Vector3.UP)
+		st.add_vertex(Vector3(0, 1, 0))
+		st.add_vertex(p0)
+		st.add_vertex(p1)
+		var n := Vector3(cos((a0 + a1) * 0.5), 0, sin((a0 + a1) * 0.5))
+		st.set_normal(n)
+		st.add_vertex(Vector3(p0.x, 0, p0.z))
+		st.add_vertex(p1)
+		st.add_vertex(p0)
+		st.add_vertex(Vector3(p0.x, 0, p0.z))
+		st.add_vertex(Vector3(p1.x, 0, p1.z))
+		st.add_vertex(p1)
+	return st.commit()
+func make_noise_tex(freq: float, sd: int, oct: int) -> ImageTexture:
+	var fn := FastNoiseLite.new()
+	fn.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	fn.fractal_type = FastNoiseLite.FRACTAL_FBM
+	fn.fractal_octaves = oct
+	fn.frequency = freq
+	fn.seed = sd
+	var im := fn.get_seamless_image(256, 256)
+	im.generate_mipmaps()
+	return ImageTexture.create_from_image(im)
+var water_simple_mat: StandardMaterial3D
+func apply_quality() -> void:
+	var q: int = opts["quality"]
+	RenderingServer.directional_shadow_atlas_set_size(2048 if q < 2 else 4096, true)
+	if sun:
+		sun.shadow_enabled = q >= 1 and opts["g_shadow"]
+	if env:
+		env.fog_enabled = opts["g_fog"]
+	if water_node:
+		if opts["g_water"]:
+			water_node.material_override = water_mat
+		else:
+			if water_simple_mat == null:
+				water_simple_mat = StandardMaterial3D.new()
+				water_simple_mat.albedo_color = Color(0.12, 0.38, 0.52)
+				water_simple_mat.roughness = 0.2
+			water_node.material_override = water_simple_mat
+	for nd in dyn_nodes:
+		nd.visible = opts["g_dyn"]
+	if sun:
+		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL if q < 2 else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	if env:
+		env.glow_enabled = q >= 2
+		env.glow_intensity = 0.6
+		env.glow_bloom = 0.05
+	var vp := get_viewport()
+	if vp:
+		vp.scaling_3d_scale = [0.8, 1.0, 1.0][q]
+		vp.msaa_3d = Viewport.MSAA_2X if q >= 2 else Viewport.MSAA_DISABLED
+	apply_fx()
+var wfx: GPUParticles3D
+var wfx_kind: String = ""
+var wfx_r: float = 0.0
+var vig_layer: CanvasLayer
+var cloud_cover: float = -1.0
+func apply_fx() -> void:
+	if city_mat == null:
+		return
+	city_mat.set_shader_parameter("wind", 1.0 if opts["g_wind"] else 0.0)
+	city_mat.set_shader_parameter("ao_on", 1.0 if opts["g_ao"] else 0.0)
+	var dt: float = 1.0 if opts["g_detail"] else 0.0
+	city_mat.set_shader_parameter("det", dt)
+	terrain_mat.set_shader_parameter("det", dt)
+	cloud_node.visible = opts["g_clouds"]
+	cloud_cover = -1.0
+	env.adjustment_enabled = opts["g_grade"]
+	env.adjustment_saturation = 1.03
+	env.adjustment_contrast = 1.05
+	if vig_layer == null:
+		vig_layer = CanvasLayer.new()
+		vig_layer.layer = 2
+		var gt := GradientTexture2D.new()
+		var gr := Gradient.new()
+		gr.offsets = PackedFloat32Array([0.5, 0.7, 0.85, 1.0])
+		gr.colors = PackedColorArray([Color(0, 0, 0, 0), Color(0.03, 0.02, 0.05, 0.04), Color(0.03, 0.02, 0.05, 0.16), Color(0.03, 0.02, 0.05, 0.36)])
+		gt.gradient = gr
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(1.0, 0.5)
+		gt.width = 128
+		gt.height = 128
+		var tr := TextureRect.new()
+		tr.texture = gt
+		tr.set_anchors_preset(Control.PRESET_FULL_RECT)
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_SCALE
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vig_layer.add_child(tr)
+		add_child(vig_layer)
+	vig_layer.visible = opts["g_grade"]
+func make_wfx() -> void:
+	wfx = GPUParticles3D.new()
+	wfx.visibility_aabb = AABB(Vector3(-140, -50, -140), Vector3(280, 80, 280))
+	wfx.local_coords = false
+	wfx.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(wfx)
+func config_wfx(kind: String) -> void:
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(60, 1, 60)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	if kind == "rain":
+		pm.direction = Vector3(0.12, -1.0, 0.05)
+		pm.spread = 1.5
+		pm.initial_velocity_min = 34.0
+		pm.initial_velocity_max = 40.0
+		pm.gravity = Vector3.ZERO
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.025, 1.2, 0.025)
+		mat.albedo_color = Color(0.82, 0.88, 1.0, 0.4)
+		bm.material = mat
+		wfx.draw_pass_1 = bm
+		wfx.amount = 1800
+		wfx.lifetime = 1.0
+	else:
+		pm.direction = Vector3(0.1, -1.0, 0.0)
+		pm.spread = 28.0
+		pm.initial_velocity_min = 2.5
+		pm.initial_velocity_max = 4.5
+		pm.gravity = Vector3.ZERO
+		pm.scale_min = 0.6
+		pm.scale_max = 1.4
+		var sm := SphereMesh.new()
+		sm.radius = 0.09
+		sm.height = 0.18
+		sm.radial_segments = 6
+		sm.rings = 3
+		mat.albedo_color = Color(1, 1, 1, 0.9)
+		sm.material = mat
+		wfx.draw_pass_1 = sm
+		wfx.amount = 1500
+		wfx.lifetime = 9.0
+	wfx.process_material = pm
+	wfx.preprocess = wfx.lifetime
+	wfx_r = 0.0
+func update_fx() -> void:
+	if cloud_node.visible:
+		cloud_node.position = Vector3(cam_target.x, 170.0, cam_target.z)
+		var cv := 0.45
+		if weather == "Nublado":
+			cv = 0.85
+		elif weather == "Lluvia" or weather == "Tormenta" or weather == "Nieve":
+			cv = 0.95
+		if cv != cloud_cover:
+			cloud_cover = cv
+			cloud_mat.set_shader_parameter("cover", cv)
+			city_mat.set_shader_parameter("cshadow", cv)
+			terrain_mat.set_shader_parameter("cshadow", cv)
+	elif cloud_cover != 0.0:
+		cloud_cover = 0.0
+		city_mat.set_shader_parameter("cshadow", 0.0)
+		terrain_mat.set_shader_parameter("cshadow", 0.0)
+	var want := ""
+	if opts["g_rain"] and opts["quality"] >= 1 and started:
+		if weather == "Lluvia" or weather == "Tormenta":
+			want = "rain"
+		elif weather == "Nieve":
+			want = "snow"
+	if want != wfx_kind:
+		wfx_kind = want
+		if want != "":
+			if wfx == null:
+				make_wfx()
+			config_wfx(want)
+		if wfx:
+			wfx.emitting = want != ""
+	if wfx and wfx.emitting:
+		wfx.global_position = Vector3(cam_target.x, 32.0, cam_target.z)
+		var r := clampf(cam_dist * 0.9, 30.0, 110.0)
+		if absf(r - wfx_r) > 5.0:
+			wfx_r = r
+			(wfx.process_material as ParticleProcessMaterial).emission_box_extents = Vector3(r, 1, r)
+func build_terrain() -> void:
+	terrain_dirty = false
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var s := season()
+	var grass: Color = [Color(0.42, 0.62, 0.28), Color(0.58, 0.55, 0.28), Color(0.62, 0.66, 0.6), Color(0.45, 0.68, 0.32)][s]
+	if weather == "Nieve":
+		grass = Color(0.9, 0.92, 0.95)
+	var half := N * CELL * 0.5
+	var vh := PackedFloat32Array()
+	vh.resize((N + 1) * (N + 1))
+	var vc := PackedColorArray()
+	vc.resize((N + 1) * (N + 1))
+	for z in N + 1:
+		for x in N + 1:
+			var hs := 0.0
+			var cnt := 0
+			var col := Color(0, 0, 0)
+			for o in [Vector2i(-1, -1), Vector2i(0, -1), Vector2i(-1, 0), Vector2i(0, 0)]:
+				var xx: int = x + o.x
+				var zz: int = z + o.y
+				if inb(xx, zz):
+					var i := idx(xx, zz)
+					hs += hgt[i]
+					cnt += 1
+					col += terrain_color(i, grass)
+			vh[z * (N + 1) + x] = hs / maxf(cnt, 1)
+			vc[z * (N + 1) + x] = col / maxf(cnt, 1)
+	for z in N:
+		for x in N:
+			var a := z * (N + 1) + x
+			var b := a + 1
+			var c := a + N + 1
+			var d := c + 1
+			var pa := Vector3(x * CELL - half, vh[a], z * CELL - half)
+			var pb := Vector3((x + 1) * CELL - half, vh[b], z * CELL - half)
+			var pc := Vector3(x * CELL - half, vh[c], (z + 1) * CELL - half)
+			var pd := Vector3((x + 1) * CELL - half, vh[d], (z + 1) * CELL - half)
+			st.set_color(vc[a]); st.add_vertex(pa)
+			st.set_color(vc[b]); st.add_vertex(pb)
+			st.set_color(vc[d]); st.add_vertex(pd)
+			st.set_color(vc[a]); st.add_vertex(pa)
+			st.set_color(vc[d]); st.add_vertex(pd)
+			st.set_color(vc[c]); st.add_vertex(pc)
+	var himg := Image.create(N + 1, N + 1, false, Image.FORMAT_RH)
+	for z in N + 1:
+		for x in N + 1:
+			himg.set_pixel(x, z, Color(vh[z * (N + 1) + x], 0.0, 0.0))
+	var htex := ImageTexture.create_from_image(himg)
+	city_mat.set_shader_parameter("hmap", htex)
+	water_mat.set_shader_parameter("hmap", htex)
+	water_mat.set_shader_parameter("hinfo", Vector4(N * CELL, half, float(N) / float(N + 1), 0.5 / float(N + 1)))
+	city_mat.set_shader_parameter("hinfo", Vector4(N * CELL, half, float(N) / float(N + 1), 0.5 / float(N + 1)))
+	st.generate_normals()
+	terrain_node.mesh = st.commit()
+	build_outer(grass)
+func terrain_color(i: int, grass: Color) -> Color:
+	var c: Color
+	match terr[i]:
+		T_WATER:
+			c = Color(0.55, 0.5, 0.38)
+		T_SAND:
+			c = Color(0.86, 0.78, 0.55)
+		T_ROCK:
+			c = Color(0.5, 0.48, 0.44)
+		_:
+			var v := float((cx(i) * 13 + cz(i) * 7) % 5) * 0.012
+			c = grass + Color(v, v, -v)
+	if not is_owned(i):
+		c = c.darkened(0.28)
+	return c
+var outer_nodes: Array = []
+func build_outer(grass: Color) -> void:
+	for n in outer_nodes:
+		n.queue_free()
+	outer_nodes.clear()
+	var size := N * CELL
+	var sides := [[Vector2i(-1, 0), 0], [Vector2i(1, 0), 0], [Vector2i(0, -1), 0], [Vector2i(0, 1), 0]]
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = grass.darkened(0.12)
+	mat.roughness = 1.0
+	for sd in sides:
+		var dir: Vector2i = sd[0]
+		var water := 0
+		for k in N:
+			var x := 0
+			var z := 0
+			if dir.x != 0:
+				x = 0 if dir.x < 0 else N - 1
+				z = k
+			else:
+				z = 0 if dir.y < 0 else N - 1
+				x = k
+			if terr[idx(x, z)] == T_WATER:
+				water += 1
+		if water > N / 3:
+			continue
+		var m := MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		pm.size = Vector2(size * 2.0, size * 2.0) if dir.x != 0 else Vector2(size, size * 2.0)
+		m.mesh = pm
+		m.material_override = mat
+		m.position = Vector3(dir.x * size * 1.5, -0.05, dir.y * size * 1.5)
+		if dir.y != 0:
+			pm.size = Vector2(size * 4.0, size * 2.0)
+		add_child(m)
+		outer_nodes.append(m)
+		for h in 4:
+			var hill := MeshInstance3D.new()
+			var sm := SphereMesh.new()
+			sm.radius = 1.0
+			sm.height = 2.0
+			hill.mesh = sm
+			var hm := StandardMaterial3D.new()
+			hm.albedo_color = grass.darkened(0.25).lerp(Color(0.5, 0.6, 0.7), 0.3)
+			hill.material_override = hm
+			var off := (h - 1.5) * size * 0.55
+			var p := Vector3(dir.x * size * 1.4, -6.0, dir.y * size * 1.4)
+			if dir.x != 0:
+				p.z = off
+			else:
+				p.x = off
+			hill.position = p
+			hill.scale = Vector3(size * 0.35, 30.0 + h * 6.0, size * 0.3)
+			add_child(hill)
+			outer_nodes.append(hill)
+func mark_dirty(i: int) -> void:
+	var x := cx(i)
+	var z := cz(i)
+	for o in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var xx: int = clampi(x + o.x * 2, 0, N - 1)
+		var zz: int = clampi(z + o.y * 2, 0, N - 1)
+		chunk_dirty[(zz / CH) * NCH + xx / CH] = 1
+func mark_all_dirty() -> void:
+	chunk_dirty.fill(1)
+func update_chunks(max_n: int) -> void:
+	var done := 0
+	for c in NCH * NCH:
+		if chunk_dirty[c] == 1:
+			chunk_dirty[c] = 0
+			build_chunk(c)
+			done += 1
+			if done >= max_n:
+				return
+func build_chunk(c: int) -> void:
+	begin_buf()
+	var x0 := (c % NCH) * CH
+	var z0 := (c / NCH) * CH
+	for z in range(z0, z0 + CH):
+		for x in range(x0, x0 + CH):
+			emit_cell(idx(x, z))
+	var nodes: Array = chunk_nodes[c]
+	for m in NMESH:
+		var node: MultiMeshInstance3D = nodes[m]
+		var mm := node.multimesh
+		mm.instance_count = _counts[m]
+		if _counts[m] > 0:
+			mm.buffer = _bufs[m].slice(0, _counts[m] * 20)
+func begin_buf() -> void:
+	_counts.resize(NMESH)
+	_counts.fill(0)
+	while _bufs.size() < NMESH:
+		var pb := PackedFloat32Array()
+		pb.resize(2000)
+		_bufs.append(pb)
+func em(m: int, x: float, y: float, z: float, sx: float, sy: float, sz: float, rot: float, col: Color, c0: float = 0.0, c1: float = 0.0, c2: float = 0.0, c3: float = 0.0) -> void:
+	var c := cos(rot)
+	var s := sin(rot)
+	var oy := y + (sy * 0.5 if MESH_CENTERED[m] else 0.0)
+	var o: int = _counts[m] * 20
+	var b: PackedFloat32Array = _bufs[m]
+	if o + 20 > b.size():
+		b.resize(maxi(b.size() * 2, 2000))
+		_bufs[m] = b
+	b[o] = c * sx
+	b[o + 2] = s * sz
+	b[o + 3] = x
+	b[o + 5] = sy
+	b[o + 7] = oy
+	b[o + 8] = -s * sx
+	b[o + 10] = c * sz
+	b[o + 11] = z
+	b[o + 12] = col.r
+	b[o + 13] = col.g
+	b[o + 14] = col.b
+	b[o + 15] = col.a
+	b[o + 16] = c0
+	b[o + 17] = c1
+	b[o + 18] = c2
+	b[o + 19] = c3
+	b[o + 1] = 0.0
+	b[o + 4] = 0.0
+	b[o + 6] = 0.0
+	b[o + 9] = 0.0
+	_counts[m] += 1
+func emit_cell(i: int) -> void:
+	var p := cell_pos(i)
+	lamps.erase(i)
+	if road[i] > 0:
+		emit_road(i, p)
+	elif bld[i] > 0:
+		if part[i] < 0 or part[i] == i:
+			emit_def(i, p)
+	elif zone[i] > 0:
+		if part[i] >= 0 and part[i] != i:
+			pass
+		elif anim_cells.has(i):
+			emit_lot(i, p)
+		else:
+			emit_zone(i, p)
+	elif tree[i] > 0:
+		emit_trees(i, p)
+	elif terr[i] == T_LAND and opts["g_grass"] and weather != "Nieve":
+		emit_grass(i, p)
+	if wire[i] & W_POWER and road[i] == 0 and bld[i] == 0 and zone[i] == 0:
+		emit_cable(i, p)
+	if wire[i] & W_LEVEE:
+		em(M_BOX, p.x, p.y, p.z, CELL, 1.4, CELL, 0.0, Color(0.55, 0.55, 0.52))
+	if flood[i] > 0.0:
+		em(M_BOX, p.x, p.y, p.z, CELL, 0.25, CELL, 0.0, Color(0.2, 0.4, 0.55), 0, 0, 0.1, 1)
+	if garbp[i] > 0.5 and road[i] == 0:
+		for k in mini(3, int(garbp[i])):
+			em(M_SPH, p.x + (hsh(i, k) - 0.5) * 2.2, p.y, p.z + (hsh(i, k + 5) - 0.5) * 2.2, 0.9, 0.6, 0.9, 0.0, Color(0.35, 0.3, 0.2))
+	if burn[i] > 0.99:
+		em(M_BOX, p.x, p.y, p.z, CELL * 0.8, 0.4, CELL * 0.8, 0.0, Color(0.12, 0.1, 0.1))
+func emit_road(i: int, p: Vector3) -> void:
+	var t: int = road[i]
+	var col: Color = [Color(), Color(0.55, 0.45, 0.32), Color(0.25, 0.25, 0.27), Color(0.21, 0.21, 0.23), Color(0.19, 0.19, 0.21)][t]
+	var nb := road_n(i)
+	var e: bool = nb[0]
+	var w: bool = nb[1]
+	var s: bool = nb[2]
+	var n: bool = nb[3]
+	var cnt := int(e) + int(w) + int(s) + int(n)
+	var y := p.y
+	var bridge := terr[i] == T_WATER
+	if bridge:
+		y = 0.6
+		em(M_BOX, p.x, WATER_Y - 1.0, p.z, 0.8, 1.6 + y, 0.8, 0.0, Color(0.5, 0.5, 0.5))
+	var sidewalk := Color(0.62, 0.6, 0.56)
+	var corner := cnt == 2 and ((e and s) or (e and n) or (w and s) or (w and n)) and not bridge
+	if corner:
+		var cxo := 1.0 if e else -1.0
+		var czo := 1.0 if s else -1.0
+		var rot := 0.0
+		if cxo > 0 and czo > 0:
+			rot = PI
+		elif cxo < 0 and czo > 0:
+			rot = -PI * 0.5
+		elif cxo > 0 and czo < 0:
+			rot = PI * 0.5
+		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 1.02, 0.17, CELL * 1.02, rot, sidewalk)
+		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 0.86, 0.2, CELL * 0.86, rot, col)
+		return
+	em(M_BOX, p.x, y, p.z, CELL, 0.2, CELL, 0.0, col)
+	var horiz := (e or w) and not (s or n)
+	var vert := (s or n) and not (e or w)
+	if t >= 2 and not bridge:
+		if not n and (horiz or cnt <= 1):
+			em(M_BOX, p.x, y, p.z - CELL * 0.44, CELL, 0.26, CELL * 0.12, 0.0, sidewalk)
+		if not s and (horiz or cnt <= 1):
+			em(M_BOX, p.x, y, p.z + CELL * 0.44, CELL, 0.26, CELL * 0.12, 0.0, sidewalk)
+		if not e and (vert or cnt <= 1):
+			em(M_BOX, p.x + CELL * 0.44, y, p.z, CELL * 0.12, 0.26, CELL, 0.0, sidewalk)
+		if not w and (vert or cnt <= 1):
+			em(M_BOX, p.x - CELL * 0.44, y, p.z, CELL * 0.12, 0.26, CELL, 0.0, sidewalk)
+	if wire[i] & W_ROUND:
+		em(M_CYL, p.x, y, p.z, CELL * 0.45, 0.35, CELL * 0.45, 0.0, Color(0.3, 0.6, 0.3))
+		em(M_SPH, p.x, y + 0.3, p.z, 1.0, 1.4, 1.0, 0.0, Color(0.25, 0.5, 0.25))
+		return
+	var rot := 0.0 if horiz else PI * 0.5
+	if horiz or vert:
+		match t:
+			2:
+				if (cx(i) + cz(i)) % 2 == 0:
+					em(M_BOX, p.x, y, p.z, CELL * 0.45, 0.22, 0.12, rot, Color(0.9, 0.85, 0.6))
+			3:
+				em(M_BOX, p.x, y, p.z, CELL, 0.32, 0.5, rot, Color(0.35, 0.55, 0.3))
+				if hsh(i, 3) < 0.4:
+					em(M_SPH, p.x, y + 0.3, p.z, 0.9, 1.4, 0.9, 0.0, Color(0.28, 0.5, 0.25))
+			4:
+				em(M_BOX, p.x, y, p.z, CELL, 0.25, 0.25, rot, Color(0.85, 0.75, 0.2))
+				em(M_BOX, p.x, y, p.z, CELL, 0.45, 0.15, rot, Color(0.7, 0.7, 0.7))
+		if wire[i] & W_BIKE:
+			var off := Vector2(0, CELL * 0.33) if horiz else Vector2(CELL * 0.33, 0)
+			em(M_BOX, p.x + off.x, y, p.z + off.y, CELL if horiz else 0.6, 0.23, 0.6 if horiz else CELL, 0.0, Color(0.25, 0.6, 0.35))
+		if wire[i] & W_TRAM:
+			for sgn in [-0.12, 0.12]:
+				var o2 := Vector2(0, CELL * sgn) if horiz else Vector2(CELL * sgn, 0)
+				em(M_BOX, p.x + o2.x, y, p.z + o2.y, CELL if horiz else 0.1, 0.25, 0.1 if horiz else CELL, 0.0, Color(0.6, 0.6, 0.62))
+		if t >= 2 and (cx(i) + cz(i) * 3) % 3 == 0 and not bridge:
+			var lo := Vector2(0, -CELL * 0.45) if horiz else Vector2(-CELL * 0.45, 0)
+			var ao := Vector2(0, 0.8) if horiz else Vector2(0.8, 0)
+			em(M_BOX, p.x + lo.x, y, p.z + lo.y, 0.12, 2.9, 0.12, 0.0, Color(0.3, 0.3, 0.32))
+			em(M_BOX, p.x + lo.x + ao.x * 0.5, y + 2.85, p.z + lo.y + ao.y * 0.5, 0.09 if horiz else 0.8, 0.09, 0.8 if horiz else 0.09, 0.0, Color(0.3, 0.3, 0.32))
+			em(M_BOX, p.x + lo.x + ao.x, y + 2.78, p.z + lo.y + ao.y, 0.34, 0.1, 0.34, 0.0, Color(1.0, 0.85, 0.55), 0, 1.0)
+			lamps[i] = Vector3(p.x + lo.x + ao.x, y, p.z + lo.y + ao.y)
+		if t == 2 and opts["quality"] >= 1:
+			for side in [-1, 1]:
+				var j: int = i + (N * side if horiz else side)
+				if j >= 0 and j < N * N and zone[j] > 0 and lvl[j] >= 1 and hsh(i, side + 7) < 0.45:
+					var po := Vector2(0, side * CELL * 0.3) if horiz else Vector2(side * CELL * 0.3, 0)
+					em(M_BOX, p.x + po.x, y + 0.15, p.z + po.y, 1.6, 0.6, 0.8, rot, car_color(i * 3 + side))
+func car_color(k: int) -> Color:
+	var pal := [Color(0.85, 0.85, 0.87), Color(0.15, 0.15, 0.17), Color(0.7, 0.12, 0.1), Color(0.2, 0.3, 0.6), Color(0.55, 0.57, 0.6), Color(0.9, 0.75, 0.2), Color(0.25, 0.45, 0.3)]
+	return pal[absi(k) % pal.size()]
+func emit_cable(i: int, p: Vector3) -> void:
+	em(M_BOX, p.x, p.y, p.z, 0.2, 4.0, 0.2, 0.0, Color(0.45, 0.35, 0.25))
+	em(M_BOX, p.x, p.y + 3.6, p.z, 1.6, 0.12, 0.12, 0.0, Color(0.45, 0.35, 0.25))
+	var x := cx(i)
+	var z := cz(i)
+	if x < N - 1 and wire[i + 1] & W_POWER:
+		em(M_BOX, p.x + CELL * 0.5, p.y + 3.6, p.z, CELL, 0.05, 0.05, 0.0, Color(0.1, 0.1, 0.1))
+	if z < N - 1 and wire[i + N] & W_POWER:
+		em(M_BOX, p.x, p.y + 3.6, p.z + CELL * 0.5, 0.05, 0.05, CELL, 0.0, Color(0.1, 0.1, 0.1))
+func tree_colors(kind: int) -> Array:
+	var s := season()
+	var snowy := weather == "Nieve"
+	match kind:
+		1, 2:
+			if s == 1:
+				return [Color(0.8, 0.5, 0.15) if kind == 2 else Color(0.75, 0.45, 0.2), 1.0]
+			if s == 2:
+				return [Color(0.45, 0.35, 0.25), 0.45]
+			return [Color(0.3, 0.55, 0.22) if kind == 1 else Color(0.38, 0.58, 0.25), 1.0]
+		3:
+			if s == 3:
+				return [Color(0.58, 0.42, 0.85), 1.0]
+			if s == 2:
+				return [Color(0.42, 0.38, 0.3), 0.5]
+			return [Color(0.32, 0.55, 0.3), 1.0]
+		4:
+			return [Color(0.9, 0.92, 0.95) if snowy else Color(0.15, 0.38, 0.2), 1.0]
+		5:
+			if s == 0 or s == 3:
+				return [Color(0.92, 0.5, 0.7), 1.0]
+			return [Color(0.35, 0.55, 0.28), 0.9]
+		6:
+			return [Color(0.3, 0.6, 0.25), 1.0]
+		7:
+			return [Color(0.55, 0.7, 0.3) if s != 2 else Color(0.5, 0.5, 0.35), 1.0]
+	return [Color(0.3, 0.55, 0.25), 1.0]
+func emit_trees(i: int, p: Vector3) -> void:
+	var kind: int = tree[i]
+	var tc := tree_colors(kind)
+	var crown: Color = tc[0]
+	var full: float = tc[1]
+	var nt := 1 + int(hsh(i, 1) * 2.4)
+	for k in nt:
+		var ox := (hsh(i, k * 3 + 2) - 0.5) * CELL * 0.6
+		var oz := (hsh(i, k * 3 + 3) - 0.5) * CELL * 0.6
+		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.6
+		var x := p.x + ox
+		var z := p.z + oz
+		var gy := ground_y(x, z) - 0.12
+		match kind:
+			4:
+				em(M_BOX, x, gy, z, 0.25 * sc, 0.8 * sc, 0.25 * sc, 0.0, Color(0.35, 0.25, 0.15))
+				em(M_CONE, x, gy + 0.6 * sc, z, 1.7 * sc, 3.2 * sc, 1.7 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.08)
+			5:
+				em(M_CYL, x, gy, z, 0.6 * sc, 1.6 * sc, 0.6 * sc, 0.0, Color(0.45, 0.5, 0.35))
+				em(M_SPH, x, gy + 1.4 * sc, z, 2.2 * sc * full, 1.6 * sc * full, 2.2 * sc * full, 0.0, crown, 0.0, 0.0, 0.0, 2.15)
+			6:
+				em(M_BOX, x, gy, z, 0.22 * sc, 3.2 * sc, 0.22 * sc, 0.3, Color(0.5, 0.4, 0.25))
+				em(M_SPH, x, gy + 3.0 * sc, z, 2.2 * sc, 0.6 * sc, 2.2 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.3)
+			7:
+				em(M_BOX, x, gy, z, 0.3 * sc, 1.2 * sc, 0.3 * sc, 0.0, Color(0.35, 0.28, 0.2))
+				em(M_SPH, x, gy + 0.6 * sc, z, 2.6 * sc, 2.2 * sc, 2.6 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.18)
+			_:
+				em(M_BOX, x, gy, z, 0.25 * sc, 1.1 * sc, 0.25 * sc, 0.0, Color(0.35, 0.25, 0.15))
+				em(M_SPH, x, gy + 0.9 * sc, z, 1.9 * sc * full, 1.8 * sc * full, 1.9 * sc * full, 0.0, crown, 0.0, 0.0, 0.0, 2.16)
+func emit_grass(i: int, p: Vector3) -> void:
+	var h := hsh(i, 40)
+	if h > 0.17:
+		return
+	var gc: Color = [Color(0.3, 0.52, 0.2), Color(0.5, 0.46, 0.2), Color(0.5, 0.56, 0.5), Color(0.33, 0.56, 0.22)][season()]
+	for k in 2:
+		var x := p.x + (hsh(i, 41 + k) - 0.5) * CELL * 0.8
+		var z := p.z + (hsh(i, 44 + k) - 0.5) * CELL * 0.8
+		var hh := 0.35 + hsh(i, 47 + k) * 0.4
+		var v := 0.85 + hsh(i, 50 + k) * 0.35
+		em(M_GRASS, x, ground_y(x, z) - 0.04, z, 0.18, hh, 0.18, hsh(i, 53 + k) * 3.0, gc * v * 1.3, 0.0, 0.0, 0.0, 2.1)
+	if h < 0.03:
+		var fc: Color = [Color(0.95, 0.85, 0.25), Color(0.95, 0.95, 0.92), Color(0.9, 0.45, 0.6), Color(0.7, 0.5, 0.9)][int(hsh(i, 60) * 4.0) % 4]
+		var fx := p.x + (hsh(i, 61) - 0.5) * CELL * 0.6
+		var fz := p.z + (hsh(i, 62) - 0.5) * CELL * 0.6
+		em(M_GRASS, fx, ground_y(fx, fz) + 0.26, fz, 0.2, 0.16, 0.2, 0.0, fc, 0.0, 0.0, 0.0, 2.1)
+func zone_color(z: int) -> Color:
+	if opts["colorblind"]:
+		return [Color(), Color(0.95, 0.75, 0.2), Color(0.2, 0.5, 0.95), Color(0.6, 0.6, 0.6), Color(0.9, 0.5, 0.9)][z]
+	return [Color(), Color(0.45, 0.8, 0.4), Color(0.35, 0.55, 0.95), Color(0.95, 0.8, 0.3), Color(0.75, 0.55, 0.9)][z]
+func emit_lot(i: int, p: Vector3) -> void:
+	em(M_BOX, p.x, p.y, p.z, CELL * 0.92, 0.08, CELL * 0.92, 0.0, zone_color(zone[i]).darkened(0.35))
+func emit_zone(i: int, p: Vector3) -> void:
+	var z: int = zone[i]
+	var l: int = lvl[i]
+	if l == 0:
+		emit_lot(i, p)
+		return
+	var v: int = vari[i]
+	var rot := face_rot(i)
+	var dark := burn[i] > 0.0
+	var big := part[i] == i
+	var w := CELL * (1.85 if big else 0.82)
+	var bx := p.x
+	var bz := p.z
+	if big:
+		bx += CELL * 0.5
+		bz += CELL * 0.5
+	em(M_BOX, bx, p.y, bz, w + CELL * 0.1, 0.12, w + CELL * 0.1, 0.0, (Color(0.36, 0.5, 0.28) if l == 1 else Color(0.5, 0.52, 0.45)) if z == Z_R else Color(0.55, 0.55, 0.55))
+	var y := p.y + 0.1
+	var wall := tint(res_wall(v), i)
+	if dark:
+		wall = wall.darkened(0.6)
+	match z:
+		Z_R:
+			emit_res(i, bx, y, bz, w, l, v, rot, wall, big)
+		Z_C:
+			emit_com(i, bx, y, bz, w, l, v, rot, dark, big)
+		Z_I:
+			emit_ind(i, bx, y, bz, w, l, v, rot, dark)
+		Z_M:
+			emit_com(i, bx, y, bz, w, mini(l, 2), v, rot, dark, false)
+			if l >= 2:
+				var h := 2.0 + l * 2.5
+				em(M_BOX, bx, y + 3.0, bz, w * 0.8, h, w * 0.8, rot, wall, 1.0)
+func tint(c: Color, i: int) -> Color:
+	var hh := fposmod(c.h + (hsh(i, 77) - 0.5) * 0.07, 1.0)
+	return Color.from_hsv(hh, clampf(c.s * (0.75 + hsh(i, 78) * 0.6), 0.0, 1.0), clampf(c.v * (0.86 + hsh(i, 79) * 0.2), 0.0, 1.0))
+func tower_col(v: int, i: int) -> Color:
+	var gp := [Color(0.45, 0.62, 0.78), Color(0.35, 0.58, 0.55), Color(0.66, 0.6, 0.5), Color(0.3, 0.34, 0.42), Color(0.78, 0.74, 0.68), Color(0.5, 0.52, 0.72), Color(0.72, 0.5, 0.42)]
+	return tint(gp[(v / 3 + i) % gp.size()], i)
+func res_wall(v: int) -> Color:
+	var pal := [Color(0.92, 0.88, 0.8), Color(0.85, 0.72, 0.6), Color(0.95, 0.93, 0.88), Color(0.78, 0.55, 0.45), Color(0.88, 0.82, 0.65), Color(0.7, 0.75, 0.78), Color(0.95, 0.85, 0.75), Color(0.65, 0.6, 0.55)]
+	return pal[v % pal.size()]
+func emit_ind(i: int, x: float, y: float, z: float, w: float, l: int, v: int, rot: float, dark: bool) -> void:
+	var c := tint(COL_BRICK if v % 2 == 0 else Color(0.55, 0.6, 0.62), i)
+	var im := -1.0 if v % 2 == 0 else -5.0
+	if dark:
+		c = c.darkened(0.6)
+	match l:
+		1:
+			em(M_BOX, x, y, z, w * 0.9, 2.6, w * 0.8, rot, c, 0, 0, 0, im)
+			em(M_ROOF, x, y + 2.6, z, w * 0.9, 0.8, w * 0.8, rot, Color(0.45, 0.47, 0.5), 0, 0, 0, -5)
+		2:
+			em(M_BOX, x, y, z, w * 0.9, 3.4, w * 0.9, rot, c, 0.4, 0, 0, im)
+			em(M_CYL, x + w * 0.3, y, z + w * 0.3, 0.8, 5.0, 0.8, 0.0, Color(0.42, 0.38, 0.36))
+		3:
+			em(M_BOX, x - w * 0.15, y, z, w * 0.6, 4.0, w * 0.9, rot, c, 0.4, 0, 0, im)
+			em(M_CYL, x + w * 0.3, y, z - w * 0.2, 1.4, 3.5, 1.4, 0.0, Color(0.8, 0.8, 0.82))
+			em(M_CYL, x + w * 0.3, y, z + w * 0.25, 1.4, 3.5, 1.4, 0.0, Color(0.8, 0.8, 0.82))
+			em(M_CYL, x - w * 0.3, y, z - w * 0.3, 0.8, 6.5, 0.8, 0.0, Color(0.42, 0.38, 0.36))
+		4:
+			em(M_BOX, x, y, z, w * 0.95, 6.0, w * 0.95, rot, c, 0.5, 0, 0, im)
+			em(M_CYL, x - w * 0.3, y, z - w * 0.3, 1.0, 8.5, 1.0, 0.0, Color(0.42, 0.38, 0.36))
+			em(M_CYL, x + w * 0.3, y, z - w * 0.3, 1.0, 7.5, 1.0, 0.0, Color(0.42, 0.38, 0.36))
+			em(M_BOX, x, y + 6.0, z, w * 0.5, 1.5, w * 0.4, rot, c.darkened(0.2))
+func emit_def(i: int, p: Vector3) -> void:
+	var d: Dictionary = DEF[bld[i]]
+	var sz: int = d["sz"]
+	var w := sz * CELL
+	var x := p.x + (sz - 1) * CELL * 0.5
+	var z := p.z + (sz - 1) * CELL * 0.5
+	var y := p.y
+	var col: Color = d["col"]
+	if burn[i] > 0.0:
+		col = col.darkened(0.6)
+	var sh: String = d["sh"]
+	var rot := face_rot(i)
+	if d["c"] == "wonder":
+		var prog: int = wonder_progress.get(i, 0)
+		if prog < WONDER_STEPS:
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.6, 0.55, 0.45))
+			var h := 2.0 + prog * 3.0
+			em(M_BOX, x, y, z, w * 0.6, h, w * 0.6, 0.0, col.darkened(0.3))
+			for k in 4:
+				var a := k * PI * 0.5 + 0.785
+				em(M_BOX, x + cos(a) * w * 0.38, y, z + sin(a) * w * 0.38, 0.2, h + 1.0, 0.2, 0.0, Color(0.85, 0.6, 0.2))
+			em(M_BOX, x + w * 0.3, y, z - w * 0.3, 0.3, h + 8.0, 0.3, 0.0, Color(0.95, 0.75, 0.1))
+			em(M_BOX, x + w * 0.1, y + h + 7.6, z - w * 0.3, w * 0.5, 0.3, 0.3, 0.0, Color(0.95, 0.75, 0.1))
+			return
+	var ground := Color(0.55, 0.55, 0.52)
+	match sh:
+		"cinema":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
+			bx(x, y, z, rot, 0, -0.05 * w, 0, w * 0.86, 5.2, w * 0.78, col)
+			bx(x, y, z, rot, 0, -0.05 * w, 5.2, w * 0.9, 0.3, w * 0.82, Color(0.12, 0.12, 0.13))
+			bx(x, y, z, rot, 0, 0.42 * w, 2.6, w * 0.92, 0.7, 0.55, Color(0.95, 0.85, 0.45), 0, 0.9)
+			bx(x, y, z, rot, 0, 0.43 * w, 2.45, w * 0.88, 0.12, 0.5, Color(1.0, 0.92, 0.65), 0, 0, 2.2)
+			bx(x, y, z, rot, 0.36 * w, 0.39 * w, 3.3, 0.25, 2.8, 0.55, Color(1.0, 0.25, 0.2), 0, 0, 1.6)
+			bx(x, y, z, rot, -0.27 * w, 0.351 * w, 0.5, 0.65, 1.3, 0.04, Color(0.2, 0.25, 0.55), 0, 0.5)
+			bx(x, y, z, rot, 0.27 * w, 0.351 * w, 0.5, 0.65, 1.3, 0.04, Color(0.65, 0.15, 0.1), 0, 0.5)
+			bx(x, y, z, rot, 0, 0.351 * w, 0.05, 1.0, 2.0, 0.03, COL_GLASS, 0, 0, 0, -8)
+		"civic":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
+			em(M_BOX, x, y, z, w * 0.8, 3.2, w * 0.7, rot, col, 0.8)
+			em(M_BOX, x, y + 3.2, z, w * 0.84, 0.3, w * 0.74, rot, col.darkened(0.25))
+			em(M_BOX, x + w * 0.38, y, z + w * 0.38, 0.1, 4.5, 0.1, 0.0, Color(0.8, 0.8, 0.8))
+			em(M_BOX, x + w * 0.38 + 0.45, y + 3.9, z + w * 0.38, 0.9, 0.5, 0.05, 0.0, Color(0.45, 0.7, 0.95))
+		"tower":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
+			em(M_BOX, x, y, z, w * 0.75, 4.0 + sz * 5.0, w * 0.55, rot, col, 1.0)
+			em(M_BOX, x, y, z, w * 0.4, 7.0 + sz * 6.0, w * 0.4, rot, col.darkened(0.08), 1.0)
+		"campus":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.4, 0.62, 0.32))
+			em(M_BOX, x, y, z - w * 0.25, w * 0.7, 6.0, w * 0.25, 0.0, col, 1.0)
+			em(M_BOX, x - w * 0.3, y, z + w * 0.15, w * 0.2, 4.5, w * 0.45, 0.0, col, 1.0)
+			em(M_BOX, x + w * 0.3, y, z + w * 0.15, w * 0.2, 4.5, w * 0.45, 0.0, col, 1.0)
+			em(M_BOX, x, y + 6.0, z - w * 0.25, 2.0, 4.0, 2.0, 0.0, col.lightened(0.1))
+		"cabildo":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.66, 0.6))
+			em(M_BOX, x, y, z, w * 0.8, 5.0, w * 0.45, rot, col, 0.9)
+			em(M_ROOF, x, y + 5.0, z, w * 0.8, 1.2, w * 0.45, rot, Color(0.6, 0.3, 0.2))
+			em(M_BOX, x, y, z, 2.2, 10.0, 2.2, rot, col)
+			em(M_CONE, x, y + 10.0, z, 2.4, 2.5, 2.4, 0.0, Color(0.55, 0.3, 0.2))
+		"park":
+			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, col)
+			em(M_BOX, x, y, z, w * 0.9, 0.17, 0.8, 0.0, Color(0.8, 0.75, 0.6))
+			em(M_BOX, x, y, z, 0.8, 0.17, w * 0.9, 0.0, Color(0.8, 0.75, 0.6))
+			for k in sz * 3:
+				var ax := x + (hsh(i, k) - 0.5) * w * 0.8
+				var az := z + (hsh(i, k + 9) - 0.5) * w * 0.8
+				em(M_BOX, ax, y, az, 0.25, 1.0, 0.25, 0.0, Color(0.35, 0.25, 0.15))
+				em(M_SPH, ax, y + 0.8, az, 2.0, 2.0, 2.0, 0.0, tree_colors(1 + k % 3)[0])
+			if sz >= 2:
+				em(M_CYL, x, y, z, 2.0, 0.6, 2.0, 0.0, Color(0.7, 0.7, 0.72))
+				em(M_CYL, x, y + 0.6, z, 0.5, 1.4, 0.5, 0.0, Color(0.6, 0.75, 0.95), 0, 0, 0.2)
+		"pitch":
+			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, Color(0.25, 0.58, 0.28))
+			em(M_BOX, x, y, z, w * 0.75, 0.16, w * 0.55, rot, Color(0.3, 0.7, 0.32))
+			em(M_BOX, x, y, z, 0.12, 0.17, w * 0.55, rot, Color(0.95, 0.95, 0.95))
+			for sgn in [-1, 1]:
+				em(M_BOX, x + sgn * w * 0.36 * cos(rot), y, z - sgn * w * 0.36 * sin(rot), 0.2, 1.0, 1.8, rot, Color(0.95, 0.95, 0.95))
+		"parrilla":
+			em(M_BOX, x, y, z, w * 0.9, 0.15, w * 0.9, 0.0, Color(0.7, 0.65, 0.55))
+			em(M_BOX, x, y, z, 2.2, 1.3, 1.2, rot, Color(0.65, 0.32, 0.2))
+			em(M_BOX, x, y + 1.3, z, 0.6, 1.6, 0.6, rot, Color(0.55, 0.28, 0.18))
+			em(M_BOX, x + 1.0, y, z + 1.2, 1.6, 0.8, 0.8, 0.0, Color(0.5, 0.35, 0.2))
+		"calesita":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.66, 0.58))
+			em(M_CYL, x, y, z, 3.2, 0.4, 3.2, 0.0, Color(0.95, 0.9, 0.7))
+			em(M_CYL, x, y + 0.4, z, 0.3, 2.2, 0.3, 0.0, Color(0.9, 0.85, 0.3))
+			em(M_CONE, x, y + 2.6, z, 3.6, 1.6, 3.6, 0.0, col, 0, 0.5)
+		"stadium":
+			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, ground)
+			em(M_CYL, x, y, z, w * 0.92, 5.5, w * 0.8, 0.0, col, 0.3)
+			em(M_CYL, x, y + 5.5, z, w * 0.7, 0.2, w * 0.58, 0.0, Color(0.3, 0.65, 0.3))
+			for k in 4:
+				var a := k * PI * 0.5 + 0.785
+				em(M_BOX, x + cos(a) * w * 0.45, y, z + sin(a) * w * 0.4, 0.4, 12.0, 0.4, 0.0, Color(0.7, 0.7, 0.72))
+				em(M_BOX, x + cos(a) * w * 0.45, y + 12.0, z + sin(a) * w * 0.4, 2.0, 1.0, 0.4, a, Color(1, 1, 0.9), 0, 1.5)
+		"wheel":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
+			em(M_BOX, x - 1.5, y, z, 0.4, 8.0, 0.4, 0.3, Color(0.8, 0.8, 0.82))
+			em(M_BOX, x + 1.5, y, z, 0.4, 8.0, 0.4, -0.3, Color(0.8, 0.8, 0.82))
+			for k in 12:
+				var a := k * TAU / 12.0
+				em(M_BOX, x + cos(a) * 6.0, y + 8.0 + sin(a) * 6.0, z, 0.9, 0.9, 0.9, 0.0, [col, Color(0.95, 0.85, 0.2), Color(0.3, 0.6, 0.95)][k % 3], 0, 0.6)
+		"cathedral":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.68, 0.62))
+			em(M_BOX, x, y, z, w * 0.4, 7.0, w * 0.75, rot, col, 0.5)
+			em(M_ROOF, x, y + 7.0, z, w * 0.4, 2.5, w * 0.75, rot, Color(0.4, 0.4, 0.45))
+			for sgn in [-1, 1]:
+				var tx: float = x + sgn * w * 0.18
+				em(M_BOX, tx, y, z + w * 0.35, 2.0, 11.0, 2.0, 0.0, col)
+				em(M_CONE, tx, y + 11.0, z + w * 0.35, 2.2, 4.0, 2.2, 0.0, Color(0.35, 0.4, 0.45))
+		"lighthouse":
+			em(M_CYL, x, y, z, 2.4, 0.5, 2.4, 0.0, Color(0.5, 0.5, 0.5))
+			for k in 5:
+				em(M_CYL, x, y + 0.5 + k * 2.2, z, 1.6 - k * 0.1, 2.2, 1.6 - k * 0.1, 0.0, Color(0.95, 0.95, 0.95) if k % 2 == 0 else Color(0.8, 0.15, 0.15))
+			em(M_CYL, x, y + 11.5, z, 1.2, 1.2, 1.2, 0.0, Color(1, 0.95, 0.7), 0, 2.0)
+		"clock":
+			em(M_BOX, x, y, z, w * 0.9, 0.15, w * 0.9, 0.0, Color(0.7, 0.68, 0.6))
+			em(M_BOX, x, y, z, 1.6, 9.0, 1.6, rot, col)
+			em(M_BOX, x, y + 7.2, z, 1.75, 1.2, 1.75, rot, Color(0.95, 0.95, 0.9), 0, 0.8)
+			em(M_CONE, x, y + 9.0, z, 2.0, 1.8, 2.0, 0.0, Color(0.3, 0.35, 0.3))
+		"beach":
+			em(M_BOX, x, y, z, w, 0.12, w, 0.0, Color(0.92, 0.85, 0.6))
+			for k in 3:
+				var ax := x + (hsh(i, k) - 0.5) * w * 0.7
+				var az := z + (hsh(i, k + 4) - 0.5) * w * 0.7
+				em(M_BOX, ax, y, az, 0.08, 1.6, 0.08, 0.0, Color(0.9, 0.9, 0.9))
+				em(M_CONE, ax, y + 1.4, az, 1.8, 0.5, 1.8, 0.0, [Color(0.9, 0.3, 0.3), Color(0.2, 0.5, 0.9), Color(0.95, 0.8, 0.2)][k])
+		"plant":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
+			em(M_BOX, x - w * 0.12, y, z, w * 0.55, 5.0, w * 0.7, rot, col, 0.3)
+			em(M_CYL, x + w * 0.28, y, z - w * 0.25, 1.3, 12.0, 1.3, 0.0, col.darkened(0.2))
+			em(M_CYL, x + w * 0.28, y, z + w * 0.15, 1.3, 10.0, 1.3, 0.0, col.darkened(0.2))
+		"solar":
+			em(M_BOX, x, y, z, w * 0.98, 0.12, w * 0.98, 0.0, Color(0.45, 0.55, 0.35))
+			for k in 4:
+				em(M_BOX, x, y + 0.6, z - w * 0.36 + k * w * 0.24, w * 0.85, 0.12, w * 0.16, 0.0, col, 0, 0, 0.05)
+		"windmill":
+			em(M_CYL, x, y, z, 0.6, 11.0, 0.6, 0.0, col)
+			em(M_BOX, x, y + 11.0, z + 0.4, 0.4, 7.0, 0.15, 0.0, col)
+			em(M_BOX, x, y + 13.5, z + 0.4, 6.0, 0.4, 0.15, 0.7, col)
+		"dam":
+			em(M_BOX, x, y - 2.0, z, w, 6.0, w * 0.35, rot, col)
+			em(M_BOX, x, y, z + w * 0.3, w * 0.5, 3.0, w * 0.3, rot, col.darkened(0.15), 0.4)
+		"pump":
+			em(M_BOX, x, y, z, w * 0.7, 2.2, w * 0.7, 0.0, col, 0.3)
+			em(M_CYL, x + 1.0, y, z + 1.0, 0.7, 3.0, 0.7, 0.0, Color(0.6, 0.6, 0.65))
+		"watertower":
+			for k in 4:
+				var a := k * PI * 0.5 + 0.785
+				em(M_BOX, x + cos(a) * 1.0, y, z + sin(a) * 1.0, 0.2, 6.0, 0.2, 0.0, Color(0.5, 0.5, 0.52))
+			em(M_SPH, x, y + 5.5, z, 3.2, 3.0, 3.2, 0.0, col)
+		"landfill":
+			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, Color(0.45, 0.4, 0.3))
+			for k in 4:
+				em(M_SPH, x + (hsh(i, k) - 0.5) * w * 0.6, y, z + (hsh(i, k + 3) - 0.5) * w * 0.6, 4.0, 1.8, 3.5, 0.0, Color(0.42, 0.36, 0.28))
+		"metro":
+			em(M_BOX, x, y, z, w * 0.9, 0.15, w * 0.9, 0.0, ground)
+			em(M_BOX, x, y, z, 2.4, 1.6, 2.4, rot, Color(0.85, 0.85, 0.85), 0.5)
+			em(M_BOX, x, y + 1.6, z, 1.0, 1.0, 0.2, rot, col, 0, 0, 0.6)
+		"station":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
+			em(M_BOX, x, y, z, w * 0.8, 4.0, w * 0.4, rot, col, 0.6)
+			em(M_ROOF, x, y + 4.0, z, w * 0.85, 1.6, w * 0.45, rot, Color(0.4, 0.4, 0.42))
+			em(M_BOX, x, y + 5.2, z, 1.0, 1.0, 0.3, rot, Color(0.95, 0.95, 0.9), 0, 0.6)
+		"port":
+			em(M_BOX, x, y, z, w, 0.4, w, 0.0, Color(0.5, 0.48, 0.45))
+			em(M_BOX, x - w * 0.25, y, z, w * 0.35, 3.0, w * 0.6, 0.0, col)
+			for k in 3:
+				em(M_BOX, x + w * 0.2, y + 0.4 + k * 1.0, z - w * 0.2 + k * 0.2, 2.5, 1.0, 1.0, 0.0, [Color(0.8, 0.3, 0.2), Color(0.2, 0.4, 0.8), Color(0.2, 0.6, 0.3)][k])
+			em(M_BOX, x + w * 0.35, y, z + w * 0.3, 0.5, 10.0, 0.5, 0.0, Color(0.95, 0.7, 0.1))
+			em(M_BOX, x + w * 0.35 - 2.0, y + 10.0, z + w * 0.3, 5.0, 0.4, 0.4, 0.0, Color(0.95, 0.7, 0.1))
+		"airport":
+			em(M_BOX, x, y, z, w, 0.12, w, 0.0, Color(0.45, 0.5, 0.4))
+			em(M_BOX, x, y, z + w * 0.15, w * 0.95, 0.16, w * 0.22, 0.0, Color(0.25, 0.25, 0.27))
+			em(M_BOX, x, y, z + w * 0.15, w * 0.9, 0.17, 0.25, 0.0, Color(0.95, 0.95, 0.95))
+			em(M_BOX, x - w * 0.15, y, z - w * 0.28, w * 0.5, 3.5, w * 0.25, 0.0, col, 1.0)
+			em(M_CYL, x + w * 0.3, y, z - w * 0.3, 1.2, 9.0, 1.2, 0.0, Color(0.8, 0.8, 0.82))
+			em(M_CYL, x + w * 0.3, y + 9.0, z - w * 0.3, 2.2, 1.6, 2.2, 0.0, Color(0.4, 0.55, 0.65), 0, 0.6)
+		"pier":
+			em(M_BOX, x, 0.2, z, w * 0.4, 0.3, w * 1.2, rot, col)
+			em(M_BOX, x, 0.5, z, 1.4, 2.0, 1.4, rot, Color(0.8, 0.75, 0.6))
+		"parking":
+			em(M_BOX, x, y, z, w * 0.95, 0.16, w * 0.95, 0.0, col)
+			for k in 4:
+				em(M_BOX, x - 1.0 + (k % 2) * 2.0, y + 0.16, z - 0.8 + (k / 2) * 1.6, 1.5, 0.6, 0.75, 0.0, car_color(i + k))
+		"mall":
+			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, Color(0.3, 0.3, 0.32))
+			em(M_BOX, x, y, z, w * 0.8, 6.0, w * 0.7, rot, col, 0.6)
+			em(M_BOX, x, y + 6.0, z, w * 0.5, 0.8, 0.3, rot, Color(0.95, 0.3, 0.4), 0, 1.2)
+		"gated":
+			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, Color(0.4, 0.62, 0.32))
+			for sgn in [-1, 1]:
+				em(M_BOX, x + sgn * w * 0.48, y, z, 0.25, 1.4, w * 0.96, 0.0, Color(0.85, 0.82, 0.75))
+				em(M_BOX, x, y, z + sgn * w * 0.48, w * 0.96, 1.4, 0.25, 0.0, Color(0.85, 0.82, 0.75))
+			for k in 4:
+				var hx := x + (k % 2 - 0.5) * w * 0.45
+				var hz := z + (k / 2 - 0.5) * w * 0.45
+				em(M_BOX, hx, y, hz, 2.6, 2.0, 2.2, 0.0, col, 0.6)
+				em(M_ROOF, hx, y + 2.0, hz, 2.8, 1.0, 2.3, 0.0, Color(0.6, 0.3, 0.2))
+			em(M_BOX, x + 1.5, y, z + 1.0, 2.0, 0.12, 1.2, 0.0, Color(0.3, 0.65, 0.9), 0, 0, 0.15)
+		"farm":
+			for k in 4:
+				em(M_BOX, x, y, z - w * 0.36 + k * w * 0.24, w * 0.95, 0.2, w * 0.22, 0.0, [Color(0.75, 0.65, 0.3), Color(0.45, 0.6, 0.25)][k % 2])
+			em(M_BOX, x + w * 0.3, y, z + w * 0.3, 2.4, 2.4, 2.0, 0.0, Color(0.7, 0.2, 0.15))
+			em(M_ROOF, x + w * 0.3, y + 2.4, z + w * 0.3, 2.6, 1.2, 2.1, 0.0, Color(0.4, 0.35, 0.3))
+		"w_tower":
+			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.7, 0.72))
+			em(M_CYL, x, y, z, 3.0, 30.0, 3.0, 0.0, col, 0.8)
+			em(M_CYL, x, y + 30.0, z, 5.0, 3.0, 5.0, 0.0, Color(0.5, 0.6, 0.75), 1.2)
+			em(M_CONE, x, y + 33.0, z, 1.2, 10.0, 1.2, 0.0, Color(0.85, 0.85, 0.9), 0, 0.8)
+		"w_park":
+			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, Color(0.3, 0.6, 0.28))
+			em(M_CYL, x, y, z, w * 0.4, 0.2, w * 0.4, 0.0, Color(0.2, 0.45, 0.65), 0, 0, 0.1)
+			for k in 14:
+				var a := k * TAU / 14.0
+				var ax := x + cos(a) * w * 0.38
+				var az := z + sin(a) * w * 0.38
+				em(M_BOX, ax, y, az, 0.3, 1.2, 0.3, 0.0, Color(0.35, 0.25, 0.15))
+				em(M_SPH, ax, y + 1.0, az, 2.4, 2.4, 2.4, 0.0, tree_colors(3 if k % 3 == 0 else 1)[0])
+			em(M_BOX, x, y, z, 1.0, 6.0, 1.0, 0.0, Color(0.95, 0.95, 0.95))
+		"w_stadium":
+			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, ground)
+			em(M_CYL, x, y, z, w * 0.95, 9.0, w * 0.85, 0.0, col, 0.4)
+			em(M_CYL, x, y + 9.0, z, w * 0.72, 0.2, w * 0.62, 0.0, Color(0.3, 0.65, 0.3))
+			em(M_CYL, x, y + 9.0, z, w * 0.98, 0.6, w * 0.88, 0.0, Color(0.45, 0.65, 0.95))
+		"w_palace":
+			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, Color(0.75, 0.72, 0.65))
+			em(M_BOX, x, y, z, w * 0.85, 8.0, w * 0.5, rot, col, 0.9)
+			em(M_SPH, x, y + 8.0, z, 7.0, 8.0, 7.0, 0.0, Color(0.55, 0.7, 0.65))
+			em(M_CONE, x, y + 15.0, z, 1.0, 4.0, 1.0, 0.0, Color(0.9, 0.8, 0.3))
+			for sgn in [-1, 1]:
+				em(M_BOX, x + sgn * w * 0.38, y, z, 3.0, 11.0, 3.0, 0.0, col)
+		_:
+			em(M_BOX, x, y, z, w * 0.8, 3.0, w * 0.8, 0.0, col)
+func build_overlay() -> void:
+	var mm := overlay_node.multimesh
+	if view_mode == "":
+		mm.instance_count = 0
+		return
+	begin_buf()
+	for i in N * N:
+		var c := overlay_color(i)
+		if c.a <= 0.0:
+			continue
+		var p := cell_pos(i)
+		em(M_BOX, p.x, maxf(p.y, 0.0) + 0.5, p.z, CELL * 0.96, 0.1, CELL * 0.96, 0.0, c)
+	mm.instance_count = _counts[M_BOX]
+	if _counts[M_BOX] > 0:
+		mm.buffer = _bufs[M_BOX].slice(0, _counts[M_BOX] * 20)
+func heat(v: float, a: float = 0.55) -> Color:
+	v = clampf(v, 0.0, 1.0)
+	if opts["colorblind"]:
+		return Color(0.15 + v * 0.8, 0.45 + v * 0.1, 0.95 - v * 0.85, a)
+	return Color(minf(1.0, v * 2.0), minf(1.0, (1.0 - v) * 2.0), 0.15, a)
+func overlay_color(i: int) -> Color:
+	var built := zone[i] > 0 or bld[i] > 0
+	match view_mode:
+		"power":
+			if built:
+				return Color(1, 0.9, 0.2, 0.55) if powered[i] else Color(0.9, 0.15, 0.1, 0.6)
+			if wire[i] & W_POWER:
+				return Color(1, 0.8, 0.2, 0.4)
+		"water":
+			if built:
+				return Color(0.2, 0.6, 1.0, 0.55) if watered[i] else Color(0.9, 0.15, 0.1, 0.6)
+			if wire[i] & W_PIPE:
+				return Color(0.3, 0.7, 1.0, 0.5)
+		"pollution":
+			if pollution[i] > 0.05:
+				return Color(0.45, 0.3, 0.1, clampf(pollution[i], 0.0, 0.8))
+		"crime":
+			if built and zone[i] > 0:
+				return heat(crime[i])
+		"land":
+			if terr[i] != T_WATER:
+				var v := landv[i]
+				return Color(0.2, 0.4 + v * 0.6, 0.2, 0.45)
+		"traffic":
+			if road[i] > 0:
+				return heat(tload[i] / road_cap(i), 0.75)
+		"happy":
+			if zone[i] == Z_R or zone[i] == Z_M:
+				return heat(1.0 - happy[i])
+		"fire":
+			return Color(0.95, 0.3, 0.1, clampf(cov[CV_FIRE][i], 0.0, 1.0) * 0.6) if cov[CV_FIRE][i] > 0.02 else Color(0, 0, 0, 0)
+		"police":
+			return Color(0.2, 0.3, 0.95, clampf(cov[CV_POL][i], 0.0, 1.0) * 0.6) if cov[CV_POL][i] > 0.02 else Color(0, 0, 0, 0)
+		"health":
+			return Color(0.95, 0.95, 0.95, clampf(cov[CV_HEALTH][i], 0.0, 1.0) * 0.6) if cov[CV_HEALTH][i] > 0.02 else Color(0, 0, 0, 0)
+		"edu":
+			var e := maxf(cov[CV_EDU1][i], maxf(cov[CV_EDU2][i], cov[CV_EDU3][i]))
+			return Color(0.95, 0.8, 0.2, clampf(e, 0.0, 1.0) * 0.6) if e > 0.02 else Color(0, 0, 0, 0)
+		"transit":
+			return Color(0.3, 0.8, 0.9, clampf(cov[CV_TRANSIT][i], 0.0, 1.0) * 0.6) if cov[CV_TRANSIT][i] > 0.02 else Color(0, 0, 0, 0)
+		"garbage":
+			if garbp[i] > 0.1:
+				return Color(0.5, 0.35, 0.1, 0.7)
+			if built and cov[CV_GARB][i] > 0.02:
+				return Color(0.3, 0.7, 0.3, 0.35)
+		"districts":
+			var r := region_of(i)
+			if not is_owned(i):
+				return Color(0, 0, 0, 0.35)
+			var dc: Color = [Color(0, 0, 0, 0), Color(0.9, 0.5, 0.2, 0.35), Color(0.2, 0.8, 0.3, 0.35), Color(0.3, 0.5, 0.95, 0.35), Color(0.9, 0.2, 0.7, 0.35)][district[r]]
+			if (cx(i) % REG == 0 or cz(i) % REG == 0):
+				return Color(1, 1, 1, 0.6)
+			return dc
+	return Color(0, 0, 0, 0)
+var sun_rot := Vector3(999, 0, 0)
+func update_light() -> void:
+	hour = fmod(6.0 + day_timer / DAY_SECONDS * 24.0, 24.0)
+	var sunrise := 6.25
+	var sunset := 20.0
+	var up := 0.0
+	if hour > sunrise and hour < sunset:
+		up = sin((hour - sunrise) / (sunset - sunrise) * PI)
+	var nf := 1.0 - clampf(up * 4.0, 0.0, 1.0)
+	night = nf
+	var az := lerpf(-70.0, 250.0, clampf((hour - sunrise) / (sunset - sunrise), 0.0, 1.0))
+	var srot := Vector3(-maxf(up * 62.0, 4.0), az, 0.0)
+	if srot.distance_to(sun_rot) > 0.8:
+		sun_rot = srot
+		sun.rotation_degrees = srot
+	var gold := clampf(1.0 - up * 2.2, 0.0, 1.0) * (1.0 - nf)
+	sun.light_color = Color(1.0, 0.96, 0.9).lerp(Color(1.0, 0.56, 0.26), gold)
+	var cloudy := 0.0
+	if weather == "Lluvia" or weather == "Tormenta" or weather == "Nieve":
+		cloudy = 0.55
+	elif weather == "Nublado":
+		cloudy = 0.3
+	sun.light_energy = 1.0 * (1.0 - nf) * (1.0 - cloudy * 0.6)
+	env.tonemap_exposure = lerpf(0.8, 0.98, nf)
+	sun.visible = nf < 0.98
+	moon.light_energy = 0.28 * nf
+	var top := Color(0.22, 0.45, 0.85).lerp(Color(0.02, 0.03, 0.09), nf).lerp(Color(0.45, 0.5, 0.56), cloudy * (1.0 - nf))
+	var hor := Color(0.68, 0.8, 0.95).lerp(Color(0.06, 0.08, 0.16), nf).lerp(Color(0.95, 0.6, 0.35), gold * 0.8)
+	sky_mat.sky_top_color = top
+	sky_mat.sky_horizon_color = hor
+	sky_mat.ground_horizon_color = hor
+	sky_mat.ground_bottom_color = top.darkened(0.3)
+	sky_mat.sun_angle_max = 30.0
+	env.ambient_light_energy = lerpf(0.55, 0.35, nf)
+	env.fog_light_color = hor
+	env.fog_density = 0.0007 + cloudy * 0.0012 + (0.0005 if hour > 5.5 and hour < 8.0 else 0.0)
+	city_mat.set_shader_parameter("night", nf)
+	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
+	water_mat.set_shader_parameter("night", nf)
+	cloud_mat.set_shader_parameter("night", nf)
+	city_mat.set_shader_parameter("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
+	env.glow_intensity = lerpf(0.22, 0.9, nf)
+const COL_WHITE := Color(0.93, 0.92, 0.88)
+const COL_CREAM := Color(0.9, 0.83, 0.68)
+const COL_BRICK := Color(0.68, 0.35, 0.26)
+const COL_WOOD := Color(0.66, 0.43, 0.25)
+const COL_CONC := Color(0.64, 0.64, 0.62)
+const COL_BLACK := Color(0.13, 0.13, 0.14)
+const COL_GLASS := Color(0.2, 0.25, 0.3)
+const COL_STONE := Color(0.82, 0.76, 0.64)
+func make_faces_mesh(faces: Array) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for f in faces:
+		var hint: Vector3 = f[0]
+		var pts: Array = f[1]
+		var p0: Vector3 = pts[0]
+		var p1: Vector3 = pts[1]
+		var p2: Vector3 = pts[2]
+		var n := (p1 - p0).cross(p2 - p0).normalized()
+		if n.dot(hint) < 0.0:
+			n = -n
+		for k in range(1, pts.size() - 1):
+			var b: Vector3 = pts[k]
+			var c: Vector3 = pts[k + 1]
+			if (b - p0).cross(c - p0).dot(n) > 0.0:
+				var tmp := b
+				b = c
+				c = tmp
+			st.set_normal(n)
+			st.add_vertex(p0)
+			st.set_normal(n)
+			st.add_vertex(b)
+			st.set_normal(n)
+			st.add_vertex(c)
+	return st.commit()
+func make_gable_mesh() -> ArrayMesh:
+	var t := 0.08
+	var f: Array = []
+	for sg in [-1.0, 1.0]:
+		var s: float = sg
+		f.append([Vector3(s, 0.5, 0), [Vector3(s * 0.5, 0, -0.5), Vector3(0, 1, -0.5), Vector3(0, 1, 0.5), Vector3(s * 0.5, 0, 0.5)]])
+		f.append([Vector3(-s, -0.5, 0), [Vector3(s * 0.5, -t, -0.5), Vector3(0, 1 - t, -0.5), Vector3(0, 1 - t, 0.5), Vector3(s * 0.5, -t, 0.5)]])
+		f.append([Vector3(s, 0, 0), [Vector3(s * 0.5, 0, -0.5), Vector3(s * 0.5, 0, 0.5), Vector3(s * 0.5, -t, 0.5), Vector3(s * 0.5, -t, -0.5)]])
+		for zg in [-0.5, 0.5]:
+			var zz: float = zg
+			f.append([Vector3(0, 0, zz), [Vector3(s * 0.5, 0, zz), Vector3(0, 1, zz), Vector3(0, 1 - t, zz), Vector3(s * 0.5, -t, zz)]])
+	return make_faces_mesh(f)
+func make_hip_mesh() -> ArrayMesh:
+	var r := 0.22
+	var f: Array = []
+	for sg in [-1.0, 1.0]:
+		var s: float = sg
+		f.append([Vector3(s, 0.6, 0), [Vector3(s * 0.5, 0, -0.5), Vector3(s * 0.5, 0, 0.5), Vector3(0, 1, r), Vector3(0, 1, -r)]])
+		f.append([Vector3(0, 0.6, s), [Vector3(-0.5, 0, s * 0.5), Vector3(0.5, 0, s * 0.5), Vector3(0, 1, s * r)]])
+	f.append([Vector3(0, -1, 0), [Vector3(-0.5, 0, -0.5), Vector3(0.5, 0, -0.5), Vector3(0.5, 0, 0.5), Vector3(-0.5, 0, 0.5)]])
+	return make_faces_mesh(f)
+func lp(x: float, z: float, rot: float, a: float, b: float) -> Vector2:
+	var c := cos(rot)
+	var s := sin(rot)
+	return Vector2(x + a * c + b * s, z - a * s + b * c)
+func bx(x: float, y: float, z: float, rot: float, a: float, b: float, yb: float, sx: float, sy: float, sz: float, col: Color, c0: float = 0.0, c1: float = 0.0, c2: float = 0.0, c3: float = 0.0) -> void:
+	var q := lp(x, z, rot, a, b)
+	em(M_BOX, q.x, y + yb, q.y, sx, sy, sz, rot, col, c0, c1, c2, c3)
+func gable(x: float, y: float, z: float, rot: float, a: float, b: float, lx: float, lz: float, h: float, wallc: Color, roofc: Color, along_x: bool, rm: float = -4.0, wm: float = 0.0) -> void:
+	var q := lp(x, z, rot, a, b)
+	var r := rot + (PI * 0.5 if along_x else 0.0)
+	var wx := lz if along_x else lx
+	var wz := lx if along_x else lz
+	em(M_ROOF, q.x, y, q.y, wx * 0.98, h, wz * 0.98, r, wallc, 0, 0, 0, wm)
+	em(M_GABLE, q.x, y + 0.02, q.y, wx * 1.16, h * 1.12, wz * 1.08, r, roofc, 0, 0, 0, rm)
+func hip(x: float, y: float, z: float, rot: float, a: float, b: float, lx: float, lz: float, h: float, roofc: Color) -> void:
+	var q := lp(x, z, rot, a, b)
+	if lx > lz:
+		em(M_HIP, q.x, y, q.y, lz, h, lx, rot + PI * 0.5, roofc, 0, 0, 0, -4.0)
+	else:
+		em(M_HIP, q.x, y, q.y, lx, h, lz, rot, roofc, 0, 0, 0, -4.0)
+func bush(x: float, y: float, z: float, r: float, i: int, k: int) -> void:
+	var g := Color(0.2, 0.42, 0.18).lerp(Color(0.32, 0.5, 0.2), hsh(i, k))
+	em(M_SPH, x, y, z, r, r * 0.8, r, 0.0, g, 0, 0, 0, 2.04)
+func pine(x: float, y: float, z: float, h: float, i: int) -> void:
+	em(M_BOX, x, y, z, 0.12, h * 0.25, 0.12, 0.0, Color(0.35, 0.24, 0.16))
+	em(M_CONE, x, y + h * 0.2, z, h * 0.38, h * 0.8, h * 0.38, 0.0, Color(0.16, 0.34, 0.2).lerp(Color(0.25, 0.42, 0.2), hsh(i, 9)), 0, 0, 0, 2.03)
+func parked_car(x: float, y: float, z: float, rot: float, a: float, b: float, i: int) -> void:
+	var q := lp(x, z, rot, a, b)
+	var cc: Color = [Color(0.92, 0.92, 0.93), Color(0.1, 0.1, 0.12), Color(0.55, 0.57, 0.6), Color(0.6, 0.1, 0.1)][int(hsh(i, 31) * 4.0) % 4]
+	em(M_BOX, q.x, y + 0.15, q.y, 0.9, 0.42, 1.95, rot, cc, 0, 0, 0, 1.5)
+	em(M_SPH, q.x, y + 0.5, q.y, 0.8, 0.42, 1.05, rot, Color(0.07, 0.09, 0.12), 0, 0, 0, 1.5)
+func garden(i: int, x: float, y: float, z: float, rot: float, s: float) -> void:
+	var q := lp(x, z, rot, -0.42 * s, 0.38 * s)
+	bush(q.x, y, q.y, 0.6 + hsh(i, 3) * 0.3, i, 3)
+	q = lp(x, z, rot, 0.42 * s, -0.4 * s)
+	if hsh(i, 4) < 0.5:
+		pine(q.x, y, q.y, 2.2 + hsh(i, 5) * 1.2, i)
+	else:
+		bush(q.x, y, q.y, 0.7, i, 6)
+func emit_house(i: int, x: float, y: float, z: float, s: float, v: int, rot: float, wall: Color) -> void:
+	var hd: bool = opts["quality"] >= 1
+	var tile: Color = [Color(0.62, 0.27, 0.18), Color(0.45, 0.25, 0.18), Color(0.28, 0.22, 0.2), Color(0.72, 0.36, 0.2)][int(hsh(i, 11) * 4.0) % 4]
+	var white := tint(COL_WHITE if hsh(i, 12) < 0.6 else COL_CREAM, i)
+	var k := (v + int(hsh(i, 13) * 8.0)) % 8
+	match k:
+		0:
+			bx(x, y, z, rot, -0.12 * s, -0.08 * s, 0, 0.62 * s, 3.4, 0.5 * s, white, 0.6)
+			gable(x, y + 3.4, z, rot, -0.12 * s, -0.08 * s, 0.62 * s, 0.5 * s, 1.5, white, tile, true)
+			bx(x, y, z, rot, 0.2 * s, 0.1 * s, 0, 0.34 * s, 3.4, 0.5 * s, white, 0.6)
+			gable(x, y + 3.4, z, rot, 0.2 * s, 0.1 * s, 0.34 * s, 0.5 * s, 1.7, white, tile, false)
+			bx(x, y, z, rot, 0.2 * s, 0.35 * s, 0, 0.32, 0.95, 0.05, Color(0.3, 0.2, 0.14), 0, 0, 0, -2)
+			bx(x, y, z, rot, -0.14 * s, 0.24 * s, 1.75, 0.46 * s, 0.1, 0.2 * s, tile, 0, 0, 0, -4)
+			if hd:
+				for pa in [-0.34, -0.14, 0.06]:
+					var pf: float = pa
+					bx(x, y, z, rot, pf * s, 0.32 * s, 0, 0.1, 1.75, 0.1, Color(0.4, 0.26, 0.18))
+				bx(x, y, z, rot, -0.14 * s, 0.33 * s, 0, 0.42 * s, 0.45, 0.05, COL_WHITE)
+				bx(x, y, z, rot, 0.2 * s, 0.42 * s, 0, 0.6, 0.14, 0.25, COL_CONC)
+			bx(x, y, z, rot, -0.34 * s, -0.12 * s, 3.4, 0.32, 2.3, 0.32, COL_BRICK, 0, 0, 0, -1)
+		1:
+			bx(x, y, z, rot, 0, -0.06 * s, 0, 0.7 * s, 2.2, 0.48 * s, white, 0.55)
+			gable(x, y + 2.2, z, rot, 0, -0.06 * s, 0.7 * s, 0.48 * s, 1.6, white, tile, true)
+			bx(x, y, z, rot, 0.17 * s, 0.22 * s, 0, 0.22 * s, 1.9, 0.1 * s, white)
+			gable(x, y + 1.9, z, rot, 0.17 * s, 0.22 * s, 0.22 * s, 0.12 * s, 0.6, white, tile, false)
+			bx(x, y, z, rot, 0.17 * s, 0.275 * s, 0, 0.3, 0.9, 0.04, Color(0.55, 0.3, 0.16), 0, 0, 0, -2)
+			bx(x, y, z, rot, -0.2 * s, 0.24 * s, 1.6, 0.3 * s, 0.08, 0.16 * s, tile, 0, 0, 0, -4)
+			if hd:
+				bx(x, y, z, rot, -0.33 * s, 0.31 * s, 0, 0.08, 1.6, 0.08, COL_WHITE)
+				bx(x, y, z, rot, -0.07 * s, 0.31 * s, 0, 0.08, 1.6, 0.08, COL_WHITE)
+				bx(x, y, z, rot, -0.2 * s, 0.32 * s, 0, 0.3 * s, 0.42, 0.04, COL_WHITE)
+				bx(x, y, z, rot, 0.27 * s, 0.28 * s, 1.25, 0.1, 0.16, 0.08, Color(1.0, 0.82, 0.5), 0, 1.0)
+			bx(x, y, z, rot, 0.22 * s, -0.12 * s, 2.2, 0.3, 2.0, 0.3, COL_BRICK, 0, 0, 0, -1)
+		2:
+			bx(x, y, z, rot, 0, 0, 0, 0.78 * s, 2.2, 0.6 * s, white, 0.55)
+			hip(x, y + 2.2, z, rot, 0, 0, 0.9 * s, 0.72 * s, 0.85, tile)
+			bx(x, y, z, rot, 0.1 * s, -0.08 * s, 2.2, 0.48 * s, 2.1, 0.4 * s, white, 0.55)
+			hip(x, y + 4.3, z, rot, 0.1 * s, -0.08 * s, 0.6 * s, 0.52 * s, 1.2, tile)
+			bx(x, y, z, rot, -0.15 * s, 0.301 * s, 0, 0.3, 0.95, 0.04, Color(0.5, 0.3, 0.17), 0, 0, 0, -2)
+			if hd:
+				bx(x, y, z, rot, -0.15 * s, 0.4 * s, 0, 0.9, 0.06, 0.6, COL_CONC)
+		3:
+			bx(x, y, z, rot, -0.12 * s, -0.08 * s, 0, 0.52 * s, 2.4, 0.5 * s, COL_CONC, 0, 0, 0, -3)
+			bx(x, y, z, rot, -0.12 * s, 0.171 * s, 0.15, 0.46 * s, 2.0, 0.03, COL_GLASS, 0, 0, 0, -8)
+			bx(x, y, z, rot, 0.24 * s, -0.08 * s, 0, 0.3 * s, 2.4, 0.5 * s, white)
+			bx(x, y, z, rot, 0.24 * s, 0.171 * s, 0, 0.26 * s, 1.9, 0.03, COL_WOOD, 0, 0, 0, -2)
+			bx(x, y, z, rot, 0.04 * s, 0.02 * s, 2.4, 0.84 * s, 2.2, 0.62 * s, white)
+			bx(x, y, z, rot, -0.12 * s, 0.331 * s, 2.6, 0.44 * s, 1.75, 0.03, COL_GLASS, 0, 0, 0, -8)
+			bx(x, y, z, rot, 0.27 * s, 0.332 * s, 2.5, 0.26 * s, 2.0, 0.04, COL_WOOD, 0, 0, 0, -2)
+			bx(x, y, z, rot, 0.04 * s, 0.02 * s, 4.6, 0.86 * s, 0.14, 0.64 * s, white.darkened(0.06))
+			if hd:
+				bx(x, y, z, rot, 0.24 * s, 0.4 * s, 0, 0.28 * s, 0.04, 0.16 * s, Color(0.78, 0.77, 0.74))
+				parked_car(x, y, z, rot, 0.24 * s, 0.44 * s, i)
+		4:
+			bx(x, y, z, rot, 0.08 * s, -0.02 * s, 0, 0.62 * s, 2.3, 0.56 * s, tint(COL_BRICK, i), 0.4, 0, 0, -1)
+			bx(x, y, z, rot, 0.08 * s, -0.06 * s, 2.3, 0.56 * s, 2.0, 0.44 * s, COL_BLACK, 0, 0, 0, -5)
+			bx(x, y, z, rot, 0.08 * s, 0.161 * s, 2.45, 0.5 * s, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
+			bx(x, y, z, rot, 0.08 * s, -0.04 * s, 4.3, 0.74 * s, 0.16, 0.6 * s, Color(0.1, 0.1, 0.11))
+			bx(x, y, z, rot, -0.38 * s, 0.14 * s, 2.0, 0.26 * s, 0.08, 0.5 * s, Color(0.1, 0.1, 0.11))
+			if hd:
+				bx(x, y, z, rot, -0.48 * s, 0.37 * s, 0, 0.08, 2.0, 0.08, Color(0.1, 0.1, 0.11))
+				bx(x, y, z, rot, -0.48 * s, -0.08 * s, 0, 0.08, 2.0, 0.08, Color(0.1, 0.1, 0.11))
+				parked_car(x, y, z, rot, -0.37 * s, 0.14 * s, i)
+				for la in [-0.1, 0.12, 0.32]:
+					var lf: float = la
+					bx(x, y, z, rot, lf * s, 0.272 * s, 0, 0.12, 0.08, 0.06, Color(1.0, 0.8, 0.5), 0, 1.0)
+		5:
+			bx(x, y, z, rot, 0.05 * s, 0, 0, 0.7 * s, 2.3, 0.56 * s, white)
+			bx(x, y, z, rot, 0.05 * s, 0.281 * s, 0.1, 0.4 * s, 1.9, 0.03, COL_GLASS, 0, 0, 0, -8)
+			bx(x, y, z, rot, -0.34 * s, -0.04 * s, 0, 0.22 * s, 5.4, 0.36 * s, Color(0.27, 0.24, 0.23), 0, 0, 0, -1)
+			bx(x, y, z, rot, 0.12 * s, -0.02 * s, 2.3, 0.44 * s, 1.5, 0.52 * s, COL_BLACK, 0, 0, 0, -5)
+			gable(x, y + 3.8, z, rot, 0.12 * s, -0.02 * s, 0.44 * s, 0.52 * s, 1.8, COL_BLACK, COL_BLACK, false, -5.0, -5.0)
+			var q := lp(x, z, rot, 0.12 * s, 0.245 * s)
+			em(M_BOX, q.x, y + 2.45, q.y, 0.36 * s, 1.3, 0.04, rot, COL_GLASS, 0, 0, 0, -8)
+			em(M_ROOF, q.x, y + 3.8, q.y, 0.36 * s, 1.55, 0.04, rot, COL_GLASS, 0, 0, 0, -8)
+			if hd:
+				bx(x, y, z, rot, -0.05 * s, 0.4 * s, 0, 0.6 * s, 0.1, 0.2 * s, Color(0.55, 0.38, 0.24), 0, 0, 0, -2)
+		6:
+			bx(x, y, z, rot, -0.08 * s, -0.12 * s, 0, 0.66 * s, 2.4, 0.44 * s, COL_STONE, 0, 0, 0, -7)
+			bx(x, y, z, rot, -0.08 * s, 0.101 * s, 0.1, 0.5 * s, 2.0, 0.03, COL_GLASS, 0, 0, 0, -8)
+			bx(x, y, z, rot, 0.02 * s, -0.06 * s, 2.4, 0.7 * s, 2.0, 0.5 * s, white)
+			bx(x, y, z, rot, -0.24 * s, -0.06 * s, 2.4, 0.22 * s, 2.0, 0.52 * s, COL_WOOD, 0, 0, 0, -2)
+			bx(x, y, z, rot, 0.1 * s, 0.191 * s, 2.55, 0.42 * s, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
+			bx(x, y, z, rot, 0.02 * s, 0.0, 4.4, 0.78 * s, 0.25, 0.62 * s, white)
+			bx(x, y, z, rot, 0.24 * s, 0.33 * s, 0, 0.42 * s, 0.1, 0.24 * s, Color(0.72, 0.58, 0.42), 0, 0, 0, -2)
+			bx(x, y, z, rot, 0.24 * s, 0.33 * s, 0, 0.34 * s, 0.14, 0.17 * s, Color(0.22, 0.72, 0.8), 0, 0, 0.25)
+		_:
+			bx(x, y, z, rot, 0, -0.06 * s, 0, 0.86 * s, 2.2, 0.46 * s, white, 0.5)
+			hip(x, y + 2.2, z, rot, 0, -0.06 * s, 0.98 * s, 0.6 * s, 1.1, tile)
+			bx(x, y, z, rot, -0.2 * s, 0.181 * s, 0.05, 0.22 * s, 1.8, 0.03, COL_GLASS, 0, 0, 0, -8)
+			bx(x, y, z, rot, 0.22 * s, 0.24 * s, 1.75, 0.24 * s, 0.06, 0.14 * s, COL_WHITE)
+			if hd:
+				for la in [-0.36, -0.02, 0.36]:
+					var lf: float = la
+					bx(x, y, z, rot, lf * s, 0.18 * s, 1.5, 0.1, 0.16, 0.08, Color(1.0, 0.8, 0.5), 0, 1.0)
+	if hd:
+		garden(i, x, y, z, rot, s)
+func emit_res(i: int, x: float, y: float, z: float, w: float, l: int, v: int, rot: float, wall: Color, big: bool) -> void:
+	var gc := tower_col(v, i)
+	var hd: bool = opts["quality"] >= 1
+	var vk := (v + int(hsh(i, 21) * 4.0)) % 4
+	match l:
+		1:
+			emit_house(i, x, y, z, w, v, rot, wall)
+		2, 3:
+			var h := (4.5 + (v % 3)) if l == 2 else (8.0 + (v % 4) * 1.3)
+			if vk == 0:
+				var bc := tint(COL_BRICK, i)
+				bx(x, y, z, rot, 0, 0, 0, w * 0.84, h, w * 0.84, bc, 1.0, 0, 0, -1)
+				bx(x, y, z, rot, 0, 0, 0, w * 0.86, 1.1, w * 0.86, Color(0.15, 0.19, 0.23), 0, 0.55)
+				var k := 2.5
+				while k < h - 0.3:
+					bx(x, y, z, rot, 0, 0, k, w * 0.86, 0.16, w * 0.86, COL_WHITE)
+					k += 2.5
+				bx(x, y, z, rot, 0, 0, h, w * 0.9, 0.3, w * 0.9, COL_WHITE)
+				if l == 3 or v % 2 == 0:
+					var q := lp(x, z, rot, w * 0.2, -w * 0.15)
+					if hd:
+						for lg in 4:
+							em(M_BOX, q.x + (0.5 if lg % 2 == 0 else -0.5), y + h, q.y + (0.5 if lg < 2 else -0.5), 0.1, 1.2, 0.1, 0.0, Color(0.25, 0.22, 0.2))
+					em(M_CYL, q.x, y + h + 1.2, q.y, 1.5, 1.4, 1.5, 0.0, Color(0.48, 0.36, 0.26), 0, 0, 0, -2)
+					em(M_CONE, q.x, y + h + 2.6, q.y, 1.6, 0.6, 1.6, 0.0, Color(0.25, 0.22, 0.2))
+			elif vk == 1:
+				bx(x, y, z, rot, 0, 0, 0, w * 0.76, h, w * 0.76, COL_BLACK, 1.0, 0, 0, -5)
+				var k := 0.0
+				while k < h + 0.1:
+					bx(x, y, z, rot, 0, 0.02 * w, k, w * 0.94, 0.26, w * 0.9, COL_WHITE.darkened(0.04), 0, 0, 0, -3)
+					if hd and k > 0.1:
+						bx(x, y, z, rot, 0, 0.44 * w, k + 0.26, w * 0.9, 0.22, 0.25, Color(0.3, 0.48, 0.22), 0, 0, 0, 2.02)
+					k += 2.5
+				if hd:
+					for pk in 5:
+						bx(x, y, z, rot, (pk - 2) * w * 0.15, -w * 0.1, h + 1.6, 0.1, 0.1, w * 0.5, COL_BLACK)
+					bx(x, y, z, rot, -w * 0.3, -w * 0.1, h, 0.12, 1.6, 0.12, COL_BLACK)
+					bx(x, y, z, rot, w * 0.3, -w * 0.1, h, 0.12, 1.6, 0.12, COL_BLACK)
+			elif vk == 2:
+				bx(x, y, z, rot, 0, 0, 0, w * 0.86, 1.8, w * 0.86, COL_STONE, 0, 0, 0, -7)
+				bx(x, y, z, rot, 0.12 * w, 0.431 * w, 0.05, w * 0.5, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
+				bx(x, y, z, rot, 0, 0, 1.8, w * 0.84, h - 1.8, w * 0.84, tint(Color(0.74, 0.4, 0.24), i), 0, 0, 0, -6)
+				bx(x, y, z, rot, 0, 0, h, w * 0.87, 0.25, w * 0.87, COL_STONE)
+			else:
+				bx(x, y, z, rot, 0, 0, 0, w * 0.82, h, w * 0.82, wall, 1.0)
+				bx(x, y, z, rot, 0, 0, 0, w * 0.84, 1.1, w * 0.84, Color(0.15, 0.19, 0.23), 0, 0.55)
+				var k := 2.6
+				while k < h - 0.5:
+					bx(x, y, z, rot, 0, 0, k, w * 0.86, 0.12, w * 0.86, wall.darkened(0.15))
+					bx(x, y, z, rot, 0, w * 0.45, k + 0.12, w * 0.5, 0.28, 0.5, wall.lightened(0.1))
+					k += 2.5
+				bx(x, y, z, rot, 0, 0, h, w * 0.88, 0.25, w * 0.88, wall.darkened(0.2))
+				if hd:
+					bx(x, y, z, rot, -w * 0.2, w * 0.18, h + 0.25, 0.9, 0.35, 0.5, Color(0.3, 0.55, 0.28), 0, 0, 0, 2.02)
+					bx(x, y, z, rot, w * 0.15, -w * 0.1, h + 0.25, 0.8, 0.5, 0.8, Color(0.55, 0.57, 0.6))
+		4:
+			var kind := v % 4
+			if kind == 0:
+				var h := 16.0 + (v % 5) * 2.0
+				em(M_BOX, x, y, z, w * 0.75, h, w * 0.75, rot, wall, 1.0, 0, 0, -7)
+				em(M_BOX, x, y + h, z, w * 0.5, 2.0, w * 0.5, rot, wall.darkened(0.1), 0.8, 0, 0, -7)
+				em(M_BOX, x, y, z, w * 0.78, 1.4, w * 0.78, rot, Color(0.14, 0.18, 0.22), 0, 0.55)
+				em(M_BOX, x, y + h - 0.3, z, w * 0.8, 0.4, w * 0.8, rot, wall.lightened(0.12))
+				em(M_CYL, x, y + h + 2.0, z, 1.2, 1.5, 1.2, 0.0, Color(0.4, 0.4, 0.42))
+			elif kind == 1:
+				var h := 22.0 + (v % 3) * 3.0
+				var sc := tint(Color(0.8, 0.7, 0.54), i)
+				em(M_BOX, x, y, z, w * 0.8, h * 0.5, w * 0.8, rot, sc, 1.0, 0, 0, -7)
+				em(M_BOX, x, y + h * 0.5, z, w * 0.84, 0.35, w * 0.84, rot, sc.lightened(0.15))
+				em(M_BOX, x, y + h * 0.5, z, w * 0.62, h * 0.3, w * 0.62, rot, sc, 1.0, 0, 0, -7)
+				em(M_BOX, x, y + h * 0.8, z, w * 0.66, 0.3, w * 0.66, rot, sc.lightened(0.15))
+				em(M_BOX, x, y + h * 0.8, z, w * 0.44, h * 0.2, w * 0.44, rot, sc, 1.0, 0, 0, -7)
+				em(M_BOX, x, y + h, z, w * 0.3, 1.4, w * 0.3, rot, Color(1.0, 0.85, 0.6), 0, 0.7)
+				em(M_CONE, x, y + h + 1.4, z, w * 0.2, h * 0.22, w * 0.2, rot, Color(0.75, 0.75, 0.78), 0, 0, 0, 1.5)
+			elif kind == 2:
+				var h := 22.0 + (v % 3) * 2.5
+				em(M_CYL, x, y, z, w * 0.7, h, w * 0.7, 0.0, gc, 1.3)
+				em(M_CYL, x, y + h, z, w * 0.74, 0.4, w * 0.74, 0.0, Color(0.8, 0.82, 0.85))
+			else:
+				var h := 18.0
+				bx(x, y, z, rot, -w * 0.22, 0, 0, w * 0.36, h, w * 0.5, gc, 1.3)
+				bx(x, y, z, rot, w * 0.22, 0, 0, w * 0.36, h + 3.0, w * 0.5, gc, 1.3)
+				em(M_BOX, x, y + h * 0.6, z, w * 0.2, 1.2, w * 0.3, rot, Color(0.5, 0.6, 0.7), 1.3)
+func emit_com(i: int, x: float, y: float, z: float, w: float, l: int, v: int, rot: float, dark: bool, big: bool) -> void:
+	var wallc: Color = tint([Color(0.85, 0.85, 0.9), Color(0.9, 0.8, 0.7), Color(0.7, 0.75, 0.85), Color(0.95, 0.9, 0.85)][v % 4], i)
+	var gcm := tower_col(v + 2, i)
+	if dark:
+		wallc = wallc.darkened(0.6)
+	var awn: Color = [Color(0.8, 0.2, 0.2), Color(0.2, 0.5, 0.8), Color(0.2, 0.6, 0.3), Color(0.9, 0.6, 0.1)][v % 4]
+	var fx := sin(rot) * w * 0.45
+	var fz := cos(rot) * w * 0.45
+	match l:
+		1:
+			em(M_BOX, x, y, z, w * 0.85, 2.4, w * 0.85, rot, wallc, 0.7, 0, 0, -1.0 if v % 3 == 0 else 0.0)
+			bx(x, y, z, rot, 0, w * 0.426, 0.1, w * 0.7, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
+			em(M_BOX, x + fx, y + 1.9, z + fz, w * 0.85, 0.12, 0.9, rot, awn)
+			if v % 2 == 0:
+				for k in 2:
+					em(M_CYL, x + fx * 1.25 + (k - 0.5) * 1.2 * cos(rot), y, z + fz * 1.25 - (k - 0.5) * 1.2 * sin(rot), 0.5, 0.6, 0.5, 0.0, Color(0.9, 0.9, 0.9))
+		2:
+			var bm := -1.0 if v % 2 == 0 else -7.0
+			em(M_BOX, x, y, z, w * 0.88, 5.0, w * 0.88, rot, tint(COL_BRICK, i) if v % 2 == 0 else wallc, 1.0, 0, 0, bm)
+			bx(x, y, z, rot, 0, w * 0.441, 0.05, w * 0.8, 1.8, 0.03, COL_GLASS, 0, 0, 0, -8)
+			em(M_BOX, x + fx, y + 2.0, z + fz, w * 0.88, 0.12, 1.0, rot, awn)
+			em(M_BOX, x, y + 5.0, z, w * 0.92, 0.3, w * 0.92, rot, COL_WHITE)
+			em(M_BOX, x, y + 5.3, z, w * 0.6, 0.8, w * 0.2, rot, awn, 0, 0.6)
+		3:
+			var h := 12.0 + (v % 3) * 2.0
+			em(M_BOX, x, y, z, w * 0.88, 3.0, w * 0.88, rot, COL_STONE, 0, 0, 0, -7)
+			bx(x, y, z, rot, 0, w * 0.441, 0.1, w * 0.78, 2.6, 0.03, COL_GLASS, 0, 0, 0, -8)
+			em(M_BOX, x, y + 3.0, z, w * 0.82, h - 3.0, w * 0.82, rot, gcm, 1.4)
+			em(M_BOX, x, y + h, z, w * 0.6, 1.0, w * 0.6, rot, Color(0.4, 0.4, 0.45))
+		4:
+			var h := 28.0 + (v % 4) * 4.0
+			if big:
+				h += 10.0
+			em(M_BOX, x, y, z, w * 0.88, 4.0, w * 0.88, rot, COL_STONE, 0.8, 0, 0, -7)
+			em(M_BOX, x, y + 4.0, z, w * 0.75, h * 0.72 - 4.0, w * 0.75, rot, gcm.darkened(0.15), 1.5)
+			em(M_BOX, x, y + h * 0.72, z, w * 0.79, 0.4, w * 0.79, rot, Color(0.75, 0.77, 0.8))
+			em(M_BOX, x, y + h * 0.72, z, w * 0.58, h * 0.28, w * 0.58, rot, gcm.darkened(0.1), 1.5)
+			if v % 2 == 0:
+				em(M_BOX, x, y + h, z, w * 0.4, 2.5, w * 0.4, rot, Color(0.8, 0.82, 0.85), 0, 0.5)
+				em(M_CONE, x, y + h + 2.5, z, w * 0.3, 6.0, w * 0.3, rot, Color(0.78, 0.8, 0.84), 0, 0, 0, 1.5)
+				em(M_BOX, x, y + h + 8.0, z, 0.2, 4.0, 0.2, 0.0, Color(0.9, 0.2, 0.2), 0, 0, 1.0)
+			else:
+				em(M_BOX, x, y + h, z, w * 0.5, 3.0, w * 0.5, rot, Color(0.35, 0.45, 0.55), 1.2)
+				em(M_BOX, x, y + h + 3.0, z, 0.25, 5.0, 0.25, 0.0, Color(0.9, 0.2, 0.2), 0, 0, 1.0)
+func clear_preview() -> void:
+	preview_node.multimesh.instance_count = 0
+	set_cost_hint("")
+func show_preview() -> void:
+	begin_buf()
+	var cost := 0.0
+	var cells: Array = []
+	if tool["k"] == "def":
+		var d: Dictionary = DEF[tool["id"]]
+		cells = def_cells(drag_a, d["sz"])
+		var ok := can_place_def(drag_a, tool["id"]) == ""
+		for c in cells:
+			var p := cell_pos(c)
+			em(M_BOX, p.x, maxf(p.y, 0.0) + 0.2, p.z, CELL * 0.95, 0.6, CELL * 0.95, 0.0, Color(0.2, 0.9, 0.3, 0.45) if ok else Color(0.95, 0.2, 0.15, 0.45))
+		cost = d["cost"]
+	else:
+		cells = drag_cells()
+		for c in cells:
+			var cc := cell_cost(c)
+			var p := cell_pos(c)
+			em(M_BOX, p.x, maxf(p.y, 0.0) + 0.3, p.z, CELL * 0.95, 0.4, CELL * 0.95, 0.0, Color(0.2, 0.9, 0.3, 0.45) if cc >= 0.0 else Color(0.95, 0.2, 0.15, 0.4))
+			if cc > 0.0:
+				cost += cc
+	var mm := preview_node.multimesh
+	mm.instance_count = _counts[M_BOX]
+	if _counts[M_BOX] > 0:
+		mm.buffer = _bufs[M_BOX].slice(0, _counts[M_BOX] * 20)
+	set_cost_hint(("Costo: " + fmt_money(cost)) if cost > 0 else "")
+func flush_mm(mm: MultiMesh, count: int, buf: PackedFloat32Array) -> void:
+	if count > mm.instance_count:
+		var cap := 256
+		while cap < count * 3 / 2:
+			cap *= 2
+		mm.instance_count = cap
+	if count > 0:
+		var pb := buf.slice(0, count * 20)
+		pb.resize(mm.instance_count * 20)
+		mm.buffer = pb
+	mm.visible_instance_count = count
+# ================================================================ src/camera.gd
+# Cámara, intro y gestos táctiles, mouse y teclado.
+var intro_full: bool = false
+var gesture: String = ""
+var press_pos := Vector2.ZERO
+var press_time: float = 0.0
+var hover_cell: int = -1
+var multi_d0: float = 0.0
+var multi_a0: float = 0.0
+var multi_mid0 := Vector2.ZERO
+var mouse_btn: int = 0
+var last_mouse := Vector2.ZERO
+const DRAG_TOOLS := ["road", "zone", "dezone", "demolish", "cable", "pipe", "bike", "tram", "levee", "trees"]
+func setup_camera() -> void:
+	cam = Camera3D.new()
+	cam.far = 3000.0
+	cam.fov = 55.0
+	add_child(cam)
+	cam.current = true
+func update_camera(delta: float) -> void:
+	if intro_t >= 0.0:
+		update_intro(delta)
+		return
+	if cam_follow != null:
+		var fp = cam_follow.call()
+		if fp == null:
+			cam_follow = null
+		else:
+			cam_goal = fp
+	var half := N * CELL * 0.55
+	cam_goal.x = clampf(cam_goal.x, -half, half)
+	cam_goal.z = clampf(cam_goal.z, -half, half)
+	cam_dist_goal = clampf(cam_dist_goal, 8.0 if drive != null else 14.0, 480.0)
+	cam_pitch = clampf(cam_pitch, 0.22, 1.32)
+	var k := 1.0 - exp(-delta * 12.0)
+	cam_target = cam_target.lerp(cam_goal, k)
+	cam_dist = lerpf(cam_dist, cam_dist_goal, k)
+	place_camera()
+func place_camera() -> void:
+	var off := Vector3(sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), cos(cam_yaw) * cos(cam_pitch)) * cam_dist
+	cam.position = cam_target + off
+	cam.look_at(cam_target, Vector3.UP)
+	if sun and not OS.has_feature("android"):
+		sun.directional_shadow_max_distance = clampf(cam_dist * 2.2, 80.0, 420.0)
+func start_intro(full: bool) -> void:
+	intro_full = full
+	intro_t = 0.0
+func update_intro(delta: float) -> void:
+	intro_t += delta
+	var dur := 9.0 if intro_full else 3.5
+	var t := clampf(intro_t / dur, 0.0, 1.0)
+	var e := t * t * (3.0 - 2.0 * t)
+	var a := cam_yaw + (1.0 - e) * (2.4 if intro_full else 0.8)
+	var d := lerpf(420.0 if intro_full else 300.0, cam_dist_goal, e)
+	var pt := lerpf(1.1, cam_pitch, e)
+	var off := Vector3(sin(a) * cos(pt), sin(pt), cos(a) * cos(pt)) * d
+	cam.position = cam_goal + off
+	cam.look_at(cam_goal, Vector3.UP)
+	cam_target = cam_goal
+	cam_dist = cam_dist_goal
+	if t >= 1.0:
+		intro_t = -1.0
+		if not card_queue.is_empty() and not card_panel.visible:
+			next_card()
+func skip_intro() -> void:
+	if intro_t >= 0.0:
+		intro_t = 999.0
+func screen_ground(pos: Vector2) -> Vector3:
+	var o := cam.project_ray_origin(pos)
+	var d := cam.project_ray_normal(pos)
+	if absf(d.y) < 0.0001:
+		return Vector3(INF, 0, INF)
+	var y := 0.0
+	var p := Vector3.ZERO
+	for it in 2:
+		var t := (y - o.y) / d.y
+		if t < 0:
+			return Vector3(INF, 0, INF)
+		p = o + d * t
+		var c := world_to_cell(p)
+		if inb(c.x, c.y):
+			y = maxf(hgt[idx(c.x, c.y)], 0.0)
+	return p
+func screen_cell(pos: Vector2) -> int:
+	var p := screen_ground(pos)
+	if p.x == INF:
+		return -1
+	var c := world_to_cell(p)
+	if not inb(c.x, c.y):
+		return -1
+	return idx(c.x, c.y)
+var ui_touch := {}
+func on_touch(index: int, pos: Vector2, pressed: bool) -> void:
+	if pressed:
+		if over_ui(pos):
+			ui_touch[index] = true
+			return
+		ui_touch.erase(index)
+	elif ui_touch.has(index):
+		ui_touch.erase(index)
+		return
+	elif not touches.has(index):
+		return
+	if pressed:
+		touches[index] = pos
+		if touches.size() == 1:
+			gesture = ""
+			press_pos = pos
+			press_time = Time.get_ticks_msec() / 1000.0
+			drag_a = screen_cell(pos)
+			drag_b = drag_a
+		elif touches.size() == 2:
+			if gesture == "draw":
+				clear_preview()
+			gesture = "multi"
+			var ps: Array = touches.values()
+			multi_d0 = (ps[0] - ps[1]).length()
+			multi_a0 = (ps[1] - ps[0]).angle()
+			multi_mid0 = (ps[0] + ps[1]) * 0.5
+	else:
+		touches.erase(index)
+		if touches.is_empty():
+			if gesture == "":
+				tap_at(pos)
+			elif gesture == "draw":
+				commit_drag()
+			gesture = ""
+		elif gesture == "multi":
+			gesture = "done"
+func on_drag(index: int, pos: Vector2) -> void:
+	if ui_touch.has(index) or not touches.has(index):
+		return
+	var prev: Vector2 = touches[index]
+	touches[index] = pos
+	cam_moving_t = 0.4
+	if touches.size() == 1:
+		if gesture == "":
+			if (pos - press_pos).length() > 14.0:
+				if tool["k"] in DRAG_TOOLS:
+					gesture = "draw"
+				else:
+					gesture = "pan"
+		if gesture == "draw":
+			var c := screen_cell(pos)
+			if c >= 0 and c != drag_b:
+				drag_b = c
+				show_preview()
+		elif gesture == "pan":
+			pan_screen(prev, pos)
+	elif touches.size() == 2 and gesture == "multi":
+		var ps: Array = touches.values()
+		var d: float = (ps[0] - ps[1]).length()
+		var a: float = (ps[1] - ps[0]).angle()
+		var mid: Vector2 = (ps[0] + ps[1]) * 0.5
+		if multi_d0 > 10.0:
+			cam_dist_goal *= multi_d0 / maxf(d, 1.0)
+			cam_dist = cam_dist_goal
+		crumb("dos dedos (zoom %d)" % int(cam_dist_goal))
+		var da := wrapf(a - multi_a0, -PI, PI)
+		cam_yaw += da
+		var dm := mid - multi_mid0
+		if absf(dm.y) > absf(dm.x) * 1.5 and absf(d - multi_d0) < 12.0:
+			cam_pitch += dm.y * 0.004
+		else:
+			pan_screen(multi_mid0, mid)
+		multi_d0 = d
+		multi_a0 = a
+		multi_mid0 = mid
+func pan_screen(from: Vector2, to: Vector2) -> void:
+	var a := screen_ground(from)
+	var b := screen_ground(to)
+	if a.x == INF or b.x == INF:
+		return
+	var d := a - b
+	d.y = 0
+	cam_goal += d
+	cam_target += d
+	cam_follow = null
+func on_mouse_button(ev: InputEventMouseButton) -> void:
+	if ev.button_index == MOUSE_BUTTON_WHEEL_UP and ev.pressed:
+		if ev.shift_pressed:
+			cam_pitch += 0.06
+		else:
+			cam_dist_goal *= 0.88
+		return
+	if ev.button_index == MOUSE_BUTTON_WHEEL_DOWN and ev.pressed:
+		if ev.shift_pressed:
+			cam_pitch -= 0.06
+		else:
+			cam_dist_goal *= 1.13
+		return
+	if ev.pressed:
+		mouse_btn = ev.button_index
+		last_mouse = ev.position
+		if ev.button_index == MOUSE_BUTTON_LEFT:
+			on_touch(0, ev.position, true)
+	else:
+		if ev.button_index == MOUSE_BUTTON_LEFT and touches.has(0):
+			on_touch(0, ev.position, false)
+		mouse_btn = 0
+func on_mouse_motion(ev: InputEventMouseMotion) -> void:
+	if mouse_btn == MOUSE_BUTTON_LEFT:
+		on_drag(0, ev.position)
+	elif mouse_btn == MOUSE_BUTTON_RIGHT:
+		pan_screen(last_mouse, ev.position)
+	elif mouse_btn == MOUSE_BUTTON_MIDDLE:
+		cam_yaw -= (ev.position.x - last_mouse.x) * 0.006
+		cam_pitch += (ev.position.y - last_mouse.y) * 0.005
+	else:
+		var c := screen_cell(ev.position)
+		if c != hover_cell:
+			hover_cell = c
+			if tool["k"] == "def":
+				drag_a = c
+				drag_b = c
+				show_preview()
+	last_mouse = ev.position
+func on_key(ev: InputEventKey) -> void:
+	var step := cam_dist * 0.08
+	var fw := Vector3(-sin(cam_yaw), 0, -cos(cam_yaw))
+	var rt := Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
+	match ev.keycode:
+		KEY_W, KEY_UP:
+			cam_goal += fw * step
+		KEY_S, KEY_DOWN:
+			cam_goal -= fw * step
+		KEY_A, KEY_LEFT:
+			cam_goal -= rt * step
+		KEY_D, KEY_RIGHT:
+			cam_goal += rt * step
+		KEY_Q:
+			cam_yaw += 0.15
+		KEY_E:
+			cam_yaw -= 0.15
+		KEY_R:
+			cam_pitch += 0.08
+		KEY_F:
+			cam_pitch -= 0.08
+		KEY_EQUAL, KEY_KP_ADD:
+			cam_dist_goal *= 0.85
+		KEY_MINUS, KEY_KP_SUBTRACT:
+			cam_dist_goal *= 1.15
+		KEY_SPACE:
+			set_speed(0 if speed > 0 else 1)
+		KEY_1:
+			set_speed(1)
+		KEY_2:
+			set_speed(2)
+		KEY_3:
+			set_speed(3)
+		KEY_ESCAPE:
+			set_tool({"k": "look"})
+func tap_at(pos: Vector2) -> void:
+	var c := screen_cell(pos)
+	var k: String = tool["k"]
+	if k in DRAG_TOOLS:
+		if c >= 0:
+			apply_cells([c])
+		return
+	match k:
+		"look":
+			var pk := pick_ped(pos)
+			if not pk.is_empty():
+				follow_citizen(pk)
+			elif c >= 0:
+				show_info(c)
+		"def":
+			if hover_cell != c or not preview_node.multimesh.instance_count:
+				pass
+			place_def(c, tool["id"])
+			clear_preview()
+		"round":
+			toggle_round(c)
+		"stop":
+			place_stop(c, tool["kind"])
+		"line":
+			pick_line_stop(c)
+		"buy":
+			ask_buy_region(c)
+		"district":
+			if c >= 0:
+				open_district(region_of(c))
+		"follow":
+			pass
+# ================================================================ src/agents.gd
+# Autos, gente, transporte, barcos, aviones, cine, partículas y choques.
 var glow_node: MultiMeshInstance3D
 var glow_buf := PackedFloat32Array()
 var glow_n: int = 0
 var dyn_close: bool = false
 var rails_node: MultiMeshInstance3D
-var cars: Array = []
-var peds: Array = []
-var svc: Array = []
-var boats: Array = []
-var planes: Array = []
-var parts: Array = []
 var tl_cells: Array = []
 var road_list := PackedInt32Array()
-var line_labels: Array = []
 var anim_time: float = 0.0
 var plane_t: float = 0.0
 var ship_t: float = 0.0
 var garbage_t: float = 0.0
 var flag_days: int = 0
-var drive = null
-var drive_turn: int = 0
-var follow_ped = null
-var follow_info := {}
 var dyn_skip: int = 0
 func setup_agents() -> void:
 	dyn_nodes.clear()
@@ -4845,7 +4640,7 @@ func setup_agents() -> void:
 	rails_node = new_mm_node(meshes[M_BOX], null)
 	var gm := ShaderMaterial.new()
 	var gsh := Shader.new()
-	gsh.code = SHADER_GLOW
+	gsh.code = SHADER_GLOW.code
 	gm.shader = gsh
 	var gq := PlaneMesh.new()
 	gq.size = Vector2(1, 1)
@@ -5174,52 +4969,6 @@ func dispatch_from(kind: String, def_id: int, target: int) -> void:
 	svc.append({"p": path, "k": 0.0, "kind": kind, "back": false})
 	if kind != "garbage" and cam_dist < 160.0 and Vector2(cam_target.x - cell_pos(target).x, cam_target.z - cell_pos(target).z).length() < 120.0:
 		sfx("siren")
-func road_next_to(i: int, tram: bool) -> int:
-	if road[i] > 0 and (not tram or wire[i] & W_TRAM):
-		return i
-	for r in range(1, 3):
-		for dz in range(-r, r + 1):
-			for dx in range(-r, r + 1):
-				var x := cx(i) + dx
-				var z := cz(i) + dz
-				if inb(x, z):
-					var j := idx(x, z)
-					if road[j] > 0 and (not tram or wire[j] & W_TRAM):
-						return j
-	return -1
-func road_path(from: int, to: int, tram: bool) -> Array:
-	var a := road_next_to(from, tram)
-	var b := road_next_to(to, tram)
-	if a < 0 or b < 0:
-		return []
-	if a == b:
-		return [a]
-	var prev := {a: a}
-	var q: Array = [a]
-	var head := 0
-	while head < q.size() and head < 20000:
-		var c: int = q[head]
-		head += 1
-		if c == b:
-			break
-		for o in [1, -1, N, -N]:
-			var j: int = c + o
-			if j < 0 or j >= N * N or prev.has(j) or road[j] == 0:
-				continue
-			if (o == 1 or o == -1) and cz(j) != cz(c):
-				continue
-			if tram and not (wire[j] & W_TRAM):
-				continue
-			prev[j] = c
-			q.append(j)
-	if not prev.has(b):
-		return []
-	var path: Array = [b]
-	var c2: int = b
-	while c2 != a:
-		c2 = prev[c2]
-		path.push_front(c2)
-	return path
 func move_svc(dt: float) -> void:
 	var keep: Array = []
 	for v in svc:
@@ -5251,69 +5000,6 @@ func move_svc(dt: float) -> void:
 							mark_dirty(idx(x2, z2))
 		keep.append(v)
 	svc = keep
-func route_line(ln: Dictionary) -> void:
-	var pts: Array = []
-	var stop_k: Array = []
-	var st: Array = ln["stops"]
-	var kind: String = ln["kind"]
-	var n := st.size()
-	if n < 2:
-		ln["pts"] = []
-		return
-	for s in n:
-		var a: int = st[s]
-		var b: int = st[(s + 1) % n]
-		stop_k.append(pts.size())
-		if kind == "bus" or kind == "tram":
-			var path := road_path(a, b, kind == "tram")
-			if path.is_empty():
-				ln["pts"] = []
-				ln["broken"] = true
-				return
-			for c in path:
-				var pp := cell_pos(c)
-				if terr[c] == T_WATER:
-					pp.y = 0.6
-				pts.append(pp)
-		else:
-			var pa := def_center(a)
-			var pb := def_center(b)
-			var y := -4.0
-			if kind == "train":
-				y = 7.0
-			elif kind == "ferry":
-				y = WATER_Y
-			pa.y = y
-			pb.y = y
-			var steps := maxi(2, int(pa.distance_to(pb) / CELL))
-			for k in steps:
-				pts.append(pa.lerp(pb, float(k) / steps))
-	ln["pts"] = pts
-	ln["stopk"] = stop_k
-	ln["broken"] = false
-	ln["dwell"] = 0.0
-	rebuild_rails()
-func def_center(a: int) -> Vector3:
-	var p := cell_pos(a)
-	if bld[a] > 0:
-		var sz: int = DEF[bld[a]]["sz"]
-		p.x += (sz - 1) * CELL * 0.5
-		p.z += (sz - 1) * CELL * 0.5
-	return p
-func reroute_all() -> void:
-	for ln in lines:
-		route_line(ln)
-func flush_mm(mm: MultiMesh, count: int, buf: PackedFloat32Array) -> void:
-	if count > mm.instance_count:
-		var cap := 256
-		while cap < count * 3 / 2:
-			cap *= 2
-		mm.instance_count = cap
-	if count > 0:
-		var pb := buf.slice(0, count * 20)
-		pb.resize(mm.instance_count * 20)
-		mm.buffer = pb
-	mm.visible_instance_count = count
 func rebuild_rails() -> void:
 	begin_buf()
 	for ln in lines:
@@ -5964,13 +5650,8 @@ const MOVIES := [
 ]
 const SCARY := ["ghostface", "chucky", "pennywise", "jason", "michael", "t800", "trex", "godzilla"]
 const KILLERS := ["ghostface", "chucky", "pennywise", "jason", "michael", "t800"]
-var stars: Array = []
-var downs: Array = []
-var movie_on: int = -1
 var movie_end_day: int = 0
-var cine_next_day: int = 0
 var cine_last: int = -1
-var cine_told: bool = false
 var movie_scared: int = 0
 func cinema_cell() -> int:
 	for a in anchors:
@@ -6281,9 +5962,80 @@ func draw_stars(nf: float) -> void:
 						em(M_BOX, p.x + fx * 4.5 * s, p.y + 1.9 * s, p.z + fz * 4.5 * s, 0.3 * s, 0.3 * s, 8.0 * s, r, Color(0.4, 0.75, 1.0), 0, 0, 4.0)
 		if close and who in KILLERS and nf > 0.4:
 			gl(2.0, p.x, p.y + 1.2, p.z, 1.0, 1.0, 0.0, Color(1.0, 0.1, 0.05, 0.5), 1.2)
+# ================================================================ src/ui.gd
+# Interfaz: HUD, abanico, bandejas, hojas, tarjetas, tutorial e íconos.
+const ROAD_NAMES := ["", "Tierra", "Calle", "Avenida", "Autopista"]
+const ZONE_NAMES := ["", "Residencial", "Comercial", "Industrial", "Mixta"]
+const DEPTS := ["Policía", "Bomberos", "Salud", "Educación", "Parques", "Transporte", "Basura"]
+const DISTRICT_RULES := ["Sin regla", "Densa", "Verde", "Tranquila", "24 horas"]
+const MAP_KINDS := ["Río", "Lago", "Costa", "Islas", "Llanura"]
+var scrolls: Array = []
+var scroll_act: ScrollContainer = null
+var scroll_coast: ScrollContainer = null
+var scroll_vel: float = 0.0
+func scroll_at(p: Vector2) -> ScrollContainer:
+	for s in scrolls:
+		var sc: ScrollContainer = s
+		if sc.is_visible_in_tree():
+			var r := sc.get_global_rect()
+			if Rect2(r.position * ui_scale, r.size * ui_scale).has_point(p):
+				return sc
+	return null
+func slider_under(n: Node, p: Vector2) -> bool:
+	for c in n.get_children():
+		if c is Slider:
+			var r: Rect2 = c.get_global_rect()
+			if Rect2(r.position * ui_scale, r.size * ui_scale).has_point(p):
+				return true
+		if slider_under(c, p):
+			return true
+	return false
+func scroll_input(ev: InputEvent) -> void:
+	if ev is InputEventScreenTouch:
+		if ev.pressed:
+			scroll_act = scroll_at(ev.position)
+			scroll_coast = null
+			if scroll_act != null and slider_under(scroll_act, ev.position):
+				scroll_act = null
+		else:
+			scroll_coast = scroll_act
+			scroll_act = null
+	elif ev is InputEventScreenDrag and scroll_act != null and drag_acc > 14.0 * ui_scale:
+		var d: Vector2 = ev.relative / ui_scale
+		var horiz: bool = scroll_act.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED
+		var amt: float = d.x if horiz else d.y
+		scroll_move(scroll_act, horiz, -amt)
+		scroll_vel = lerpf(scroll_vel, -amt / maxf(get_process_delta_time(), 0.004), 0.5)
+func scroll_move(sc: ScrollContainer, horiz: bool, amt: float) -> void:
+	if horiz:
+		sc.scroll_horizontal += roundi(amt)
+	else:
+		sc.scroll_vertical += roundi(amt)
+func scroll_coast_step(delta: float) -> void:
+	if scroll_coast == null:
+		return
+	if absf(scroll_vel) < 30.0 or not scroll_coast.is_visible_in_tree():
+		scroll_coast = null
+		scroll_vel = 0.0
+		return
+	scroll_move(scroll_coast, scroll_coast.horizontal_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED, scroll_vel * delta)
+	scroll_vel *= pow(0.04, delta)
+func over_ui(pos: Vector2) -> bool:
+	for fb in fan_btns:
+		if fb.visible and fb.modulate.a > 0.05:
+			var fr: Rect2 = fb.get_global_rect()
+			if Rect2(fr.position * ui_scale, fr.size * ui_scale).has_point(pos):
+				return true
+	for c in [hud_col, hud_right, build_btn, bottom_box, side_box, sheet, info_panel, mode_bar, drive_bar, follow_panel, tut_panel, card_panel, start_panel]:
+		var cc: Control = c
+		if cc.visible:
+			var r := cc.get_global_rect()
+			var rr := Rect2(r.position * ui_scale, r.size * ui_scale)
+			if rr.has_point(pos):
+				return true
+	return false
 var ui_layer: CanvasLayer
 var ui_root: Control
-var ui_scale: float = 1.0
 var ui_theme: Theme
 var top_bar: PanelContainer
 var hud_col: VBoxContainer
@@ -6293,13 +6045,10 @@ var hud_chev: Button
 var hud_open: bool = false
 var hud_state: int = 0
 var ui_built: bool = false
-var notif_panel: PanelContainer
 var notif_title: Label
 var notif_text: Label
 var notif_icon: TextureRect
 var notif_q: Array = []
-var notif_busy: bool = false
-var tray_sc: ScrollContainer
 var menu_card: PanelContainer
 var menu_scroll: ScrollContainer
 var city_card: PanelContainer
@@ -6312,17 +6061,11 @@ var top_rate: Label
 var top_clock: Label
 var top_stage: Label
 var top_stage_bar: ProgressBar
-var build_btn: Button
-var fan_btns: Array = []
 var fan_final: Array = []
-var fan_open: bool = false
-var fan_hold: bool = false
 var fan_was_open: bool = false
 var fan_hold_t: float = 0.0
-var fan_hover: String = ""
 var fan_dwell: float = 0.0
 var fan_c: Vector2 = Vector2.ZERO
-var top_money: Label
 var top_pop: Label
 var top_date: Label
 var top_weather: Label
@@ -6335,24 +6078,11 @@ var toast_label: Label
 var toast_t: float = 0.0
 var cost_label: Label
 var bottom_box: VBoxContainer
-var tray: HBoxContainer
-var cat_bar: HBoxContainer
 var cat_btns := {}
-var cur_cat: String = ""
 var side_box: GridContainer
-var sheet: PanelContainer
-var sheet_body: VBoxContainer
 var sheet_title: Label
-var sheet_name: String = ""
-var info_panel: PanelContainer
 var info_body: VBoxContainer
 var info_cell: int = -1
-var card_panel: PanelContainer
-var card_title: Label
-var card_text: Label
-var card_btns: HBoxContainer
-var card_queue: Array = []
-var mode_bar: PanelContainer
 var mode_label: Label
 var mode_btns: HBoxContainer
 var drive_bar: PanelContainer
@@ -6364,10 +6094,8 @@ var start_body: VBoxContainer
 var fps_label: Label
 var photo_btn: Button
 var photo_extra: Array = []
-var photo_mode: bool = false
 var ui_timer: float = 0.0
 var overlay_timer: float = 0.0
-var idle_t: float = 0.0
 var tut_on: bool = false
 var tut_step: int = 0
 var tut_panel: PanelContainer
@@ -6417,7 +6145,6 @@ class Chart extends Control:
 		draw_string(font, Vector2(size.x - 160, fs + 4), txt, HORIZONTAL_ALIGNMENT_RIGHT, 150, fs, col)
 const COL_BG := Color(0.17, 0.12, 0.09, 0.92)
 const COL_BTN := Color(0.37, 0.27, 0.19, 0.96)
-const COL_BTN_HI := Color(0.45, 0.33, 0.23, 1.0)
 const COL_ACC := Color(1.0, 0.78, 0.32)
 const COL_ACC_DK := Color(0.2, 0.12, 0.05)
 func sbox(col: Color, radius: int = 14) -> StyleBoxFlat:
@@ -6692,7 +6419,6 @@ func clear_box(b: Node) -> void:
 		ch.queue_free()
 var crumb_last: String = ""
 var crumb_f: FileAccess = null
-var prev_crumb: String = ""
 func crumb(t: String) -> void:
 	if t == crumb_last:
 		return
@@ -8340,30 +8066,6 @@ func tut_check() -> void:
 			ok = zone_count(Z_C) >= 3
 	if ok:
 		tut_next()
-var new_opts := {"name": "Mi ciudad", "map": 0, "scen": 0, "creative": false, "story": true, "tut": false}
-func latest_slot() -> int:
-	var best := 0
-	var bt := 0
-	for s in range(1, 4):
-		var p := slot_path(s)
-		if FileAccess.file_exists(p):
-			var t := int(FileAccess.get_modified_time(p))
-			if best == 0 or t > bt:
-				best = s
-				bt = t
-	return best
-func free_slot() -> int:
-	var oldest := 1
-	var ot := 0
-	for s in range(1, 4):
-		var p := slot_path(s)
-		if not FileAccess.file_exists(p):
-			return s
-		var t := int(FileAccess.get_modified_time(p))
-		if ot == 0 or t < ot:
-			oldest = s
-			ot = t
-	return oldest
 func start_reset(back: bool) -> void:
 	started = false
 	speed = 1
@@ -8674,8 +8376,9 @@ func menu_items() -> Array:
 			close_sheet()
 			show_start()],
 	]
+# ================================================================ src/audio.gd
+# Sonidos y música generados.
 const SR := 22050
-var sounds := {}
 var sfx_players: Array = []
 var sfx_next: int = 0
 var sfx_last := {}
@@ -8814,6 +8517,32 @@ func apply_volumes() -> void:
 		var p: AudioStreamPlayer = music_players[k]
 		var on := m > 0.01 and (k == 0 or (k == 1 and max_stage >= 2) or (k == 2 and max_stage >= 4))
 		p.volume_db = linear_to_db(maxf(m * 0.55, 0.0001)) if on else -80.0
+# ================================================================ src/save.gd
+# Partidas: nueva, guardar, cargar, códigos y migración.
+const SAVE_VERSION := 1
+func latest_slot() -> int:
+	var best := 0
+	var bt := 0
+	for s in range(1, 4):
+		var p := slot_path(s)
+		if FileAccess.file_exists(p):
+			var t := int(FileAccess.get_modified_time(p))
+			if best == 0 or t > bt:
+				best = s
+				bt = t
+	return best
+func free_slot() -> int:
+	var oldest := 1
+	var ot := 0
+	for s in range(1, 4):
+		var p := slot_path(s)
+		if not FileAccess.file_exists(p):
+			return s
+		var t := int(FileAccess.get_modified_time(p))
+		if ot == 0 or t < ot:
+			oldest = s
+			ot = t
+	return oldest
 func reset_state() -> void:
 	test_city = false
 	money = 30000.0
@@ -8931,32 +8660,6 @@ func new_game(kind: int, scen: int, crea: bool, hist: bool, s: int) -> void:
 	after_load()
 	add_news("Se fundó la ciudad. ¡Bienvenidos!")
 	save_game(slot)
-func place_plaza() -> void:
-	var c := N / 2
-	for z in range(c - 2, c + 2):
-		for x in range(c - 2, c + 2):
-			var i := idx(x, z)
-			if terr[i] == T_WATER:
-				return
-	for z in range(c - 2, c + 2):
-		for x in range(c - 2, c + 2):
-			var i := idx(x, z)
-			if x == c - 2 or x == c + 1 or z == c - 2 or z == c + 1:
-				road[i] = 2
-			tree[i] = 0
-			terr[i] = T_LAND if terr[i] == T_ROCK else terr[i]
-			hgt[i] = 0.0
-	var a := idx(c - 1, c - 1)
-	for dz in 2:
-		for dx in 2:
-			var j := a + dz * N + dx
-			bld[j] = 31
-			part[j] = a
-	for x in range(N / 2 - 6, c - 2):
-		var i := idx(x, c - 1)
-		if terr[i] != T_WATER:
-			road[i] = maxi(road[i], 3)
-			tree[i] = 0
 func after_load() -> void:
 	compute_wdist()
 	terrain_dirty = true
@@ -9283,85 +8986,9 @@ func load_opts() -> void:
 			opts[k] = d[k]
 	for k in ["quality", "text", "ui_size"]:
 		opts[k] = int(opts[k])
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
-		crumb("cierre limpio")
-		if started:
-			save_game(slot)
-var test_mode: String = ""
+# ================================================================ src/tests.gd
+# Modos de prueba (--test=...).
 var test_frame: int = 0
-var first_chunks: bool = true
-func _ready() -> void:
-	if FileAccess.file_exists("user://ultimo_paso.txt"):
-		prev_crumb = FileAccess.get_file_as_string("user://ultimo_paso.txt").strip_edges()
-	crumb("arranque")
-	randomize()
-	load_opts()
-	for a in OS.get_cmdline_user_args():
-		if a.begins_with("--test"):
-			test_mode = a.substr(7) if a.length() > 7 else "run"
-	if test_mode != "":
-		seed(20261012)
-	setup_render()
-	setup_camera()
-	setup_agents()
-	apply_quality()
-	setup_audio()
-	build_ui()
-	migrate_old_file()
-	reset_state()
-	gen_map(randi() % 5, randi() % 100000 + 1)
-	place_plaza()
-	after_load()
-	cam_yaw = 0.6
-	cam_dist_goal = 260.0
-	show_start()
-	if test_mode != "":
-		print("TEST ", test_mode)
-func _process(delta: float) -> void:
-	scroll_coast_step(delta)
-	crumb("terreno")
-	if terrain_dirty:
-		build_terrain()
-	crumb("chunks")
-	update_chunks(4 if first_chunks or not started else 1)
-	if first_chunks and not chunk_dirty.has(1):
-		first_chunks = false
-	if started:
-		crumb("simulación etapa %d" % sim_stage)
-		sim_process(delta)
-		crumb("agentes (intro %s, zoom %d)" % [str(intro_t >= 0.0), int(cam_dist)])
-		agents_process(delta)
-	else:
-		cam_yaw += delta * 0.05
-	crumb("luz")
-	update_light()
-	crumb("cámara (intro %s, zoom %d)" % [str(intro_t >= 0.0), int(cam_dist)])
-	update_camera(delta)
-	update_fx()
-	crumb("interfaz")
-	ui_process(delta)
-	crumb("dibujando el cuadro")
-	if opts["idle30"] and not OS.has_feature("android"):
-		idle_t += delta
-		if not touches.is_empty() or cam_moving_t > 0.0 or intro_t >= 0.0 or drive != null:
-			idle_t = 0.0
-		Engine.max_fps = 30 if idle_t > 4.0 else 0
-	else:
-		Engine.max_fps = 0
-	cam_moving_t = maxf(0.0, cam_moving_t - delta)
-	if test_mode != "":
-		run_test()
-func _input(event: InputEvent) -> void:
-	if event is InputEventScreenDrag or event is InputEventScreenTouch:
-		finger_pos = event.position
-		scroll_input(event)
-		if event is InputEventScreenDrag:
-			drag_acc += event.relative.length()
-		elif event.pressed:
-			drag_acc = 0.0
-	if event is InputEventScreenTouch or event is InputEventMouseButton or event is InputEventKey:
-		idle_t = 0.0
 func shot(nm: String) -> void:
 	if test_mode == "run":
 		return
@@ -10006,10 +9633,125 @@ func run_sim() -> void:
 	skip_intro()
 	card_queue.clear()
 	test_build()
+	var t0 := Time.get_ticks_usec()
 	for k in 30:
 		for s in 8:
 			run_sim_stage(s)
 		new_day()
 		print("SIM día=%d pop=%d money=%d jobs=%d happy=%.4f power=%.1f/%.1f water=%.1f/%.1f lines=%d stage=%d" % [day, pop, int(money), jobs, avg_happy, power_sup, power_use, water_sup, water_use, lines.size(), stage])
+	print("BENCH sim_ms=%d" % ((Time.get_ticks_usec() - t0) / 1000))
+	t0 = Time.get_ticks_usec()
+	for k in 5:
+		mark_all_dirty()
+		update_chunks(NCH * NCH)
+	print("BENCH chunks_ms=%d" % ((Time.get_ticks_usec() - t0) / 1000))
+	speed = 1
+	for k in 600:
+		agents_process(1.0 / 60.0)
+	t0 = Time.get_ticks_usec()
+	for k in 300:
+		agents_process(1.0 / 60.0)
+	print("BENCH agents_ms=%d cars=%d peds=%d" % [(Time.get_ticks_usec() - t0) / 1000, cars.size(), peds.size()])
 	print("SIM OK")
 	get_tree().quit()
+# ================================================================ src/main.gd
+# Arranque y bucle principal de Godot.
+func _unhandled_input(event: InputEvent) -> void:
+	if intro_t >= 0.0:
+		if event is InputEventScreenTouch or (event is InputEventMouseButton and event.pressed):
+			skip_intro()
+		return
+	if photo_mode and event is InputEventScreenTouch and event.pressed and touches.is_empty():
+		pass
+	if event is InputEventScreenTouch:
+		on_touch(event.index, event.position, event.pressed)
+	elif event is InputEventScreenDrag:
+		on_drag(event.index, event.position)
+	elif event is InputEventMouseButton:
+		if event.device == -1:
+			return
+		on_mouse_button(event)
+	elif event is InputEventMouseMotion:
+		if event.device == -1:
+			return
+		on_mouse_motion(event)
+	elif event is InputEventKey and event.pressed:
+		on_key(event)
+var idle_t: float = 0.0
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
+		crumb("cierre limpio")
+		if started:
+			save_game(slot)
+var first_chunks: bool = true
+func _ready() -> void:
+	if FileAccess.file_exists("user://ultimo_paso.txt"):
+		prev_crumb = FileAccess.get_file_as_string("user://ultimo_paso.txt").strip_edges()
+	crumb("arranque")
+	randomize()
+	load_opts()
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--test"):
+			test_mode = a.substr(7) if a.length() > 7 else "run"
+	if test_mode != "":
+		seed(20261012)
+	setup_render()
+	setup_camera()
+	setup_agents()
+	apply_quality()
+	setup_audio()
+	build_ui()
+	migrate_old_file()
+	reset_state()
+	gen_map(randi() % 5, randi() % 100000 + 1)
+	place_plaza()
+	after_load()
+	cam_yaw = 0.6
+	cam_dist_goal = 260.0
+	show_start()
+	if test_mode != "":
+		print("TEST ", test_mode)
+func _process(delta: float) -> void:
+	scroll_coast_step(delta)
+	crumb("terreno")
+	if terrain_dirty:
+		build_terrain()
+	crumb("chunks")
+	update_chunks(4 if first_chunks or not started else 1)
+	if first_chunks and not chunk_dirty.has(1):
+		first_chunks = false
+	if started:
+		crumb("simulación etapa %d" % sim_stage)
+		sim_process(delta)
+		crumb("agentes (intro %s, zoom %d)" % [str(intro_t >= 0.0), int(cam_dist)])
+		agents_process(delta)
+	else:
+		cam_yaw += delta * 0.05
+	crumb("luz")
+	update_light()
+	crumb("cámara (intro %s, zoom %d)" % [str(intro_t >= 0.0), int(cam_dist)])
+	update_camera(delta)
+	update_fx()
+	crumb("interfaz")
+	ui_process(delta)
+	crumb("dibujando el cuadro")
+	if opts["idle30"] and not OS.has_feature("android"):
+		idle_t += delta
+		if not touches.is_empty() or cam_moving_t > 0.0 or intro_t >= 0.0 or drive != null:
+			idle_t = 0.0
+		Engine.max_fps = 30 if idle_t > 4.0 else 0
+	else:
+		Engine.max_fps = 0
+	cam_moving_t = maxf(0.0, cam_moving_t - delta)
+	if test_mode != "":
+		run_test()
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenDrag or event is InputEventScreenTouch:
+		finger_pos = event.position
+		scroll_input(event)
+		if event is InputEventScreenDrag:
+			drag_acc += event.relative.length()
+		elif event.pressed:
+			drag_acc = 0.0
+	if event is InputEventScreenTouch or event is InputEventMouseButton or event is InputEventKey:
+		idle_t = 0.0

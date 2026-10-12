@@ -87,6 +87,10 @@
 
 ### Task 3: Estado compartido `G`, constantes y shaders
 
+> **Reemplazada en la implementación** (ver la nota en el spec): las Tasks 3–6 se hicieron juntas con
+> `tools/godot_modules.py` (`split` una vez, `build` y `check` siempre), sin `G` ni `Data`, porque
+> `G` costaba +70 % de tiempo de simulación. Lo que sigue queda como registro del plan original.
+
 **Files:**
 - Create: `godot/scripts/state.gd`, `godot/scripts/data.gd`, `godot/shaders/{city,water,terrain,cloud,glow,overlay}.gdshader`
 - Modify: `godot/project.godot` (autoload `G="*res://scripts/state.gd"`), `godot/scripts/main.gd`
