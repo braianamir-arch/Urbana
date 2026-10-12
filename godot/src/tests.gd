@@ -96,6 +96,9 @@ func shot_to(dir: String, nm: String) -> void:
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(dir + "/" + nm + ".png")
 func run_test() -> void:
+	if test_mode in ["compat_save", "compat_load", "fresh", "pause"]:
+		run_extra()
+		return
 	if test_mode == "sim":
 		run_sim()
 		return
@@ -665,3 +668,63 @@ func run_sim() -> void:
 	print("BENCH agents_ms=%d cars=%d peds=%d" % [(Time.get_ticks_usec() - t0) / 1000, cars.size(), peds.size()])
 	print("SIM OK")
 	get_tree().quit()
+# --- pruebas de compatibilidad y casos de borde (etapa 0)
+func compat_line() -> String:
+	var roads := 0
+	for i in N * N:
+		if road[i] > 0:
+			roads += 1
+	return "COMPAT money=%d day=%d roads=%d lines=%d pop=%d" % [int(money), day, roads, lines.size(), pop]
+func run_extra() -> void:
+	test_frame += 1
+	var f := test_frame
+	match test_mode:
+		"compat_save":
+			if f == 5:
+				seed(20261012)
+				new_game(4, 0, false, true, 1)
+				enter_game(true)
+				skip_intro()
+				card_queue.clear()
+				test_build()
+				for k in 10:
+					for s in 8:
+						run_sim_stage(s)
+					new_day()
+				save_game(1)
+				print(compat_line())
+				var fc := FileAccess.open("user://compat_code.txt", FileAccess.WRITE)
+				fc.store_string(export_code())
+				fc.close()
+				print("COMPAT_SAVE OK")
+				get_tree().quit()
+		"compat_load":
+			if f == 5:
+				if not load_game(1):
+					print("COMPAT ERROR no se pudo cargar la partida 1")
+				else:
+					print(compat_line())
+				var code := FileAccess.get_file_as_string("user://compat_code.txt")
+				if not import_code(code):
+					print("COMPAT ERROR no se pudo importar el código")
+				else:
+					print(compat_line())
+				print("COMPAT_LOAD OK")
+				get_tree().quit()
+		"fresh":
+			if f == 30:
+				var clean := not FileAccess.file_exists("user://opciones.json") and latest_slot() == 0
+				print("FRESH OK" if clean and start_panel.visible and not started else "FRESH FALLA")
+				get_tree().quit()
+		"pause":
+			if f == 5:
+				new_game(4, 0, false, true, 2)
+				enter_game(true)
+				skip_intro()
+				DirAccess.remove_absolute(ProjectSettings.globalize_path(slot_path(2)))
+			elif f == 20:
+				notification(NOTIFICATION_APPLICATION_PAUSED)
+				var saved := FileAccess.file_exists(slot_path(2))
+				var clean := FileAccess.get_file_as_string("user://ultimo_paso.txt").contains("cierre limpio")
+				print("PAUSE OK" if saved and clean else "PAUSE FALLA guardada=%s limpio=%s" % [saved, clean])
+				get_tree().quit()
