@@ -2,3 +2,4 @@ tools/.godot/
 godot/.godot/
 out/
 .superpowers/
+__pycache__/
