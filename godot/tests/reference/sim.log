@@ -1,0 +1,39 @@
+Godot Engine v4.7.stable.official.5b4e0cb0f - https://godotengine.org
+WARNING: Could not set V-Sync mode, as changing V-Sync mode is not supported by the graphics driver.
+     at: set_use_vsync (platform/linuxbsd/x11/gl_manager_x11.cpp:372)
+OpenGL API 4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.4 - Compatibility - Using Device: Mesa - llvmpipe (LLVM 20.1.2, 256 bits)
+
+TEST sim
+SIM día=2 pop=108 money=172434 jobs=54 happy=0.6500 power=900.0/57.7 water=520.0/56.5 lines=1 stage=0
+SIM día=3 pop=203 money=172587 jobs=101 happy=0.6479 power=900.0/192.7 water=520.0/192.1 lines=1 stage=1
+SIM día=4 pop=272 money=173037 jobs=136 happy=0.6278 power=900.0/295.2 water=520.0/290.3 lines=1 stage=1
+SIM día=5 pop=313 money=173485 jobs=156 happy=0.6205 power=900.0/335.2 water=520.0/338.3 lines=1 stage=1
+SIM día=6 pop=340 money=173730 jobs=170 happy=0.5604 power=900.0/359.2 water=520.0/367.1 lines=1 stage=1
+SIM día=7 pop=357 money=174001 jobs=178 happy=0.5519 power=900.0/375.2 water=520.0/386.3 lines=1 stage=1
+SIM día=8 pop=367 money=174446 jobs=183 happy=0.5436 power=900.0/385.2 water=520.0/398.3 lines=1 stage=1
+SIM día=9 pop=383 money=175092 jobs=191 happy=0.5371 power=900.0/391.2 water=520.0/405.5 lines=1 stage=1
+SIM día=10 pop=391 money=176039 jobs=195 happy=0.5305 power=900.0/400.2 water=520.0/416.3 lines=1 stage=1
+SIM día=11 pop=408 money=176565 jobs=204 happy=0.5234 power=900.0/405.2 water=520.0/422.3 lines=1 stage=2
+SIM día=12 pop=415 money=177812 jobs=207 happy=0.5175 power=900.0/415.2 water=520.0/434.3 lines=1 stage=2
+SIM día=13 pop=419 money=178753 jobs=209 happy=0.5093 power=900.0/419.2 water=520.0/439.1 lines=1 stage=2
+SIM día=14 pop=420 money=178520 jobs=210 happy=0.4999 power=900.0/421.2 water=520.0/441.5 lines=1 stage=2
+SIM día=15 pop=422 money=179261 jobs=211 happy=0.4929 power=900.0/422.2 water=520.0/442.7 lines=1 stage=2
+SIM día=16 pop=422 money=178998 jobs=211 happy=0.4886 power=900.0/423.2 water=520.0/443.9 lines=1 stage=2
+SIM día=17 pop=424 money=178737 jobs=212 happy=0.4857 power=900.0/423.2 water=520.0/443.9 lines=1 stage=2
+SIM día=18 pop=424 money=178479 jobs=212 happy=0.4842 power=900.0/424.2 water=520.0/445.1 lines=1 stage=2
+SIM día=19 pop=426 money=178224 jobs=213 happy=0.4816 power=900.0/424.2 water=520.0/445.1 lines=1 stage=2
+SIM día=20 pop=429 money=177977 jobs=214 happy=0.4796 power=900.0/425.2 water=520.0/446.3 lines=1 stage=2
+SIM día=21 pop=429 money=177750 jobs=214 happy=0.4797 power=900.0/427.2 water=520.0/448.7 lines=1 stage=2
+SIM día=22 pop=429 money=177499 jobs=214 happy=0.4794 power=900.0/427.2 water=520.0/448.7 lines=1 stage=2
+SIM día=23 pop=431 money=177246 jobs=215 happy=0.4786 power=900.0/427.2 water=520.0/448.7 lines=1 stage=2
+SIM día=24 pop=431 money=176991 jobs=215 happy=0.4783 power=900.0/428.2 water=520.0/449.9 lines=1 stage=2
+SIM día=25 pop=429 money=176740 jobs=214 happy=0.4790 power=900.0/427.2 water=520.0/448.7 lines=1 stage=2
+SIM día=26 pop=428 money=176485 jobs=214 happy=0.4769 power=900.0/426.2 water=520.0/447.5 lines=1 stage=2
+SIM día=27 pop=425 money=176223 jobs=212 happy=0.4785 power=900.0/424.2 water=520.0/445.1 lines=1 stage=2
+SIM día=28 pop=425 money=175990 jobs=212 happy=0.5568 power=900.0/421.7 water=520.0/443.3 lines=1 stage=2
+SIM día=29 pop=425 money=175730 jobs=212 happy=0.5565 power=900.0/421.7 water=520.0/443.3 lines=1 stage=2
+SIM día=30 pop=425 money=176467 jobs=212 happy=0.4756 power=900.0/421.7 water=520.0/443.3 lines=1 stage=2
+SIM día=31 pop=425 money=176210 jobs=212 happy=0.4732 power=900.0/421.7 water=520.0/443.3 lines=1 stage=2
+SIM OK
+WARNING: 8 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2535)
