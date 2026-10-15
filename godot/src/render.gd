@@ -1025,7 +1025,8 @@ func tree_colors(kind: int) -> Array:
 				return [Color(0.42, 0.38, 0.3), 0.5]
 			return [Color(0.32, 0.55, 0.3), 1.0]
 		4:
-			return [Color(0.9, 0.92, 0.95) if snowy else Color(0.15, 0.38, 0.2), 1.0]
+			# la nieve la pone el shader arriba de cada capa
+			return [Color(0.15, 0.38, 0.2), 1.0]
 		5:
 			if s == 0 or s == 3:
 				return [Color(0.92, 0.5, 0.7), 1.0]
@@ -1035,35 +1036,6 @@ func tree_colors(kind: int) -> Array:
 		7:
 			return [Color(0.55, 0.7, 0.3) if s != 2 else Color(0.5, 0.5, 0.35), 1.0]
 	return [Color(0.3, 0.55, 0.25), 1.0]
-func emit_trees(i: int, p: Vector3) -> void:
-	var kind: int = tree[i]
-	var tc := tree_colors(kind)
-	var crown: Color = tc[0]
-	var full: float = tc[1]
-	var nt := 1 + int(hsh(i, 1) * 2.4)
-	for k in nt:
-		var ox := (hsh(i, k * 3 + 2) - 0.5) * CELL * 0.6
-		var oz := (hsh(i, k * 3 + 3) - 0.5) * CELL * 0.6
-		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.6
-		var x := p.x + ox
-		var z := p.z + oz
-		var gy := ground_y(x, z) - 0.12
-		match kind:
-			4:
-				em(M_BOX, x, gy, z, 0.25 * sc, 0.8 * sc, 0.25 * sc, 0.0, Color(0.35, 0.25, 0.15))
-				em(M_CONE, x, gy + 0.6 * sc, z, 1.7 * sc, 3.2 * sc, 1.7 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.08)
-			5:
-				em(M_CYL, x, gy, z, 0.6 * sc, 1.6 * sc, 0.6 * sc, 0.0, Color(0.45, 0.5, 0.35))
-				em(M_SPH, x, gy + 1.4 * sc, z, 2.2 * sc * full, 1.6 * sc * full, 2.2 * sc * full, 0.0, crown, 0.0, 0.0, 0.0, 2.15)
-			6:
-				em(M_BOX, x, gy, z, 0.22 * sc, 3.2 * sc, 0.22 * sc, 0.3, Color(0.5, 0.4, 0.25))
-				em(M_SPH, x, gy + 3.0 * sc, z, 2.2 * sc, 0.6 * sc, 2.2 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.3)
-			7:
-				em(M_BOX, x, gy, z, 0.3 * sc, 1.2 * sc, 0.3 * sc, 0.0, Color(0.35, 0.28, 0.2))
-				em(M_SPH, x, gy + 0.6 * sc, z, 2.6 * sc, 2.2 * sc, 2.6 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.18)
-			_:
-				em(M_BOX, x, gy, z, 0.25 * sc, 1.1 * sc, 0.25 * sc, 0.0, Color(0.35, 0.25, 0.15))
-				em(M_SPH, x, gy + 0.9 * sc, z, 1.9 * sc * full, 1.8 * sc * full, 1.9 * sc * full, 0.0, crown, 0.0, 0.0, 0.0, 2.16)
 func emit_grass(i: int, p: Vector3) -> void:
 	var h := hsh(i, 40)
 	if h > 0.17:

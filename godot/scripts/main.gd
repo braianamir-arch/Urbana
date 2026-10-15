@@ -3838,7 +3838,8 @@ func tree_colors(kind: int) -> Array:
 				return [Color(0.42, 0.38, 0.3), 0.5]
 			return [Color(0.32, 0.55, 0.3), 1.0]
 		4:
-			return [Color(0.9, 0.92, 0.95) if snowy else Color(0.15, 0.38, 0.2), 1.0]
+			# la nieve la pone el shader arriba de cada capa
+			return [Color(0.15, 0.38, 0.2), 1.0]
 		5:
 			if s == 0 or s == 3:
 				return [Color(0.92, 0.5, 0.7), 1.0]
@@ -3848,35 +3849,6 @@ func tree_colors(kind: int) -> Array:
 		7:
 			return [Color(0.55, 0.7, 0.3) if s != 2 else Color(0.5, 0.5, 0.35), 1.0]
 	return [Color(0.3, 0.55, 0.25), 1.0]
-func emit_trees(i: int, p: Vector3) -> void:
-	var kind: int = tree[i]
-	var tc := tree_colors(kind)
-	var crown: Color = tc[0]
-	var full: float = tc[1]
-	var nt := 1 + int(hsh(i, 1) * 2.4)
-	for k in nt:
-		var ox := (hsh(i, k * 3 + 2) - 0.5) * CELL * 0.6
-		var oz := (hsh(i, k * 3 + 3) - 0.5) * CELL * 0.6
-		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.6
-		var x := p.x + ox
-		var z := p.z + oz
-		var gy := ground_y(x, z) - 0.12
-		match kind:
-			4:
-				em(M_BOX, x, gy, z, 0.25 * sc, 0.8 * sc, 0.25 * sc, 0.0, Color(0.35, 0.25, 0.15))
-				em(M_CONE, x, gy + 0.6 * sc, z, 1.7 * sc, 3.2 * sc, 1.7 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.08)
-			5:
-				em(M_CYL, x, gy, z, 0.6 * sc, 1.6 * sc, 0.6 * sc, 0.0, Color(0.45, 0.5, 0.35))
-				em(M_SPH, x, gy + 1.4 * sc, z, 2.2 * sc * full, 1.6 * sc * full, 2.2 * sc * full, 0.0, crown, 0.0, 0.0, 0.0, 2.15)
-			6:
-				em(M_BOX, x, gy, z, 0.22 * sc, 3.2 * sc, 0.22 * sc, 0.3, Color(0.5, 0.4, 0.25))
-				em(M_SPH, x, gy + 3.0 * sc, z, 2.2 * sc, 0.6 * sc, 2.2 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.3)
-			7:
-				em(M_BOX, x, gy, z, 0.3 * sc, 1.2 * sc, 0.3 * sc, 0.0, Color(0.35, 0.28, 0.2))
-				em(M_SPH, x, gy + 0.6 * sc, z, 2.6 * sc, 2.2 * sc, 2.6 * sc, 0.0, crown, 0.0, 0.0, 0.0, 2.18)
-			_:
-				em(M_BOX, x, gy, z, 0.25 * sc, 1.1 * sc, 0.25 * sc, 0.0, Color(0.35, 0.25, 0.15))
-				em(M_SPH, x, gy + 0.9 * sc, z, 1.9 * sc * full, 1.8 * sc * full, 1.9 * sc * full, 0.0, crown, 0.0, 0.0, 0.0, 2.16)
 func emit_grass(i: int, p: Vector3) -> void:
 	var h := hsh(i, 40)
 	if h > 0.17:
@@ -4613,6 +4585,7 @@ func cat_register() -> void:
 	cat_add("fabrica_grande", [Z_I], [3, 4], false, {}, rc_fabrica_grande)
 	cat_add("complejo", [Z_I], [4], false, {}, rc_complejo)
 	cat_add("complejo_grande", [Z_I], [3, 4], true, {}, rc_complejo_grande)
+	tree_register()
 	bset.clear()
 	for m in cat_models.size():
 		var md: Dictionary = cat_models[m]
@@ -5466,9 +5439,9 @@ func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 	# especies de copa: forma propia (alto del tronco, centro y radios de la copa)
 	var th: float = {1: 1.6, 2: 2.0, 3: 1.4, 5: 1.7, 7: 1.0}[kind]
 	var cy: float = {1: 2.7, 2: 3.4, 3: 2.6, 5: 3.0, 7: 2.0}[kind]
-	var cr: Vector3 = {1: Vector3(1.3, 1.2, 1.3), 2: Vector3(1.6, 1.5, 1.6), 3: Vector3(1.9, 0.9, 1.9), 5: Vector3(1.3, 0.9, 1.3), 7: Vector3(2.1, 1.1, 2.1)}[kind]
+	var cr: Vector3 = {1: Vector3(1.2, 1.15, 1.2), 2: Vector3(1.4, 1.45, 1.4), 3: Vector3(1.45, 0.85, 1.45), 5: Vector3(1.2, 0.9, 1.2), 7: Vector3(1.45, 1.0, 1.45)}[kind]
 	var tr: float = {1: 0.14, 2: 0.17, 3: 0.13, 5: 0.24, 7: 0.32}[kind]
-	cr *= 1.0 + v * 0.08
+	cr *= 1.0 + v * 0.04
 	if kind == 5:
 		# palo borracho: tronco panzón
 		mb_limb(Vector3.ZERO, Vector3(0, th * 0.45, 0), tr * 1.1, tr * 1.5, seg)
@@ -5506,6 +5479,21 @@ func mb_cone_leaf(c: Vector3, r: float, h: float, seg: int) -> void:
 		var p1 := c + Vector3(cos(a1) * r, 0, sin(a1) * r)
 		mb_tri(p1, p0, c + Vector3(0, h, 0), BM_LEAF, 1)
 		mb_tri(c, p0, p1, BM_LEAF, 1)
+# 1 a 3 árboles por celda (misma cantidad y lugar que antes), de la especie de la celda, con el color de
+# la estación; ralos cuando la estación los deja con poca hoja
+func emit_trees(i: int, p: Vector3) -> void:
+	var kind: int = tree[i]
+	var tc := tree_colors(kind)
+	var crown: Color = tc[0]
+	var f := 1 if float(tc[1]) < 0.6 else 0
+	var models: Array = tree_models.get(kind, tree_models[1])
+	var nt := 1 + int(hsh(i, 1) * 2.4)
+	for k in nt:
+		var x := p.x + (hsh(i, k * 3 + 2) - 0.5) * CELL * 0.6
+		var z := p.z + (hsh(i, k * 3 + 3) - 0.5) * CELL * 0.6
+		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.6
+		var m: int = models[int(hsh(i, k * 3 + 5) * 3.0) % models.size()]
+		emit_model(m, f, x, ground_y(x, z) - 0.05, z, hsh(i, k * 3 + 6) * TAU, sc, crown, Vector4(0, 0, hsh(i, k + 20), 0))
 # ================================================================ src/props.gd
 # Objetos de calle de la etapa 2d: faroles, semáforos, autos, mobiliario, postes y carteles.
 # ================================================================ src/specials.gd
@@ -11024,6 +11012,10 @@ func run_album(dir: String) -> void:
 			["cerca_noche", func(): album_close(Z_R, [2, 3], 23.0, "Soleado", 3)],
 			["cerca_lluvia", func(): album_close(Z_R, [1], 13.0, "Lluvia", 3)],
 			["cerca_nieve", func(): album_close(Z_R, [1], 13.0, "Nieve", 23)],
+			["arboles_primavera", func(): album_trees(1 + DAYS_PER_SEASON * 3, "Soleado")],
+			["arboles_otono", func(): album_trees(1 + DAYS_PER_SEASON, "Soleado")],
+			["arboles_invierno", func(): album_trees(1 + DAYS_PER_SEASON * 2, "Nieve")],
+			["catalogo_arboles", func(): album_catalog(-2)],
 			["catalogo", func(): album_catalog(-1)],
 			["catalogo_casas", func(): album_catalog(0)],
 			["catalogo_deptos", func(): album_catalog(1)],
@@ -11137,6 +11129,7 @@ func run_buildings() -> void:
 	enter_game(false)
 	skip_intro()
 	building_check("ciudad")
+	tree_check()
 	# quemar uno, subir de nivel otro y borrar la zona de un tercero
 	var ks: Array = []
 	for i in N * N:
@@ -11217,11 +11210,15 @@ func catalog_check() -> void:
 						continue
 					var ab := mesh.get_aabb()
 					var lim := w * 0.5 + 0.2
+					if md["fam"] == "arbol":
+						lim = 2.4
 					var why := ""
 					if ab.position.x < -lim or ab.position.z < -lim or ab.end.x > lim or ab.end.z > lim:
 						why += " huella %s > %.2f" % [str(ab), lim]
 					if ab.position.y < -0.5:
 						why += " se hunde %.2f" % ab.position.y
+					if md["fam"] == "arbol" and (ab.end.y < 2.0 or ab.end.y > 9.0):
+						why += " altura de árbol %.1f fuera de [2, 9]" % ab.end.y
 					for z in md["zones"]:
 						var r: Array = CAT_H[Z_C if z == Z_M else z][l - 1]
 						if ab.end.y < r[0] or ab.end.y > r[1]:
@@ -11282,7 +11279,7 @@ func building_check(tag: String) -> void:
 	var tot := 0
 	for c in bnodes:
 		for k in c:
-			if k % 3 == LOD_FAR:
+			if k % 3 == LOD_FAR and cat_models[k / 192]["fam"] == "edificio":
 				tot += c[k].multimesh.instance_count
 	if tot != n:
 		why += " instancias lejos %d != lotes %d" % [tot, n]
@@ -11304,10 +11301,18 @@ func album_catalog(focus_row: int) -> void:
 	var row := 0
 	var cols := 9
 	var pos: Array = []
+	var fam := "arbol" if focus_row == -2 else "edificio"
+	var mlist: Array = []
 	for m in cat_models.size():
+		if cat_models[m]["fam"] == fam:
+			mlist.append(m)
+	if focus_row == -2:
+		focus_row = -1
+	for mi in mlist.size():
+		var m: int = mlist[mi]
 		var md: Dictionary = cat_models[m]
 		var sp := 10.0 if md["big"] else 5.5
-		if m > 0 and m % cols == 0:
+		if mi > 0 and mi % cols == 0:
 			z -= 12.0
 			x = 0.0
 		pos.append(Vector3(x + sp * 0.5, y0, z))
@@ -11325,20 +11330,21 @@ func album_catalog(focus_row: int) -> void:
 	sm.albedo_color = Color(0.5, 0.52, 0.5)
 	slab.material_override = sm
 	root.add_child(slab)
-	for m in cat_models.size():
-		if focus_row >= 0 and m / cols != focus_row:
+	for mi in mlist.size():
+		var m: int = mlist[mi]
+		if focus_row >= 0 and mi / cols != focus_row:
 			continue
 		var md: Dictionary = cat_models[m]
 		var l: int = md["levels"][md["levels"].size() - 1]
 		var fl: Array = md["floors"].get(l, [0])
-		var node := new_mm_node(cat_mesh(m, fl[fl.size() / 2], LOD_NEAR), building_mat)
+		var node := new_mm_node(cat_mesh(m, fl[fl.size() / 2] if fam == "edificio" else 0, LOD_NEAR), building_mat)
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		remove_child(node)
 		root.add_child(node)
 		var mm := node.multimesh
 		mm.instance_count = 1
-		var p: Vector3 = pos[m]
-		var col := tint(res_wall(m), m)
+		var p: Vector3 = pos[mi]
+		var col := tint(res_wall(m), m) if fam == "edificio" else tree_colors(TREE_SPECIES.keys()[mi / 3])[0]
 		mm.buffer = PackedFloat32Array([1, 0, 0, p.x, 0, 1, 0, p.y, 0, 0, 1, p.z, col.r, col.g, col.b, 1, 0, float(m % 8) / 8.0, hsh(m, 42), 0])
 	if focus_row >= 0:
 		var rx := 0.0
@@ -11378,6 +11384,62 @@ func album_close(z: int, lvls: Array, h: float, w: String, d: int) -> void:
 	cam_yaw = 0.5 + face_rot(maxi(best, 0))
 func rc_test_box(_lod: int, _f: int, _w: float) -> void:
 	mb_box(Vector3.ZERO, Vector3(0.5, 0.5, 0.5), BM_PLAIN, 0)
+# cada celda con árbol tiene árboles de su especie; no hay árboles sobre lotes ni en el campo vacío
+func tree_check() -> void:
+	var fam_of := {}
+	for kind in tree_models:
+		for m in tree_models[kind]:
+			fam_of[m] = kind
+	bcheck_on = true
+	mcheck_log.clear()
+	mark_all_dirty()
+	update_chunks(NCH * NCH)
+	bcheck_on = false
+	var got := {}
+	for e in mcheck_log:
+		if fam_of.has(e[1]):
+			var c: Vector2i = e[0]
+			if inb(c.x, c.y):
+				var ci := idx(c.x, c.y)
+				if not got.has(ci):
+					got[ci] = []
+				got[ci].append(fam_of[e[1]])
+	var why := ""
+	var n := 0
+	for i in N * N:
+		var want: bool = tree[i] > 0 and road[i] == 0 and zone[i] == 0 and bld[i] == 0
+		if want:
+			n += 1
+			if not got.has(i) or not (tree[i] in got[i]):
+				if why.length() < 300:
+					why += " falta árbol tipo %d en %d" % [tree[i], i]
+		elif got.has(i) and road[i] == 0 and bld[i] == 0:
+			if why.length() < 300:
+				why += " árbol de más en %d" % i
+	if n == 0:
+		why += " no hay celdas con árbol"
+	bt(why == "", "TREE_CHECK (%d celdas) " % n + ("ok" if why == "" else "FALLA" + why))
+# toma de cerca sobre la celda con árbol más cercana al centro, en un día dado (estación) y clima
+func album_trees(d: int, w: String) -> void:
+	album_city(13.0, w, d)
+	if cat_root:
+		cat_root.queue_free()
+		cat_root = null
+	var best := -1
+	var bd := 1e9
+	for i in N * N:
+		if tree[i] == 3 and road[i] == 0 and zone[i] == 0 and bld[i] == 0:
+			var dd := Vector2(cx(i) - N / 2, cz(i) - N / 2).length()
+			if dd < bd:
+				bd = dd
+				best = i
+	if best >= 0:
+		cam_goal = cell_pos(best)
+	cam_target = cam_goal
+	cam_dist_goal = 24.0
+	cam_dist = 24.0
+	cam_pitch = 0.35
+	cam_yaw = 0.5
 # ================================================================ src/main.gd
 # Arranque y bucle principal de Godot.
 func _unhandled_input(event: InputEvent) -> void:

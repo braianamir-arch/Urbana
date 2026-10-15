@@ -209,6 +209,7 @@ func cat_register() -> void:
 	cat_add("fabrica_grande", [Z_I], [3, 4], false, {}, rc_fabrica_grande)
 	cat_add("complejo", [Z_I], [4], false, {}, rc_complejo)
 	cat_add("complejo_grande", [Z_I], [3, 4], true, {}, rc_complejo_grande)
+	tree_register()
 	bset.clear()
 	for m in cat_models.size():
 		var md: Dictionary = cat_models[m]

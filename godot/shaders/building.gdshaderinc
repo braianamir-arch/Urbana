@@ -38,6 +38,13 @@ const vec3 ACCENT[8] = vec3[](
 	vec3(0.85, 0.82, 0.74), vec3(0.2, 0.22, 0.24), vec3(0.75, 0.55, 0.15), vec3(0.32, 0.46, 0.5));
 
 void vertex() {
+	// follaje: se mece con el viento (más arriba, más), cada árbol con su fase
+	if (wind > 0.0 && int(UV2.x + 0.5) == 11) {
+		float ph = MODEL_MATRIX[3].x * 0.35 + MODEL_MATRIX[3].z * 0.27;
+		float a = max(VERTEX.y - 0.8, 0.0) * wind;
+		VERTEX.x += sin(TIME * 1.7 + ph) * 0.05 * a;
+		VERTEX.z += cos(TIME * 1.3 + ph) * 0.035 * a;
+	}
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	vmat = UV2.x;

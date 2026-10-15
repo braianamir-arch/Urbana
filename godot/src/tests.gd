@@ -856,6 +856,10 @@ func run_album(dir: String) -> void:
 			["cerca_noche", func(): album_close(Z_R, [2, 3], 23.0, "Soleado", 3)],
 			["cerca_lluvia", func(): album_close(Z_R, [1], 13.0, "Lluvia", 3)],
 			["cerca_nieve", func(): album_close(Z_R, [1], 13.0, "Nieve", 23)],
+			["arboles_primavera", func(): album_trees(1 + DAYS_PER_SEASON * 3, "Soleado")],
+			["arboles_otono", func(): album_trees(1 + DAYS_PER_SEASON, "Soleado")],
+			["arboles_invierno", func(): album_trees(1 + DAYS_PER_SEASON * 2, "Nieve")],
+			["catalogo_arboles", func(): album_catalog(-2)],
 			["catalogo", func(): album_catalog(-1)],
 			["catalogo_casas", func(): album_catalog(0)],
 			["catalogo_deptos", func(): album_catalog(1)],
@@ -969,6 +973,7 @@ func run_buildings() -> void:
 	enter_game(false)
 	skip_intro()
 	building_check("ciudad")
+	tree_check()
 	# quemar uno, subir de nivel otro y borrar la zona de un tercero
 	var ks: Array = []
 	for i in N * N:
@@ -1049,11 +1054,15 @@ func catalog_check() -> void:
 						continue
 					var ab := mesh.get_aabb()
 					var lim := w * 0.5 + 0.2
+					if md["fam"] == "arbol":
+						lim = 2.4
 					var why := ""
 					if ab.position.x < -lim or ab.position.z < -lim or ab.end.x > lim or ab.end.z > lim:
 						why += " huella %s > %.2f" % [str(ab), lim]
 					if ab.position.y < -0.5:
 						why += " se hunde %.2f" % ab.position.y
+					if md["fam"] == "arbol" and (ab.end.y < 2.0 or ab.end.y > 9.0):
+						why += " altura de árbol %.1f fuera de [2, 9]" % ab.end.y
 					for z in md["zones"]:
 						var r: Array = CAT_H[Z_C if z == Z_M else z][l - 1]
 						if ab.end.y < r[0] or ab.end.y > r[1]:
@@ -1114,7 +1123,7 @@ func building_check(tag: String) -> void:
 	var tot := 0
 	for c in bnodes:
 		for k in c:
-			if k % 3 == LOD_FAR:
+			if k % 3 == LOD_FAR and cat_models[k / 192]["fam"] == "edificio":
 				tot += c[k].multimesh.instance_count
 	if tot != n:
 		why += " instancias lejos %d != lotes %d" % [tot, n]
@@ -1136,10 +1145,18 @@ func album_catalog(focus_row: int) -> void:
 	var row := 0
 	var cols := 9
 	var pos: Array = []
+	var fam := "arbol" if focus_row == -2 else "edificio"
+	var mlist: Array = []
 	for m in cat_models.size():
+		if cat_models[m]["fam"] == fam:
+			mlist.append(m)
+	if focus_row == -2:
+		focus_row = -1
+	for mi in mlist.size():
+		var m: int = mlist[mi]
 		var md: Dictionary = cat_models[m]
 		var sp := 10.0 if md["big"] else 5.5
-		if m > 0 and m % cols == 0:
+		if mi > 0 and mi % cols == 0:
 			z -= 12.0
 			x = 0.0
 		pos.append(Vector3(x + sp * 0.5, y0, z))
@@ -1157,20 +1174,21 @@ func album_catalog(focus_row: int) -> void:
 	sm.albedo_color = Color(0.5, 0.52, 0.5)
 	slab.material_override = sm
 	root.add_child(slab)
-	for m in cat_models.size():
-		if focus_row >= 0 and m / cols != focus_row:
+	for mi in mlist.size():
+		var m: int = mlist[mi]
+		if focus_row >= 0 and mi / cols != focus_row:
 			continue
 		var md: Dictionary = cat_models[m]
 		var l: int = md["levels"][md["levels"].size() - 1]
 		var fl: Array = md["floors"].get(l, [0])
-		var node := new_mm_node(cat_mesh(m, fl[fl.size() / 2], LOD_NEAR), building_mat)
+		var node := new_mm_node(cat_mesh(m, fl[fl.size() / 2] if fam == "edificio" else 0, LOD_NEAR), building_mat)
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		remove_child(node)
 		root.add_child(node)
 		var mm := node.multimesh
 		mm.instance_count = 1
-		var p: Vector3 = pos[m]
-		var col := tint(res_wall(m), m)
+		var p: Vector3 = pos[mi]
+		var col := tint(res_wall(m), m) if fam == "edificio" else tree_colors(TREE_SPECIES.keys()[mi / 3])[0]
 		mm.buffer = PackedFloat32Array([1, 0, 0, p.x, 0, 1, 0, p.y, 0, 0, 1, p.z, col.r, col.g, col.b, 1, 0, float(m % 8) / 8.0, hsh(m, 42), 0])
 	if focus_row >= 0:
 		var rx := 0.0
@@ -1210,3 +1228,59 @@ func album_close(z: int, lvls: Array, h: float, w: String, d: int) -> void:
 	cam_yaw = 0.5 + face_rot(maxi(best, 0))
 func rc_test_box(_lod: int, _f: int, _w: float) -> void:
 	mb_box(Vector3.ZERO, Vector3(0.5, 0.5, 0.5), BM_PLAIN, 0)
+# cada celda con árbol tiene árboles de su especie; no hay árboles sobre lotes ni en el campo vacío
+func tree_check() -> void:
+	var fam_of := {}
+	for kind in tree_models:
+		for m in tree_models[kind]:
+			fam_of[m] = kind
+	bcheck_on = true
+	mcheck_log.clear()
+	mark_all_dirty()
+	update_chunks(NCH * NCH)
+	bcheck_on = false
+	var got := {}
+	for e in mcheck_log:
+		if fam_of.has(e[1]):
+			var c: Vector2i = e[0]
+			if inb(c.x, c.y):
+				var ci := idx(c.x, c.y)
+				if not got.has(ci):
+					got[ci] = []
+				got[ci].append(fam_of[e[1]])
+	var why := ""
+	var n := 0
+	for i in N * N:
+		var want: bool = tree[i] > 0 and road[i] == 0 and zone[i] == 0 and bld[i] == 0
+		if want:
+			n += 1
+			if not got.has(i) or not (tree[i] in got[i]):
+				if why.length() < 300:
+					why += " falta árbol tipo %d en %d" % [tree[i], i]
+		elif got.has(i) and road[i] == 0 and bld[i] == 0:
+			if why.length() < 300:
+				why += " árbol de más en %d" % i
+	if n == 0:
+		why += " no hay celdas con árbol"
+	bt(why == "", "TREE_CHECK (%d celdas) " % n + ("ok" if why == "" else "FALLA" + why))
+# toma de cerca sobre la celda con árbol más cercana al centro, en un día dado (estación) y clima
+func album_trees(d: int, w: String) -> void:
+	album_city(13.0, w, d)
+	if cat_root:
+		cat_root.queue_free()
+		cat_root = null
+	var best := -1
+	var bd := 1e9
+	for i in N * N:
+		if tree[i] == 3 and road[i] == 0 and zone[i] == 0 and bld[i] == 0:
+			var dd := Vector2(cx(i) - N / 2, cz(i) - N / 2).length()
+			if dd < bd:
+				bd = dd
+				best = i
+	if best >= 0:
+		cam_goal = cell_pos(best)
+	cam_target = cam_goal
+	cam_dist_goal = 24.0
+	cam_dist = 24.0
+	cam_pitch = 0.35
+	cam_yaw = 0.5

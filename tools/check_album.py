@@ -111,6 +111,14 @@ def main():
     else:
         a, b2 = zone(cl, CALLE).mean(), zone(cc, CALLE).mean()
         check("cerca_lluvia: calle más oscura (≤ 0,9 × con sol)", a <= 0.9 * b2, f"{a:.0f} vs {b2:.0f}")
+    # etapa 2c: jacarandás violetas en primavera
+    ap = load(d, "arboles_primavera")
+    if ap is None:
+        check("arboles_primavera", False, "falta la captura")
+    else:
+        r, g, b = ap[..., 0], ap[..., 1], ap[..., 2]
+        frac = ((b > g + 30) & (r > g + 10)).mean() * 100
+        check("arboles_primavera: jacarandá violeta (≥ 0,3 % de píxeles)", frac >= 0.3, f"{frac:.2f} %")
     sys.exit(0 if all(results) else 1)
 
 

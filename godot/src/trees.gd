@@ -103,9 +103,9 @@ func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 	# especies de copa: forma propia (alto del tronco, centro y radios de la copa)
 	var th: float = {1: 1.6, 2: 2.0, 3: 1.4, 5: 1.7, 7: 1.0}[kind]
 	var cy: float = {1: 2.7, 2: 3.4, 3: 2.6, 5: 3.0, 7: 2.0}[kind]
-	var cr: Vector3 = {1: Vector3(1.3, 1.2, 1.3), 2: Vector3(1.6, 1.5, 1.6), 3: Vector3(1.9, 0.9, 1.9), 5: Vector3(1.3, 0.9, 1.3), 7: Vector3(2.1, 1.1, 2.1)}[kind]
+	var cr: Vector3 = {1: Vector3(1.2, 1.15, 1.2), 2: Vector3(1.4, 1.45, 1.4), 3: Vector3(1.45, 0.85, 1.45), 5: Vector3(1.2, 0.9, 1.2), 7: Vector3(1.45, 1.0, 1.45)}[kind]
 	var tr: float = {1: 0.14, 2: 0.17, 3: 0.13, 5: 0.24, 7: 0.32}[kind]
-	cr *= 1.0 + v * 0.08
+	cr *= 1.0 + v * 0.04
 	if kind == 5:
 		# palo borracho: tronco panzón
 		mb_limb(Vector3.ZERO, Vector3(0, th * 0.45, 0), tr * 1.1, tr * 1.5, seg)
@@ -143,3 +143,18 @@ func mb_cone_leaf(c: Vector3, r: float, h: float, seg: int) -> void:
 		var p1 := c + Vector3(cos(a1) * r, 0, sin(a1) * r)
 		mb_tri(p1, p0, c + Vector3(0, h, 0), BM_LEAF, 1)
 		mb_tri(c, p0, p1, BM_LEAF, 1)
+# 1 a 3 árboles por celda (misma cantidad y lugar que antes), de la especie de la celda, con el color de
+# la estación; ralos cuando la estación los deja con poca hoja
+func emit_trees(i: int, p: Vector3) -> void:
+	var kind: int = tree[i]
+	var tc := tree_colors(kind)
+	var crown: Color = tc[0]
+	var f := 1 if float(tc[1]) < 0.6 else 0
+	var models: Array = tree_models.get(kind, tree_models[1])
+	var nt := 1 + int(hsh(i, 1) * 2.4)
+	for k in nt:
+		var x := p.x + (hsh(i, k * 3 + 2) - 0.5) * CELL * 0.6
+		var z := p.z + (hsh(i, k * 3 + 3) - 0.5) * CELL * 0.6
+		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.6
+		var m: int = models[int(hsh(i, k * 3 + 5) * 3.0) % models.size()]
+		emit_model(m, f, x, ground_y(x, z) - 0.05, z, hsh(i, k * 3 + 6) * TAU, sc, crown, Vector4(0, 0, hsh(i, k + 20), 0))
