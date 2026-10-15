@@ -23,6 +23,7 @@ var env: Environment
 var sky_mat: ShaderMaterial
 var cloud_drift := Vector2.ZERO
 const SHADER_CITY := preload("res://shaders/city.gdshader")
+const SHADER_BUILDING := preload("res://shaders/building.gdshader")
 const SHADER_WATER := preload("res://shaders/water.gdshader")
 const SHADER_TERRAIN := preload("res://shaders/terrain_simple.gdshader")
 const SHADER_TERRAIN_TEX := preload("res://shaders/terrain.gdshader")
@@ -71,6 +72,9 @@ func setup_render() -> void:
 	city_mat.shader = sh
 	for m in meshes:
 		m.surface_set_material(0, city_mat)
+	cat_register()
+	building_mat = ShaderMaterial.new()
+	building_mat.shader = SHADER_BUILDING
 	water_mat = ShaderMaterial.new()
 	var sw := Shader.new()
 	sw.code = SHADER_WATER.code
@@ -144,6 +148,9 @@ func setup_render() -> void:
 	overlay_node = new_mm_node(meshes[M_BOX], overlay_mat)
 	preview_node = new_mm_node(meshes[M_BOX], overlay_mat)
 	chunk_nodes.clear()
+	bnodes.clear()
+	for c in NCH * NCH:
+		bnodes.append({})
 	chunk_dirty.resize(NCH * NCH)
 	chunk_dirty.fill(1)
 	for c in NCH * NCH:
@@ -203,6 +210,10 @@ func make_noise_tex(freq: float, sd: int, oct: int) -> ImageTexture:
 var water_simple_mat: StandardMaterial3D
 func apply_quality() -> void:
 	var q: int = opts["quality"]
+	# calidad Baja usa solo la versión lejana de los edificios: hay que rehacer los bloques
+	if bq_last >= 0 and (bq_last == 0) != (q == 0):
+		mark_all_dirty()
+	bq_last = q
 	RenderingServer.directional_shadow_atlas_set_size(2048 if q < 2 else 4096, true)
 	if sun:
 		sun.shadow_enabled = q >= 1 and opts["g_shadow"]
@@ -802,6 +813,7 @@ func update_chunks(max_n: int) -> void:
 				return
 func build_chunk(c: int) -> void:
 	begin_buf()
+	_binst.clear()
 	var x0 := (c % NCH) * CH
 	var z0 := (c / NCH) * CH
 	for z in range(z0, z0 + CH):
@@ -814,6 +826,7 @@ func build_chunk(c: int) -> void:
 		mm.instance_count = _counts[m]
 		if _counts[m] > 0:
 			mm.buffer = _bufs[m].slice(0, _counts[m] * 20)
+	flush_buildings(c)
 func begin_buf() -> void:
 	_counts.resize(NMESH)
 	_counts.fill(0)
@@ -1066,53 +1079,13 @@ func emit_zone(i: int, p: Vector3) -> void:
 		bx += CELL * 0.5
 		bz += CELL * 0.5
 	em(M_BOX, bx, p.y, bz, w + CELL * 0.1, 0.12, w + CELL * 0.1, 0.0, (Color(0.36, 0.5, 0.28) if l == 1 else Color(0.5, 0.52, 0.45)) if z == Z_R else Color(0.55, 0.55, 0.55))
-	var y := p.y + 0.1
-	var wall := tint(res_wall(v), i)
-	if dark:
-		wall = wall.darkened(0.6)
-	match z:
-		Z_R:
-			emit_res(i, bx, y, bz, w, l, v, rot, wall, big)
-		Z_C:
-			emit_com(i, bx, y, bz, w, l, v, rot, dark, big)
-		Z_I:
-			emit_ind(i, bx, y, bz, w, l, v, rot, dark)
-		Z_M:
-			emit_com(i, bx, y, bz, w, mini(l, 2), v, rot, dark, false)
-			if l >= 2:
-				var h := 2.0 + l * 2.5
-				em(M_BOX, bx, y + 3.0, bz, w * 0.8, h, w * 0.8, rot, wall, 1.0)
+	emit_building(i, bx, p.y + 0.1, bz, rot, tint(res_wall(v), i), dark)
 func tint(c: Color, i: int) -> Color:
 	var hh := fposmod(c.h + (hsh(i, 77) - 0.5) * 0.07, 1.0)
 	return Color.from_hsv(hh, clampf(c.s * (0.75 + hsh(i, 78) * 0.6), 0.0, 1.0), clampf(c.v * (0.86 + hsh(i, 79) * 0.2), 0.0, 1.0))
-func tower_col(v: int, i: int) -> Color:
-	var gp := [Color(0.45, 0.62, 0.78), Color(0.35, 0.58, 0.55), Color(0.66, 0.6, 0.5), Color(0.3, 0.34, 0.42), Color(0.78, 0.74, 0.68), Color(0.5, 0.52, 0.72), Color(0.72, 0.5, 0.42)]
-	return tint(gp[(v / 3 + i) % gp.size()], i)
 func res_wall(v: int) -> Color:
 	var pal := [Color(0.92, 0.88, 0.8), Color(0.85, 0.72, 0.6), Color(0.95, 0.93, 0.88), Color(0.78, 0.55, 0.45), Color(0.88, 0.82, 0.65), Color(0.7, 0.75, 0.78), Color(0.95, 0.85, 0.75), Color(0.65, 0.6, 0.55)]
 	return pal[v % pal.size()]
-func emit_ind(i: int, x: float, y: float, z: float, w: float, l: int, v: int, rot: float, dark: bool) -> void:
-	var c := tint(COL_BRICK if v % 2 == 0 else Color(0.55, 0.6, 0.62), i)
-	var im := -1.0 if v % 2 == 0 else -5.0
-	if dark:
-		c = c.darkened(0.6)
-	match l:
-		1:
-			em(M_BOX, x, y, z, w * 0.9, 2.6, w * 0.8, rot, c, 0, 0, 0, im)
-			em(M_ROOF, x, y + 2.6, z, w * 0.9, 0.8, w * 0.8, rot, Color(0.45, 0.47, 0.5), 0, 0, 0, -5)
-		2:
-			em(M_BOX, x, y, z, w * 0.9, 3.4, w * 0.9, rot, c, 0.4, 0, 0, im)
-			em(M_CYL, x + w * 0.3, y, z + w * 0.3, 0.8, 5.0, 0.8, 0.0, Color(0.42, 0.38, 0.36))
-		3:
-			em(M_BOX, x - w * 0.15, y, z, w * 0.6, 4.0, w * 0.9, rot, c, 0.4, 0, 0, im)
-			em(M_CYL, x + w * 0.3, y, z - w * 0.2, 1.4, 3.5, 1.4, 0.0, Color(0.8, 0.8, 0.82))
-			em(M_CYL, x + w * 0.3, y, z + w * 0.25, 1.4, 3.5, 1.4, 0.0, Color(0.8, 0.8, 0.82))
-			em(M_CYL, x - w * 0.3, y, z - w * 0.3, 0.8, 6.5, 0.8, 0.0, Color(0.42, 0.38, 0.36))
-		4:
-			em(M_BOX, x, y, z, w * 0.95, 6.0, w * 0.95, rot, c, 0.5, 0, 0, im)
-			em(M_CYL, x - w * 0.3, y, z - w * 0.3, 1.0, 8.5, 1.0, 0.0, Color(0.42, 0.38, 0.36))
-			em(M_CYL, x + w * 0.3, y, z - w * 0.3, 1.0, 7.5, 1.0, 0.0, Color(0.42, 0.38, 0.36))
-			em(M_BOX, x, y + 6.0, z, w * 0.5, 1.5, w * 0.4, rot, c.darkened(0.2))
 func emit_def(i: int, p: Vector3) -> void:
 	var d: Dictionary = DEF[bld[i]]
 	var sz: int = d["sz"]
@@ -1548,262 +1521,6 @@ func lp(x: float, z: float, rot: float, a: float, b: float) -> Vector2:
 func bx(x: float, y: float, z: float, rot: float, a: float, b: float, yb: float, sx: float, sy: float, sz: float, col: Color, c0: float = 0.0, c1: float = 0.0, c2: float = 0.0, c3: float = 0.0) -> void:
 	var q := lp(x, z, rot, a, b)
 	em(M_BOX, q.x, y + yb, q.y, sx, sy, sz, rot, col, c0, c1, c2, c3)
-func gable(x: float, y: float, z: float, rot: float, a: float, b: float, lx: float, lz: float, h: float, wallc: Color, roofc: Color, along_x: bool, rm: float = -4.0, wm: float = 0.0) -> void:
-	var q := lp(x, z, rot, a, b)
-	var r := rot + (PI * 0.5 if along_x else 0.0)
-	var wx := lz if along_x else lx
-	var wz := lx if along_x else lz
-	em(M_ROOF, q.x, y, q.y, wx * 0.98, h, wz * 0.98, r, wallc, 0, 0, 0, wm)
-	em(M_GABLE, q.x, y + 0.02, q.y, wx * 1.16, h * 1.12, wz * 1.08, r, roofc, 0, 0, 0, rm)
-func hip(x: float, y: float, z: float, rot: float, a: float, b: float, lx: float, lz: float, h: float, roofc: Color) -> void:
-	var q := lp(x, z, rot, a, b)
-	if lx > lz:
-		em(M_HIP, q.x, y, q.y, lz, h, lx, rot + PI * 0.5, roofc, 0, 0, 0, -4.0)
-	else:
-		em(M_HIP, q.x, y, q.y, lx, h, lz, rot, roofc, 0, 0, 0, -4.0)
-func bush(x: float, y: float, z: float, r: float, i: int, k: int) -> void:
-	var g := Color(0.2, 0.42, 0.18).lerp(Color(0.32, 0.5, 0.2), hsh(i, k))
-	em(M_SPH, x, y, z, r, r * 0.8, r, 0.0, g, 0, 0, 0, 2.04)
-func pine(x: float, y: float, z: float, h: float, i: int) -> void:
-	em(M_BOX, x, y, z, 0.12, h * 0.25, 0.12, 0.0, Color(0.35, 0.24, 0.16))
-	em(M_CONE, x, y + h * 0.2, z, h * 0.38, h * 0.8, h * 0.38, 0.0, Color(0.16, 0.34, 0.2).lerp(Color(0.25, 0.42, 0.2), hsh(i, 9)), 0, 0, 0, 2.03)
-func parked_car(x: float, y: float, z: float, rot: float, a: float, b: float, i: int) -> void:
-	var q := lp(x, z, rot, a, b)
-	var cc: Color = [Color(0.92, 0.92, 0.93), Color(0.1, 0.1, 0.12), Color(0.55, 0.57, 0.6), Color(0.6, 0.1, 0.1)][int(hsh(i, 31) * 4.0) % 4]
-	em(M_BOX, q.x, y + 0.15, q.y, 0.9, 0.42, 1.95, rot, cc, 0, 0, 0, 1.5)
-	em(M_SPH, q.x, y + 0.5, q.y, 0.8, 0.42, 1.05, rot, Color(0.07, 0.09, 0.12), 0, 0, 0, 1.5)
-func garden(i: int, x: float, y: float, z: float, rot: float, s: float) -> void:
-	var q := lp(x, z, rot, -0.42 * s, 0.38 * s)
-	bush(q.x, y, q.y, 0.6 + hsh(i, 3) * 0.3, i, 3)
-	q = lp(x, z, rot, 0.42 * s, -0.4 * s)
-	if hsh(i, 4) < 0.5:
-		pine(q.x, y, q.y, 2.2 + hsh(i, 5) * 1.2, i)
-	else:
-		bush(q.x, y, q.y, 0.7, i, 6)
-func emit_house(i: int, x: float, y: float, z: float, s: float, v: int, rot: float, wall: Color) -> void:
-	var hd: bool = opts["quality"] >= 1
-	var tile: Color = [Color(0.62, 0.27, 0.18), Color(0.45, 0.25, 0.18), Color(0.28, 0.22, 0.2), Color(0.72, 0.36, 0.2)][int(hsh(i, 11) * 4.0) % 4]
-	var white := tint(COL_WHITE if hsh(i, 12) < 0.6 else COL_CREAM, i)
-	var k := (v + int(hsh(i, 13) * 8.0)) % 8
-	match k:
-		0:
-			bx(x, y, z, rot, -0.12 * s, -0.08 * s, 0, 0.62 * s, 3.4, 0.5 * s, white, 0.6)
-			gable(x, y + 3.4, z, rot, -0.12 * s, -0.08 * s, 0.62 * s, 0.5 * s, 1.5, white, tile, true)
-			bx(x, y, z, rot, 0.2 * s, 0.1 * s, 0, 0.34 * s, 3.4, 0.5 * s, white, 0.6)
-			gable(x, y + 3.4, z, rot, 0.2 * s, 0.1 * s, 0.34 * s, 0.5 * s, 1.7, white, tile, false)
-			bx(x, y, z, rot, 0.2 * s, 0.35 * s, 0, 0.32, 0.95, 0.05, Color(0.3, 0.2, 0.14), 0, 0, 0, -2)
-			bx(x, y, z, rot, -0.14 * s, 0.24 * s, 1.75, 0.46 * s, 0.1, 0.2 * s, tile, 0, 0, 0, -4)
-			if hd:
-				for pa in [-0.34, -0.14, 0.06]:
-					var pf: float = pa
-					bx(x, y, z, rot, pf * s, 0.32 * s, 0, 0.1, 1.75, 0.1, Color(0.4, 0.26, 0.18))
-				bx(x, y, z, rot, -0.14 * s, 0.33 * s, 0, 0.42 * s, 0.45, 0.05, COL_WHITE)
-				bx(x, y, z, rot, 0.2 * s, 0.42 * s, 0, 0.6, 0.14, 0.25, COL_CONC)
-			bx(x, y, z, rot, -0.34 * s, -0.12 * s, 3.4, 0.32, 2.3, 0.32, COL_BRICK, 0, 0, 0, -1)
-		1:
-			bx(x, y, z, rot, 0, -0.06 * s, 0, 0.7 * s, 2.2, 0.48 * s, white, 0.55)
-			gable(x, y + 2.2, z, rot, 0, -0.06 * s, 0.7 * s, 0.48 * s, 1.6, white, tile, true)
-			bx(x, y, z, rot, 0.17 * s, 0.22 * s, 0, 0.22 * s, 1.9, 0.1 * s, white)
-			gable(x, y + 1.9, z, rot, 0.17 * s, 0.22 * s, 0.22 * s, 0.12 * s, 0.6, white, tile, false)
-			bx(x, y, z, rot, 0.17 * s, 0.275 * s, 0, 0.3, 0.9, 0.04, Color(0.55, 0.3, 0.16), 0, 0, 0, -2)
-			bx(x, y, z, rot, -0.2 * s, 0.24 * s, 1.6, 0.3 * s, 0.08, 0.16 * s, tile, 0, 0, 0, -4)
-			if hd:
-				bx(x, y, z, rot, -0.33 * s, 0.31 * s, 0, 0.08, 1.6, 0.08, COL_WHITE)
-				bx(x, y, z, rot, -0.07 * s, 0.31 * s, 0, 0.08, 1.6, 0.08, COL_WHITE)
-				bx(x, y, z, rot, -0.2 * s, 0.32 * s, 0, 0.3 * s, 0.42, 0.04, COL_WHITE)
-				bx(x, y, z, rot, 0.27 * s, 0.28 * s, 1.25, 0.1, 0.16, 0.08, Color(1.0, 0.82, 0.5), 0, 1.0)
-			bx(x, y, z, rot, 0.22 * s, -0.12 * s, 2.2, 0.3, 2.0, 0.3, COL_BRICK, 0, 0, 0, -1)
-		2:
-			bx(x, y, z, rot, 0, 0, 0, 0.78 * s, 2.2, 0.6 * s, white, 0.55)
-			hip(x, y + 2.2, z, rot, 0, 0, 0.9 * s, 0.72 * s, 0.85, tile)
-			bx(x, y, z, rot, 0.1 * s, -0.08 * s, 2.2, 0.48 * s, 2.1, 0.4 * s, white, 0.55)
-			hip(x, y + 4.3, z, rot, 0.1 * s, -0.08 * s, 0.6 * s, 0.52 * s, 1.2, tile)
-			bx(x, y, z, rot, -0.15 * s, 0.301 * s, 0, 0.3, 0.95, 0.04, Color(0.5, 0.3, 0.17), 0, 0, 0, -2)
-			if hd:
-				bx(x, y, z, rot, -0.15 * s, 0.4 * s, 0, 0.9, 0.06, 0.6, COL_CONC)
-		3:
-			bx(x, y, z, rot, -0.12 * s, -0.08 * s, 0, 0.52 * s, 2.4, 0.5 * s, COL_CONC, 0, 0, 0, -3)
-			bx(x, y, z, rot, -0.12 * s, 0.171 * s, 0.15, 0.46 * s, 2.0, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.24 * s, -0.08 * s, 0, 0.3 * s, 2.4, 0.5 * s, white)
-			bx(x, y, z, rot, 0.24 * s, 0.171 * s, 0, 0.26 * s, 1.9, 0.03, COL_WOOD, 0, 0, 0, -2)
-			bx(x, y, z, rot, 0.04 * s, 0.02 * s, 2.4, 0.84 * s, 2.2, 0.62 * s, white)
-			bx(x, y, z, rot, -0.12 * s, 0.331 * s, 2.6, 0.44 * s, 1.75, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.27 * s, 0.332 * s, 2.5, 0.26 * s, 2.0, 0.04, COL_WOOD, 0, 0, 0, -2)
-			bx(x, y, z, rot, 0.04 * s, 0.02 * s, 4.6, 0.86 * s, 0.14, 0.64 * s, white.darkened(0.06))
-			if hd:
-				bx(x, y, z, rot, 0.24 * s, 0.4 * s, 0, 0.28 * s, 0.04, 0.16 * s, Color(0.78, 0.77, 0.74))
-				parked_car(x, y, z, rot, 0.24 * s, 0.44 * s, i)
-		4:
-			bx(x, y, z, rot, 0.08 * s, -0.02 * s, 0, 0.62 * s, 2.3, 0.56 * s, tint(COL_BRICK, i), 0.4, 0, 0, -1)
-			bx(x, y, z, rot, 0.08 * s, -0.06 * s, 2.3, 0.56 * s, 2.0, 0.44 * s, COL_BLACK, 0, 0, 0, -5)
-			bx(x, y, z, rot, 0.08 * s, 0.161 * s, 2.45, 0.5 * s, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.08 * s, -0.04 * s, 4.3, 0.74 * s, 0.16, 0.6 * s, Color(0.1, 0.1, 0.11))
-			bx(x, y, z, rot, -0.38 * s, 0.14 * s, 2.0, 0.26 * s, 0.08, 0.5 * s, Color(0.1, 0.1, 0.11))
-			if hd:
-				bx(x, y, z, rot, -0.48 * s, 0.37 * s, 0, 0.08, 2.0, 0.08, Color(0.1, 0.1, 0.11))
-				bx(x, y, z, rot, -0.48 * s, -0.08 * s, 0, 0.08, 2.0, 0.08, Color(0.1, 0.1, 0.11))
-				parked_car(x, y, z, rot, -0.37 * s, 0.14 * s, i)
-				for la in [-0.1, 0.12, 0.32]:
-					var lf: float = la
-					bx(x, y, z, rot, lf * s, 0.272 * s, 0, 0.12, 0.08, 0.06, Color(1.0, 0.8, 0.5), 0, 1.0)
-		5:
-			bx(x, y, z, rot, 0.05 * s, 0, 0, 0.7 * s, 2.3, 0.56 * s, white)
-			bx(x, y, z, rot, 0.05 * s, 0.281 * s, 0.1, 0.4 * s, 1.9, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, -0.34 * s, -0.04 * s, 0, 0.22 * s, 5.4, 0.36 * s, Color(0.27, 0.24, 0.23), 0, 0, 0, -1)
-			bx(x, y, z, rot, 0.12 * s, -0.02 * s, 2.3, 0.44 * s, 1.5, 0.52 * s, COL_BLACK, 0, 0, 0, -5)
-			gable(x, y + 3.8, z, rot, 0.12 * s, -0.02 * s, 0.44 * s, 0.52 * s, 1.8, COL_BLACK, COL_BLACK, false, -5.0, -5.0)
-			var q := lp(x, z, rot, 0.12 * s, 0.245 * s)
-			em(M_BOX, q.x, y + 2.45, q.y, 0.36 * s, 1.3, 0.04, rot, COL_GLASS, 0, 0, 0, -8)
-			em(M_ROOF, q.x, y + 3.8, q.y, 0.36 * s, 1.55, 0.04, rot, COL_GLASS, 0, 0, 0, -8)
-			if hd:
-				bx(x, y, z, rot, -0.05 * s, 0.4 * s, 0, 0.6 * s, 0.1, 0.2 * s, Color(0.55, 0.38, 0.24), 0, 0, 0, -2)
-		6:
-			bx(x, y, z, rot, -0.08 * s, -0.12 * s, 0, 0.66 * s, 2.4, 0.44 * s, COL_STONE, 0, 0, 0, -7)
-			bx(x, y, z, rot, -0.08 * s, 0.101 * s, 0.1, 0.5 * s, 2.0, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.02 * s, -0.06 * s, 2.4, 0.7 * s, 2.0, 0.5 * s, white)
-			bx(x, y, z, rot, -0.24 * s, -0.06 * s, 2.4, 0.22 * s, 2.0, 0.52 * s, COL_WOOD, 0, 0, 0, -2)
-			bx(x, y, z, rot, 0.1 * s, 0.191 * s, 2.55, 0.42 * s, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.02 * s, 0.0, 4.4, 0.78 * s, 0.25, 0.62 * s, white)
-			bx(x, y, z, rot, 0.24 * s, 0.33 * s, 0, 0.42 * s, 0.1, 0.24 * s, Color(0.72, 0.58, 0.42), 0, 0, 0, -2)
-			bx(x, y, z, rot, 0.24 * s, 0.33 * s, 0, 0.34 * s, 0.14, 0.17 * s, Color(0.22, 0.72, 0.8), 0, 0, 0.25)
-		_:
-			bx(x, y, z, rot, 0, -0.06 * s, 0, 0.86 * s, 2.2, 0.46 * s, white, 0.5)
-			hip(x, y + 2.2, z, rot, 0, -0.06 * s, 0.98 * s, 0.6 * s, 1.1, tile)
-			bx(x, y, z, rot, -0.2 * s, 0.181 * s, 0.05, 0.22 * s, 1.8, 0.03, COL_GLASS, 0, 0, 0, -8)
-			bx(x, y, z, rot, 0.22 * s, 0.24 * s, 1.75, 0.24 * s, 0.06, 0.14 * s, COL_WHITE)
-			if hd:
-				for la in [-0.36, -0.02, 0.36]:
-					var lf: float = la
-					bx(x, y, z, rot, lf * s, 0.18 * s, 1.5, 0.1, 0.16, 0.08, Color(1.0, 0.8, 0.5), 0, 1.0)
-	if hd:
-		garden(i, x, y, z, rot, s)
-func emit_res(i: int, x: float, y: float, z: float, w: float, l: int, v: int, rot: float, wall: Color, big: bool) -> void:
-	var gc := tower_col(v, i)
-	var hd: bool = opts["quality"] >= 1
-	var vk := (v + int(hsh(i, 21) * 4.0)) % 4
-	match l:
-		1:
-			emit_house(i, x, y, z, w, v, rot, wall)
-		2, 3:
-			var h := (4.5 + (v % 3)) if l == 2 else (8.0 + (v % 4) * 1.3)
-			if vk == 0:
-				var bc := tint(COL_BRICK, i)
-				bx(x, y, z, rot, 0, 0, 0, w * 0.84, h, w * 0.84, bc, 1.0, 0, 0, -1)
-				bx(x, y, z, rot, 0, 0, 0, w * 0.86, 1.1, w * 0.86, Color(0.15, 0.19, 0.23), 0, 0.55)
-				var k := 2.5
-				while k < h - 0.3:
-					bx(x, y, z, rot, 0, 0, k, w * 0.86, 0.16, w * 0.86, COL_WHITE)
-					k += 2.5
-				bx(x, y, z, rot, 0, 0, h, w * 0.9, 0.3, w * 0.9, COL_WHITE)
-				if l == 3 or v % 2 == 0:
-					var q := lp(x, z, rot, w * 0.2, -w * 0.15)
-					if hd:
-						for lg in 4:
-							em(M_BOX, q.x + (0.5 if lg % 2 == 0 else -0.5), y + h, q.y + (0.5 if lg < 2 else -0.5), 0.1, 1.2, 0.1, 0.0, Color(0.25, 0.22, 0.2))
-					em(M_CYL, q.x, y + h + 1.2, q.y, 1.5, 1.4, 1.5, 0.0, Color(0.48, 0.36, 0.26), 0, 0, 0, -2)
-					em(M_CONE, q.x, y + h + 2.6, q.y, 1.6, 0.6, 1.6, 0.0, Color(0.25, 0.22, 0.2))
-			elif vk == 1:
-				bx(x, y, z, rot, 0, 0, 0, w * 0.76, h, w * 0.76, COL_BLACK, 1.0, 0, 0, -5)
-				var k := 0.0
-				while k < h + 0.1:
-					bx(x, y, z, rot, 0, 0.02 * w, k, w * 0.94, 0.26, w * 0.9, COL_WHITE.darkened(0.04), 0, 0, 0, -3)
-					if hd and k > 0.1:
-						bx(x, y, z, rot, 0, 0.44 * w, k + 0.26, w * 0.9, 0.22, 0.25, Color(0.3, 0.48, 0.22), 0, 0, 0, 2.02)
-					k += 2.5
-				if hd:
-					for pk in 5:
-						bx(x, y, z, rot, (pk - 2) * w * 0.15, -w * 0.1, h + 1.6, 0.1, 0.1, w * 0.5, COL_BLACK)
-					bx(x, y, z, rot, -w * 0.3, -w * 0.1, h, 0.12, 1.6, 0.12, COL_BLACK)
-					bx(x, y, z, rot, w * 0.3, -w * 0.1, h, 0.12, 1.6, 0.12, COL_BLACK)
-			elif vk == 2:
-				bx(x, y, z, rot, 0, 0, 0, w * 0.86, 1.8, w * 0.86, COL_STONE, 0, 0, 0, -7)
-				bx(x, y, z, rot, 0.12 * w, 0.431 * w, 0.05, w * 0.5, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
-				bx(x, y, z, rot, 0, 0, 1.8, w * 0.84, h - 1.8, w * 0.84, tint(Color(0.74, 0.4, 0.24), i), 0, 0, 0, -6)
-				bx(x, y, z, rot, 0, 0, h, w * 0.87, 0.25, w * 0.87, COL_STONE)
-			else:
-				bx(x, y, z, rot, 0, 0, 0, w * 0.82, h, w * 0.82, wall, 1.0)
-				bx(x, y, z, rot, 0, 0, 0, w * 0.84, 1.1, w * 0.84, Color(0.15, 0.19, 0.23), 0, 0.55)
-				var k := 2.6
-				while k < h - 0.5:
-					bx(x, y, z, rot, 0, 0, k, w * 0.86, 0.12, w * 0.86, wall.darkened(0.15))
-					bx(x, y, z, rot, 0, w * 0.45, k + 0.12, w * 0.5, 0.28, 0.5, wall.lightened(0.1))
-					k += 2.5
-				bx(x, y, z, rot, 0, 0, h, w * 0.88, 0.25, w * 0.88, wall.darkened(0.2))
-				if hd:
-					bx(x, y, z, rot, -w * 0.2, w * 0.18, h + 0.25, 0.9, 0.35, 0.5, Color(0.3, 0.55, 0.28), 0, 0, 0, 2.02)
-					bx(x, y, z, rot, w * 0.15, -w * 0.1, h + 0.25, 0.8, 0.5, 0.8, Color(0.55, 0.57, 0.6))
-		4:
-			var kind := v % 4
-			if kind == 0:
-				var h := 16.0 + (v % 5) * 2.0
-				em(M_BOX, x, y, z, w * 0.75, h, w * 0.75, rot, wall, 1.0, 0, 0, -7)
-				em(M_BOX, x, y + h, z, w * 0.5, 2.0, w * 0.5, rot, wall.darkened(0.1), 0.8, 0, 0, -7)
-				em(M_BOX, x, y, z, w * 0.78, 1.4, w * 0.78, rot, Color(0.14, 0.18, 0.22), 0, 0.55)
-				em(M_BOX, x, y + h - 0.3, z, w * 0.8, 0.4, w * 0.8, rot, wall.lightened(0.12))
-				em(M_CYL, x, y + h + 2.0, z, 1.2, 1.5, 1.2, 0.0, Color(0.4, 0.4, 0.42))
-			elif kind == 1:
-				var h := 22.0 + (v % 3) * 3.0
-				var sc := tint(Color(0.8, 0.7, 0.54), i)
-				em(M_BOX, x, y, z, w * 0.8, h * 0.5, w * 0.8, rot, sc, 1.0, 0, 0, -7)
-				em(M_BOX, x, y + h * 0.5, z, w * 0.84, 0.35, w * 0.84, rot, sc.lightened(0.15))
-				em(M_BOX, x, y + h * 0.5, z, w * 0.62, h * 0.3, w * 0.62, rot, sc, 1.0, 0, 0, -7)
-				em(M_BOX, x, y + h * 0.8, z, w * 0.66, 0.3, w * 0.66, rot, sc.lightened(0.15))
-				em(M_BOX, x, y + h * 0.8, z, w * 0.44, h * 0.2, w * 0.44, rot, sc, 1.0, 0, 0, -7)
-				em(M_BOX, x, y + h, z, w * 0.3, 1.4, w * 0.3, rot, Color(1.0, 0.85, 0.6), 0, 0.7)
-				em(M_CONE, x, y + h + 1.4, z, w * 0.2, h * 0.22, w * 0.2, rot, Color(0.75, 0.75, 0.78), 0, 0, 0, 1.5)
-			elif kind == 2:
-				var h := 22.0 + (v % 3) * 2.5
-				em(M_CYL, x, y, z, w * 0.7, h, w * 0.7, 0.0, gc, 1.3)
-				em(M_CYL, x, y + h, z, w * 0.74, 0.4, w * 0.74, 0.0, Color(0.8, 0.82, 0.85))
-			else:
-				var h := 18.0
-				bx(x, y, z, rot, -w * 0.22, 0, 0, w * 0.36, h, w * 0.5, gc, 1.3)
-				bx(x, y, z, rot, w * 0.22, 0, 0, w * 0.36, h + 3.0, w * 0.5, gc, 1.3)
-				em(M_BOX, x, y + h * 0.6, z, w * 0.2, 1.2, w * 0.3, rot, Color(0.5, 0.6, 0.7), 1.3)
-func emit_com(i: int, x: float, y: float, z: float, w: float, l: int, v: int, rot: float, dark: bool, big: bool) -> void:
-	var wallc: Color = tint([Color(0.85, 0.85, 0.9), Color(0.9, 0.8, 0.7), Color(0.7, 0.75, 0.85), Color(0.95, 0.9, 0.85)][v % 4], i)
-	var gcm := tower_col(v + 2, i)
-	if dark:
-		wallc = wallc.darkened(0.6)
-	var awn: Color = [Color(0.8, 0.2, 0.2), Color(0.2, 0.5, 0.8), Color(0.2, 0.6, 0.3), Color(0.9, 0.6, 0.1)][v % 4]
-	var fx := sin(rot) * w * 0.45
-	var fz := cos(rot) * w * 0.45
-	match l:
-		1:
-			em(M_BOX, x, y, z, w * 0.85, 2.4, w * 0.85, rot, wallc, 0.7, 0, 0, -1.0 if v % 3 == 0 else 0.0)
-			bx(x, y, z, rot, 0, w * 0.426, 0.1, w * 0.7, 1.6, 0.03, COL_GLASS, 0, 0, 0, -8)
-			em(M_BOX, x + fx, y + 1.9, z + fz, w * 0.85, 0.12, 0.9, rot, awn)
-			if v % 2 == 0:
-				for k in 2:
-					em(M_CYL, x + fx * 1.25 + (k - 0.5) * 1.2 * cos(rot), y, z + fz * 1.25 - (k - 0.5) * 1.2 * sin(rot), 0.5, 0.6, 0.5, 0.0, Color(0.9, 0.9, 0.9))
-		2:
-			var bm := -1.0 if v % 2 == 0 else -7.0
-			em(M_BOX, x, y, z, w * 0.88, 5.0, w * 0.88, rot, tint(COL_BRICK, i) if v % 2 == 0 else wallc, 1.0, 0, 0, bm)
-			bx(x, y, z, rot, 0, w * 0.441, 0.05, w * 0.8, 1.8, 0.03, COL_GLASS, 0, 0, 0, -8)
-			em(M_BOX, x + fx, y + 2.0, z + fz, w * 0.88, 0.12, 1.0, rot, awn)
-			em(M_BOX, x, y + 5.0, z, w * 0.92, 0.3, w * 0.92, rot, COL_WHITE)
-			em(M_BOX, x, y + 5.3, z, w * 0.6, 0.8, w * 0.2, rot, awn, 0, 0.6)
-		3:
-			var h := 12.0 + (v % 3) * 2.0
-			em(M_BOX, x, y, z, w * 0.88, 3.0, w * 0.88, rot, COL_STONE, 0, 0, 0, -7)
-			bx(x, y, z, rot, 0, w * 0.441, 0.1, w * 0.78, 2.6, 0.03, COL_GLASS, 0, 0, 0, -8)
-			em(M_BOX, x, y + 3.0, z, w * 0.82, h - 3.0, w * 0.82, rot, gcm, 1.4)
-			em(M_BOX, x, y + h, z, w * 0.6, 1.0, w * 0.6, rot, Color(0.4, 0.4, 0.45))
-		4:
-			var h := 28.0 + (v % 4) * 4.0
-			if big:
-				h += 10.0
-			em(M_BOX, x, y, z, w * 0.88, 4.0, w * 0.88, rot, COL_STONE, 0.8, 0, 0, -7)
-			em(M_BOX, x, y + 4.0, z, w * 0.75, h * 0.72 - 4.0, w * 0.75, rot, gcm.darkened(0.15), 1.5)
-			em(M_BOX, x, y + h * 0.72, z, w * 0.79, 0.4, w * 0.79, rot, Color(0.75, 0.77, 0.8))
-			em(M_BOX, x, y + h * 0.72, z, w * 0.58, h * 0.28, w * 0.58, rot, gcm.darkened(0.1), 1.5)
-			if v % 2 == 0:
-				em(M_BOX, x, y + h, z, w * 0.4, 2.5, w * 0.4, rot, Color(0.8, 0.82, 0.85), 0, 0.5)
-				em(M_CONE, x, y + h + 2.5, z, w * 0.3, 6.0, w * 0.3, rot, Color(0.78, 0.8, 0.84), 0, 0, 0, 1.5)
-				em(M_BOX, x, y + h + 8.0, z, 0.2, 4.0, 0.2, 0.0, Color(0.9, 0.2, 0.2), 0, 0, 1.0)
-			else:
-				em(M_BOX, x, y + h, z, w * 0.5, 3.0, w * 0.5, rot, Color(0.35, 0.45, 0.55), 1.2)
-				em(M_BOX, x, y + h + 3.0, z, 0.25, 5.0, 0.25, 0.0, Color(0.9, 0.2, 0.2), 0, 0, 1.0)
 func clear_preview() -> void:
 	preview_node.multimesh.instance_count = 0
 	set_cost_hint("")

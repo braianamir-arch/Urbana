@@ -30,6 +30,16 @@ var mb_xf := Transform3D.IDENTITY
 # catálogo: lista de modelos y mallas ya armadas
 var cat_models: Array = []
 var cat_cache: Dictionary = {}
+# modelos por zona, nivel y tamaño: clave zona * 10 + nivel * 2 + (1 si es 2×2)
+var bset: Dictionary = {}
+# dibujo: por bloque, clave (modelo * 64 + pisos) * 3 + versión -> MultiMeshInstance3D
+var building_mat: ShaderMaterial
+var bnodes: Array = []
+var _binst: Dictionary = {}
+var bq_last: int = -1
+# prueba: celda -> {m, n, dark} (lo llena emit_building cuando bcheck_on)
+var bcheck_on: bool = false
+var bcheck_log: Dictionary = {}
 func mb_begin() -> void:
 	mb_v = PackedVector3Array()
 	mb_n = PackedVector3Array()
@@ -151,7 +161,31 @@ func cat_add(id: String, zones: Array, levels: Array, big: bool, floors: Diction
 func cat_register() -> void:
 	cat_models.clear()
 	cat_cache.clear()
-	cat_add("caja", [Z_R], [1], false, {}, rc_caja)
+	cat_add("caja", [Z_R, Z_C, Z_M], [1, 2, 3, 4], false, {1: [2], 2: [4], 3: [7], 4: [12]}, rc_caja)
+	cat_add("caja_ind", [Z_I], [1, 2, 3, 4], false, {1: [2], 2: [4], 3: [6], 4: [8]}, rc_caja)
+	bset.clear()
+	for m in cat_models.size():
+		var md: Dictionary = cat_models[m]
+		for z in md["zones"]:
+			for l in md["levels"]:
+				var k: int = z * 10 + l * 2 + (1 if md["big"] else 0)
+				if not bset.has(k):
+					bset[k] = []
+				bset[k].append(m)
+# modelo y pisos para la celda i: (modelo, pisos) o (-1, 0). Si no hay modelo 2×2 para esa zona y
+# nivel, se usa uno normal (emit_building lo agranda).
+func pick_model(i: int) -> Vector2i:
+	var z: int = zone[i]
+	var l: int = lvl[i]
+	var big := part[i] == i
+	var cands: Array = bset.get(z * 10 + l * 2 + (1 if big else 0), [])
+	if cands.is_empty() and big:
+		cands = bset.get(z * 10 + l * 2, [])
+	if cands.is_empty():
+		return Vector2i(-1, 0)
+	var m: int = cands[(vari[i] + int(hsh(i, 41) * 7.0)) % cands.size()]
+	var fl: Array = cat_models[m]["floors"].get(l, [0])
+	return Vector2i(m, fl[int(hsh(i, 43) * fl.size()) % fl.size()])
 func cat_mesh(m: int, floors: int, lod: int) -> ArrayMesh:
 	var key := (m * 64 + floors) * 3 + lod
 	if cat_cache.has(key):
@@ -162,12 +196,73 @@ func cat_mesh(m: int, floors: int, lod: int) -> ArrayMesh:
 	var mesh := mb_end()
 	cat_cache[key] = mesh
 	return mesh
-# --- recetas: (versión, pisos, ancho del lote). Frente hacia +Z, base en y = 0.
-func rc_caja(lod: int, _f: int, w: float) -> void:
-	var s := w * 0.8
-	if lod == LOD_FAR:
-		mb_box(Vector3.ZERO, Vector3(s, 2.6, s), BM_PLASTER, 1, 63 - 8)
+# --- dibujo por bloque
+func building_color(i: int, z: int, v: int, wall: Color) -> Color:
+	match z:
+		Z_C:
+			return tint(res_wall(v + 3), i)
+		Z_I:
+			return tint(Color(0.66, 0.64, 0.6) if v % 2 == 0 else Color(0.6, 0.62, 0.64), i)
+	return wall
+func emit_building(i: int, x: float, y: float, z: float, rot: float, wall: Color, dark: bool) -> void:
+	var pk := pick_model(i)
+	if pk.x < 0:
 		return
-	mb_box(Vector3.ZERO, Vector3(s, 2.6, s), BM_PLASTER, 1, 63 - 8 - 4)
-	mb_gable(Vector3(0, 2.6, 0), s + 0.2, s + 0.2, 1.0, BM_TILES, 0, true, BM_PLASTER, 1)
+	var md: Dictionary = cat_models[pk.x]
+	var sc := 1.85 / 0.82 if part[i] == i and not md["big"] else 1.0
+	var key := pk.x * 64 + pk.y
+	if not _binst.has(key):
+		_binst[key] = PackedFloat32Array()
+	var b: PackedFloat32Array = _binst[key]
+	var c := cos(rot) * sc
+	var s := sin(rot) * sc
+	var col := building_color(i, zone[i], vari[i], wall)
+	b.append_array([c, 0.0, s, x, 0.0, 1.0, 0.0, y, -s, 0.0, c, z, col.r, col.g, col.b, 1.0, 1.0 if dark else 0.0, float(int(hsh(i, 44) * 8.0)) / 8.0, hsh(i, 42), 0.0])
+	_binst[key] = b
+	if bcheck_on:
+		if bcheck_log.has(i):
+			bcheck_log[i]["n"] += 1
+		else:
+			bcheck_log[i] = {"m": pk.x, "n": 1, "dark": dark}
+# vuelca las instancias juntadas por build_chunk en los nodos del bloque (uno por modelo y versión)
+func flush_buildings(ch: int) -> void:
+	var q: int = opts["quality"]
+	var nodes: Dictionary = bnodes[ch]
+	for k in nodes:
+		if not _binst.has(k / 3):
+			nodes[k].multimesh.instance_count = 0
+	for key in _binst:
+		var buf: PackedFloat32Array = _binst[key]
+		var cnt := buf.size() / 20
+		for lod in ([LOD_FAR] if q == 0 else [LOD_NEAR, LOD_MID, LOD_FAR]):
+			var nk: int = key * 3 + lod
+			var node: MultiMeshInstance3D = nodes.get(nk)
+			if node == null:
+				node = new_mm_node(cat_mesh(key / 64, key % 64, lod), building_mat)
+				nodes[nk] = node
+			node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+			if q == 0:
+				node.visibility_range_begin = 0.0
+				node.visibility_range_end = 0.0
+			else:
+				node.visibility_range_begin = [0.0, 120.0, 340.0][lod]
+				node.visibility_range_begin_margin = 0.0 if lod == LOD_NEAR else 20.0
+				node.visibility_range_end = [140.0, 380.0, 0.0][lod]
+				node.visibility_range_end_margin = 20.0
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if lod != LOD_FAR or q == 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			node.multimesh.instance_count = cnt
+			node.multimesh.buffer = buf
+		if q == 0:
+			for lod in [LOD_NEAR, LOD_MID]:
+				if nodes.has(key * 3 + lod):
+					nodes[key * 3 + lod].multimesh.instance_count = 0
+# --- recetas: (versión, pisos, ancho del lote). Frente hacia +Z, base en y = 0.
+func rc_caja(lod: int, f: int, w: float) -> void:
+	var s := w * 0.8
+	var h := maxf(f, 2) * FLOOR_H
+	if lod == LOD_FAR:
+		mb_box(Vector3.ZERO, Vector3(s, h, s), BM_PLASTER, 1, 63 - 8)
+		return
+	mb_box(Vector3.ZERO, Vector3(s, h, s), BM_PLASTER, 1, 63 - 8 - 4)
+	mb_gable(Vector3(0, h, 0), s + 0.2, s + 0.2, 1.0, BM_TILES, 0, true, BM_PLASTER, 1)
 	mb_box(Vector3(0, 0, s * 0.5), Vector3(0.45, 0.95, 0.04), BM_WOOD, 0)

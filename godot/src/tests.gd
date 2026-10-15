@@ -952,6 +952,22 @@ func run_buildings() -> void:
 	if test_frame != 5:
 		return
 	catalog_check()
+	new_test_city()
+	enter_game(false)
+	skip_intro()
+	building_check("ciudad")
+	# quemar uno, subir de nivel otro y borrar la zona de un tercero
+	var ks: Array = []
+	for i in N * N:
+		if bcheck_log.has(i) and part[i] < 0 and lvl[i] == 1:
+			ks.append(i)
+		if ks.size() == 3:
+			break
+	burn[ks[0]] = 0.5
+	lvl[ks[1]] = 2
+	zone[ks[2]] = 0
+	building_check("cambios")
+	bt(bool(bcheck_log[ks[0]]["dark"]), "BUILDING_CHECK quemado oscuro " + ("ok" if bcheck_log[ks[0]]["dark"] else "FALLA"))
 	print("BUILDINGS OK" if bt_fail == 0 else "BUILDINGS FALLA")
 	get_tree().quit()
 # cada modelo arma sus 3 versiones, entra en su lote y tiene la altura de su nivel
@@ -994,3 +1010,43 @@ func catalog_check() -> void:
 						why += " la versión lejos no es más liviana (%d >= %d)" % [vs.size(), nv[0]]
 					bt(why == "", tag + ("ok" if why == "" else "FALLA" + why))
 	print("BENCH catalog_ms=%d" % ((Time.get_ticks_usec() - t0) / 1000))
+# cada lote construido tiene exactamente un modelo de su zona, nivel y tamaño, y nada más
+func building_check(tag: String) -> void:
+	bcheck_on = true
+	bcheck_log.clear()
+	mark_all_dirty()
+	update_chunks(NCH * NCH)
+	bcheck_on = false
+	var why := ""
+	var n := 0
+	for i in N * N:
+		var want := zone[i] > 0 and lvl[i] >= 1 and road[i] == 0 and bld[i] == 0 and not anim_cells.has(i) and (part[i] < 0 or part[i] == i)
+		if not bcheck_log.has(i):
+			if want and why.length() < 300:
+				why += " falta en %d (zona %d nivel %d)" % [i, zone[i], lvl[i]]
+			continue
+		n += 1
+		var e: Dictionary = bcheck_log[i]
+		if not want:
+			why += " sobra en %d" % i
+			continue
+		if e["n"] != 1:
+			why += " %d instancias en %d" % [e["n"], i]
+		var md: Dictionary = cat_models[e["m"]]
+		var big := part[i] == i
+		var has_big := false
+		for o in cat_models:
+			if o["big"] and zone[i] in o["zones"] and lvl[i] in o["levels"]:
+				has_big = true
+		if not (zone[i] in md["zones"]) or not (lvl[i] in md["levels"]) or md["big"] != (big and has_big):
+			why += " modelo %s no sirve para %d (zona %d nivel %d grande %s)" % [md["id"], i, zone[i], lvl[i], big]
+	var tot := 0
+	for c in bnodes:
+		for k in c:
+			if k % 3 == LOD_FAR:
+				tot += c[k].multimesh.instance_count
+	if tot != n:
+		why += " instancias lejos %d != lotes %d" % [tot, n]
+	if n == 0:
+		why += " ningún edificio"
+	bt(why == "", "BUILDING_CHECK %s (%d lotes) " % [tag, n] + ("ok" if why == "" else "FALLA" + why))
