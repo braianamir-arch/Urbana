@@ -2414,6 +2414,7 @@ func demolish_cell(c: int) -> void:
 	if road[c] > 0:
 		road[c] = 0
 		stops.erase(c)
+		mark_dirty(c)
 		wire[c] &= ~(W_BIKE | W_TRAM | W_ROUND)
 	tree[c] = 0
 	wire[c] = 0
@@ -2609,6 +2610,7 @@ func place_stop(c: int, kind: String) -> void:
 		toast("No alcanza la plata")
 		return
 	stops[c] = kind
+	mark_dirty(c)
 	if not creative:
 		money -= 60
 	sim_dirty = true
@@ -3770,6 +3772,7 @@ func emit_road(i: int, p: Vector3) -> void:
 				av = true
 		if av:
 			emit_semaforos(i, p, y + 0.2)
+		emit_corner_props(i, p, y + 0.26, av)
 	var horiz := (e or w) and not (s or n)
 	var vert := (s or n) and not (e or w)
 	if t >= 2 and not bridge:
@@ -3810,6 +3813,8 @@ func emit_road(i: int, p: Vector3) -> void:
 			var ao := Vector2(0, 0.8) if horiz else Vector2(0.8, 0)
 			emit_farol(p.x + lo.x, y + 0.26, p.z + lo.y, ao.x, ao.y)
 			lamps[i] = Vector3(p.x + lo.x + ao.x, y, p.z + lo.y + ao.y)
+		if t >= 2 and not bridge:
+			emit_street_furniture(i, p, y + 0.26, t, horiz)
 		if t == 2 and opts["quality"] >= 1:
 			for side in [-1, 1]:
 				var j: int = i + (N * side if horiz else side)
@@ -3820,14 +3825,7 @@ func car_color(k: int) -> Color:
 	var pal := [Color(0.85, 0.85, 0.87), Color(0.15, 0.15, 0.17), Color(0.7, 0.12, 0.1), Color(0.2, 0.3, 0.6), Color(0.55, 0.57, 0.6), Color(0.9, 0.75, 0.2), Color(0.25, 0.45, 0.3)]
 	return pal[absi(k) % pal.size()]
 func emit_cable(i: int, p: Vector3) -> void:
-	em(M_BOX, p.x, p.y, p.z, 0.2, 4.0, 0.2, 0.0, Color(0.45, 0.35, 0.25))
-	em(M_BOX, p.x, p.y + 3.6, p.z, 1.6, 0.12, 0.12, 0.0, Color(0.45, 0.35, 0.25))
-	var x := cx(i)
-	var z := cz(i)
-	if x < N - 1 and wire[i + 1] & W_POWER:
-		em(M_BOX, p.x + CELL * 0.5, p.y + 3.6, p.z, CELL, 0.05, 0.05, 0.0, Color(0.1, 0.1, 0.1))
-	if z < N - 1 and wire[i + N] & W_POWER:
-		em(M_BOX, p.x, p.y + 3.6, p.z + CELL * 0.5, 0.05, 0.05, CELL, 0.0, Color(0.1, 0.1, 0.1))
+	emit_power(i, p)
 func tree_colors(kind: int) -> Array:
 	var s := season()
 	var snowy := weather == "Nieve"
@@ -5511,6 +5509,12 @@ func prop_register() -> void:
 	for id in ["farol", "semaforo"] + CAR_MODELS:
 		cat_add(id, [], [1], false, {}, Callable(self, "rc_" + id), false, "objeto")
 		prop_ids[id] = cat_models.size() - 1
+	# objetos chicos: solo versión cerca (con la cámara acercada)
+	for id in ["banco", "tacho", "bolardo", "cantero", "parada", "cartel_calle", "pare", "cable"]:
+		cat_add(id, [], [1], false, {}, Callable(self, "rc_" + id), true, "objeto")
+		prop_ids[id] = cat_models.size() - 1
+	cat_add("poste", [], [1], false, {}, rc_poste, false, "objeto")
+	prop_ids["poste"] = cat_models.size() - 1
 # farol: columna, brazo hacia +X y farola que brilla de noche (la cabeza queda en x = 0,8, y = 2,8)
 func rc_farol(lod: int, _f: int, _w: float) -> void:
 	if lod == LOD_FAR:
@@ -5595,6 +5599,108 @@ func emit_car(k: int, x: float, y: float, z: float, rot: float) -> void:
 	var taxi: bool = m == prop_ids["taxi"]
 	var col: Color = Color(0.06, 0.06, 0.07) if taxi else car_color(k)
 	emit_model(m, 0, x, y, z, rot, 1.0, col, Vector4(0, 6.0 / 8.0, hsh(k, 92), 0))
+
+# --- mobiliario (marco del objeto: el frente mira a +Z, que es la calle)
+func rc_banco(_lod: int, _f: int, _w: float) -> void:
+	mb_box(Vector3(0, 0.22, 0), Vector3(0.9, 0.05, 0.3), BM_WOOD, 0)
+	mb_box(Vector3(0, 0.3, -0.13), Vector3(0.9, 0.25, 0.04), BM_WOOD, 0)
+	for x in [-0.38, 0.38]:
+		mb_box(Vector3(x, 0, 0), Vector3(0.05, 0.22, 0.28), BM_PAINTED, 0, 63 - 8)
+func rc_tacho(_lod: int, _f: int, _w: float) -> void:
+	mb_cyl(Vector3.ZERO, 0.13, 0.45, 8, BM_PAINTED, 2)
+	mb_box(Vector3(0, 0, 0.0), Vector3(0.04, 0.55, 0.04), BM_PAINTED, 0, 63 - 8)
+func rc_bolardo(_lod: int, _f: int, _w: float) -> void:
+	mb_cyl(Vector3.ZERO, 0.06, 0.4, 6, BM_CONCRETE, 0)
+func rc_cantero(_lod: int, _f: int, _w: float) -> void:
+	mb_box(Vector3.ZERO, Vector3(0.9, 0.3, 0.4), BM_CONCRETE, 0, 63 - 8 - 4)
+	mb_quad(Vector3(-0.42, 0.26, 0.17), Vector3(0.42, 0.26, 0.17), Vector3(0.42, 0.26, -0.17), Vector3(-0.42, 0.26, -0.17), BM_TURF, 0)
+	for x in [-0.25, 0.05, 0.3]:
+		mb_blob(Vector3(x, 0.38, 0), Vector3(0.16, 0.14, 0.14), 5, 3, int(x * 100.0) + 7)
+func rc_parada(_lod: int, _f: int, _w: float) -> void:
+	# refugio de colectivo: techito, vidrio atrás y banco
+	mb_box(Vector3(0, 1.15, 0), Vector3(1.4, 0.05, 0.6), BM_PAINTED, 2)
+	for x in [-0.66, 0.66]:
+		mb_box(Vector3(x, 0, -0.25), Vector3(0.05, 1.15, 0.05), BM_PAINTED, 0, 63 - 8)
+	mb_quad(Vector3(0.66, 0.15, -0.27), Vector3(-0.66, 0.15, -0.27), Vector3(-0.66, 1.1, -0.27), Vector3(0.66, 1.1, -0.27), BM_GLASS, 0, Vector2(0, 60), Vector2(1, 61))
+	mb_quad(Vector3(-0.66, 0.15, -0.27), Vector3(0.66, 0.15, -0.27), Vector3(0.66, 1.1, -0.27), Vector3(-0.66, 1.1, -0.27), BM_GLASS, 0, Vector2(0, 60), Vector2(1, 61))
+	mb_box(Vector3(0, 0.25, -0.15), Vector3(1.0, 0.05, 0.22), BM_WOOD, 0)
+func rc_cartel_calle(_lod: int, _f: int, _w: float) -> void:
+	mb_box(Vector3.ZERO, Vector3(0.05, 1.9, 0.05), BM_PAINTED, 0, 63 - 8)
+	mb_box(Vector3(0.2, 1.8, 0), Vector3(0.5, 0.12, 0.02), BM_PLAIN, 2)
+	mb_box(Vector3(0, 1.62, 0.2), Vector3(0.02, 0.12, 0.5), BM_PLAIN, 2)
+func rc_pare(_lod: int, _f: int, _w: float) -> void:
+	mb_box(Vector3.ZERO, Vector3(0.05, 1.5, 0.05), BM_PAINTED, 0, 63 - 8)
+	mb_cyl(Vector3(0, 1.45, 0.03), 0.17, 0.02, 8, BM_PLAIN, 2)
+# poste de madera con cruceta (los cables los pone otro objeto)
+func rc_poste(lod: int, _f: int, _w: float) -> void:
+	if lod == LOD_FAR:
+		mb_box(Vector3.ZERO, Vector3(0.14, 4.0, 0.14), BM_WOOD, 0, 63 - 8)
+		return
+	mb_cyl(Vector3.ZERO, 0.08, 4.0, 6, BM_WOOD, 0)
+	mb_box(Vector3(0, 3.55, 0), Vector3(1.4, 0.08, 0.08), BM_WOOD, 0)
+	if lod == LOD_NEAR:
+		for x in [-0.6, 0.0, 0.6]:
+			mb_cyl(Vector3(x, 3.63, 0), 0.025, 0.07, 5, BM_PLAIN, 0)
+# cable entre dos postes (una celda a lo largo de +X), con comba: tres hilos en 4 tramos
+func rc_cable(_lod: int, _f: int, _w: float) -> void:
+	for x in [-0.6, 0.0, 0.6]:
+		var pts: Array = []
+		for k in 5:
+			var t := k / 4.0
+			pts.append(Vector3(t * CELL, 3.66 - 0.35 * 4.0 * t * (1.0 - t), x))
+		for k in 4:
+			var a: Vector3 = pts[k]
+			var b: Vector3 = pts[k + 1]
+			mb_quad(Vector3(a.x, a.y - 0.012, a.z), Vector3(b.x, b.y - 0.012, b.z), Vector3(b.x, b.y + 0.012, b.z), Vector3(a.x, a.y + 0.012, a.z), BM_DARK, 0)
+			mb_quad(Vector3(b.x, b.y - 0.012, b.z), Vector3(a.x, a.y - 0.012, a.z), Vector3(a.x, a.y + 0.012, a.z), Vector3(b.x, b.y + 0.012, b.z), BM_DARK, 0)
+# --- ubicación del mobiliario en una cuadra recta (la llama emit_road). horiz: la calle va a lo largo de X
+func emit_street_furniture(i: int, p: Vector3, y: float, t: int, horiz: bool) -> void:
+	for side in [-1, 1]:
+		var j: int = i + (N * side if horiz else side)
+		if j < 0 or j >= N * N:
+			continue
+		# vereda de este lado: a 0,44 celdas del centro; "fw" apunta a la calle
+		var off := Vector2(0, side * CELL * 0.44) if horiz else Vector2(side * CELL * 0.44, 0)
+		var along := Vector2(1, 0) if horiz else Vector2(0, 1)
+		var rot := (PI if side > 0 else 0.0) if horiz else (-PI * 0.5 if side > 0 else PI * 0.5)
+		var bx := p.x + off.x
+		var bz := p.z + off.y
+		if zone[j] == Z_R and lvl[j] >= 1 and t == 2 and hsh(i, side + 30) < 0.35:
+			# árbol de vereda (chico)
+			var kind: int = [1, 2, 3, 1][int(hsh(i, side + 31) * 4.0) % 4]
+			var tm: Array = tree_models[kind]
+			var tc := tree_colors(kind)
+			var x := bx + along.x * CELL * 0.22
+			var z := bz + along.y * CELL * 0.22
+			emit_model(tm[int(hsh(i, side + 32) * 3.0) % 3], 1 if float(tc[1]) < 0.6 else 0, x, y, z, hsh(i, side + 33) * TAU, 0.6, tc[0], Vector4(0, 0, hsh(i, side + 34), 0))
+		if zone[j] == Z_C and lvl[j] >= 1:
+			var h := hsh(i, side + 35)
+			if h < 0.25:
+				emit_model(prop_ids["banco"], 0, bx - along.x * 0.6, y, bz - along.y * 0.6, rot, 1.0, Color(1, 1, 1), Vector4(0, 0, h, 0))
+				emit_model(prop_ids["tacho"], 0, bx + along.x * 0.5, y, bz + along.y * 0.5, rot, 1.0, Color(1, 1, 1), Vector4(0, 0.0, h, 0))
+			elif h < 0.35:
+				emit_model(prop_ids["cantero"], 0, bx, y, bz, rot, 1.0, Color(1, 1, 1), Vector4(0, 0, h, 0))
+		if side == -1 and stops.has(i):
+			emit_model(prop_ids["parada"], 0, bx, y, bz, rot, 1.0, Color(1, 1, 1), Vector4(0, 3.0 / 8.0, 0.5, 0))
+# esquinas de un cruce: cartel con nombre de calle, PARE si no hay semáforo, bolardos si hay avenida
+func emit_corner_props(i: int, p: Vector3, y: float, av: bool) -> void:
+	var c := CELL * 0.44
+	emit_model(prop_ids["cartel_calle"], 0, p.x + c, y, p.z + c, 0.0, 1.0, Color(1, 1, 1), Vector4(0, 3.0 / 8.0, 0.3, 0))
+	if not av and hsh(i, 95) < 0.3:
+		emit_model(prop_ids["pare"], 0, p.x - c, y, p.z - c, PI * 0.25, 1.0, Color(1, 1, 1), Vector4(0, 2.0 / 8.0, 0.3, 0))
+	if av:
+		for k in 4:
+			var sx := 1.0 if k == 0 or k == 3 else -1.0
+			var sz := 1.0 if k < 2 else -1.0
+			emit_model(prop_ids["bolardo"], 0, p.x + sx * CELL * 0.36, y, p.z + sz * CELL * 0.47, 0.0, 1.0, Color(1, 1, 1), Vector4.ZERO)
+# tendido eléctrico: poste en la celda y cable hacia los vecinos de +X y +Z que también tienen tendido
+func emit_power(i: int, p: Vector3) -> void:
+	var y := ground_y(p.x, p.z) - 0.05
+	emit_model(prop_ids["poste"], 0, p.x, y, p.z, 0.0, 1.0, Color(1, 1, 1), Vector4.ZERO)
+	if cx(i) < N - 1 and wire[i + 1] & W_POWER:
+		emit_model(prop_ids["cable"], 0, p.x, y, p.z, 0.0, 1.0, Color(1, 1, 1), Vector4.ZERO)
+	if cz(i) < N - 1 and wire[i + N] & W_POWER:
+		emit_model(prop_ids["cable"], 0, p.x, y, p.z, -PI * 0.5, 1.0, Color(1, 1, 1), Vector4.ZERO)
 # ================================================================ src/specials.gd
 # Edificios especiales de la etapa 2e: una receta por cada uno.
 # ================================================================ src/camera.gd
@@ -9230,6 +9336,7 @@ func show_info(c: int) -> void:
 	if stops.has(c):
 		r.add_child(mk_btn("Quitar parada", func():
 			stops.erase(c)
+			mark_dirty(c)
 			for ln in lines:
 				ln["stops"] = ln["stops"].filter(func(s): return s != c)
 				route_line(ln)
@@ -11300,6 +11407,9 @@ func catalog_check() -> void:
 				var nv: Array = []
 				for lod in 3:
 					var tag := "CATALOG_CHECK %s f=%d lod=%d " % [md["id"], f, lod]
+					if md["near_only"] and lod != LOD_NEAR:
+						nv.append(0)
+						continue
 					var mesh: ArrayMesh = cat_mesh(m, f, lod)
 					if mesh == null or mesh.get_surface_count() != 1:
 						bt(false, tag + "FALLA sin malla")
@@ -11314,6 +11424,8 @@ func catalog_check() -> void:
 					var lim := w * 0.5 + 0.2
 					if md["fam"] == "arbol":
 						lim = 2.4
+					elif md["id"] == "cable":
+						lim = CELL + 0.2
 					var why := ""
 					if ab.position.x < -lim or ab.position.z < -lim or ab.end.x > lim or ab.end.z > lim:
 						why += " huella %s > %.2f" % [str(ab), lim]
@@ -11332,7 +11444,7 @@ func catalog_check() -> void:
 						if (mt == BM_TILES or mt == BM_SHEET) and ns[vi].y > 0.45 and ns[vi].y < SNOW_NY:
 							why += " techo sin nieve (normal.y %.2f < %.2f)" % [ns[vi].y, SNOW_NY]
 							break
-					if lod == 2 and nv[0] > 0 and vs.size() >= nv[0]:
+					if lod == 2 and nv[0] > 0 and vs.size() >= nv[0] and not md["near_only"]:
 						why += " la versión lejos no es más liviana (%d >= %d)" % [vs.size(), nv[0]]
 					bt(why == "", tag + ("ok" if why == "" else "FALLA" + why))
 	print("BENCH catalog_ms=%d" % ((Time.get_ticks_usec() - t0) / 1000))
@@ -11548,6 +11660,21 @@ func prop_check() -> void:
 	var ids := {}
 	for m in cat_models.size():
 		ids[cat_models[m]["id"]] = m
+	# tendido de prueba: tres postes seguidos en campo libre (la ciudad de prueba no tiene)
+	var pw := 0
+	for i in N * N:
+		if wire[i] & W_POWER and road[i] == 0 and bld[i] == 0 and zone[i] == 0:
+			pw += 1
+	if pw == 0:
+		for i in range(N * 10 + 5, N * N - 3):
+			var free := true
+			for k in 3:
+				if road[i + k] > 0 or bld[i + k] > 0 or zone[i + k] > 0 or terr[i + k] == T_WATER:
+					free = false
+			if free:
+				for k in 3:
+					wire[i + k] |= W_POWER
+				break
 	bcheck_on = true
 	mcheck_log.clear()
 	lamps.clear()
@@ -11583,8 +11710,40 @@ func prop_check() -> void:
 				why += " auto fuera de la calle en %d" % i
 	if nf != lamps.size():
 		why += " faroles %d != luces %d" % [nf, lamps.size()]
+	# parte 2: mobiliario y carteles solo en calles (o vereda); postes y cables solo donde hay tendido
+	var furn := ["banco", "tacho", "bolardo", "cantero", "parada", "cartel_calle", "pare"]
+	var nm := 0
+	var np := 0
+	var nv := 0
+	for e in mcheck_log:
+		var c: Vector2i = e[0]
+		if not inb(c.x, c.y):
+			continue
+		var i := idx(c.x, c.y)
+		var id: String = cat_models[e[1]]["id"]
+		if id in furn:
+			nm += 1
+			if road[i] == 0 or terr[i] == T_WATER:
+				why += " %s fuera de la calle en %d" % [id, i]
+		elif id == "poste" or id == "cable":
+			np += 1
+			if not (wire[i] & W_POWER):
+				why += " %s sin tendido en %d" % [id, i]
+		elif cat_models[e[1]]["fam"] == "arbol" and road[i] > 0:
+			nv += 1
+	if nm == 0 or np == 0 or nv == 0:
+		why += " sin mobiliario (%d), postes (%d) o árboles de vereda (%d)" % [nm, np, nv]
 	if ns == 0 or nc == 0:
 		why += " sin semáforos (%d) o sin autos (%d)" % [ns, nc]
+	# con la cámara lejos no hay nodos visibles de objetos "solo cerca"
+	var vis := 0
+	if not b_near_on:
+		for cn in bnodes:
+			for k in cn:
+				if cat_models[k / 192]["near_only"] and cn[k].visible and cn[k].multimesh.instance_count > 0:
+					vis += 1
+	if vis > 0:
+		why += " %d nodos de objetos chicos visibles lejos" % vis
 	bt(why == "", "PROP_CHECK faroles %d semáforos %d autos %d " % [nf, ns, nc] + ("ok" if why == "" else "FALLA" + why.substr(0, 400)))
 # toma de cerca sobre el cruce con avenida más cercano al centro (semáforos, faroles, autos)
 func album_street(h: float) -> void:

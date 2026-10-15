@@ -1999,6 +1999,7 @@ func show_info(c: int) -> void:
 	if stops.has(c):
 		r.add_child(mk_btn("Quitar parada", func():
 			stops.erase(c)
+			mark_dirty(c)
 			for ln in lines:
 				ln["stops"] = ln["stops"].filter(func(s): return s != c)
 				route_line(ln)

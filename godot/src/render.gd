@@ -957,6 +957,7 @@ func emit_road(i: int, p: Vector3) -> void:
 				av = true
 		if av:
 			emit_semaforos(i, p, y + 0.2)
+		emit_corner_props(i, p, y + 0.26, av)
 	var horiz := (e or w) and not (s or n)
 	var vert := (s or n) and not (e or w)
 	if t >= 2 and not bridge:
@@ -997,6 +998,8 @@ func emit_road(i: int, p: Vector3) -> void:
 			var ao := Vector2(0, 0.8) if horiz else Vector2(0.8, 0)
 			emit_farol(p.x + lo.x, y + 0.26, p.z + lo.y, ao.x, ao.y)
 			lamps[i] = Vector3(p.x + lo.x + ao.x, y, p.z + lo.y + ao.y)
+		if t >= 2 and not bridge:
+			emit_street_furniture(i, p, y + 0.26, t, horiz)
 		if t == 2 and opts["quality"] >= 1:
 			for side in [-1, 1]:
 				var j: int = i + (N * side if horiz else side)
@@ -1007,14 +1010,7 @@ func car_color(k: int) -> Color:
 	var pal := [Color(0.85, 0.85, 0.87), Color(0.15, 0.15, 0.17), Color(0.7, 0.12, 0.1), Color(0.2, 0.3, 0.6), Color(0.55, 0.57, 0.6), Color(0.9, 0.75, 0.2), Color(0.25, 0.45, 0.3)]
 	return pal[absi(k) % pal.size()]
 func emit_cable(i: int, p: Vector3) -> void:
-	em(M_BOX, p.x, p.y, p.z, 0.2, 4.0, 0.2, 0.0, Color(0.45, 0.35, 0.25))
-	em(M_BOX, p.x, p.y + 3.6, p.z, 1.6, 0.12, 0.12, 0.0, Color(0.45, 0.35, 0.25))
-	var x := cx(i)
-	var z := cz(i)
-	if x < N - 1 and wire[i + 1] & W_POWER:
-		em(M_BOX, p.x + CELL * 0.5, p.y + 3.6, p.z, CELL, 0.05, 0.05, 0.0, Color(0.1, 0.1, 0.1))
-	if z < N - 1 and wire[i + N] & W_POWER:
-		em(M_BOX, p.x, p.y + 3.6, p.z + CELL * 0.5, 0.05, 0.05, CELL, 0.0, Color(0.1, 0.1, 0.1))
+	emit_power(i, p)
 func tree_colors(kind: int) -> Array:
 	var s := season()
 	var snowy := weather == "Nieve"

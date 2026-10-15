@@ -1045,6 +1045,9 @@ func catalog_check() -> void:
 				var nv: Array = []
 				for lod in 3:
 					var tag := "CATALOG_CHECK %s f=%d lod=%d " % [md["id"], f, lod]
+					if md["near_only"] and lod != LOD_NEAR:
+						nv.append(0)
+						continue
 					var mesh: ArrayMesh = cat_mesh(m, f, lod)
 					if mesh == null or mesh.get_surface_count() != 1:
 						bt(false, tag + "FALLA sin malla")
@@ -1059,6 +1062,8 @@ func catalog_check() -> void:
 					var lim := w * 0.5 + 0.2
 					if md["fam"] == "arbol":
 						lim = 2.4
+					elif md["id"] == "cable":
+						lim = CELL + 0.2
 					var why := ""
 					if ab.position.x < -lim or ab.position.z < -lim or ab.end.x > lim or ab.end.z > lim:
 						why += " huella %s > %.2f" % [str(ab), lim]
@@ -1077,7 +1082,7 @@ func catalog_check() -> void:
 						if (mt == BM_TILES or mt == BM_SHEET) and ns[vi].y > 0.45 and ns[vi].y < SNOW_NY:
 							why += " techo sin nieve (normal.y %.2f < %.2f)" % [ns[vi].y, SNOW_NY]
 							break
-					if lod == 2 and nv[0] > 0 and vs.size() >= nv[0]:
+					if lod == 2 and nv[0] > 0 and vs.size() >= nv[0] and not md["near_only"]:
 						why += " la versión lejos no es más liviana (%d >= %d)" % [vs.size(), nv[0]]
 					bt(why == "", tag + ("ok" if why == "" else "FALLA" + why))
 	print("BENCH catalog_ms=%d" % ((Time.get_ticks_usec() - t0) / 1000))
@@ -1293,6 +1298,21 @@ func prop_check() -> void:
 	var ids := {}
 	for m in cat_models.size():
 		ids[cat_models[m]["id"]] = m
+	# tendido de prueba: tres postes seguidos en campo libre (la ciudad de prueba no tiene)
+	var pw := 0
+	for i in N * N:
+		if wire[i] & W_POWER and road[i] == 0 and bld[i] == 0 and zone[i] == 0:
+			pw += 1
+	if pw == 0:
+		for i in range(N * 10 + 5, N * N - 3):
+			var free := true
+			for k in 3:
+				if road[i + k] > 0 or bld[i + k] > 0 or zone[i + k] > 0 or terr[i + k] == T_WATER:
+					free = false
+			if free:
+				for k in 3:
+					wire[i + k] |= W_POWER
+				break
 	bcheck_on = true
 	mcheck_log.clear()
 	lamps.clear()
@@ -1328,8 +1348,40 @@ func prop_check() -> void:
 				why += " auto fuera de la calle en %d" % i
 	if nf != lamps.size():
 		why += " faroles %d != luces %d" % [nf, lamps.size()]
+	# parte 2: mobiliario y carteles solo en calles (o vereda); postes y cables solo donde hay tendido
+	var furn := ["banco", "tacho", "bolardo", "cantero", "parada", "cartel_calle", "pare"]
+	var nm := 0
+	var np := 0
+	var nv := 0
+	for e in mcheck_log:
+		var c: Vector2i = e[0]
+		if not inb(c.x, c.y):
+			continue
+		var i := idx(c.x, c.y)
+		var id: String = cat_models[e[1]]["id"]
+		if id in furn:
+			nm += 1
+			if road[i] == 0 or terr[i] == T_WATER:
+				why += " %s fuera de la calle en %d" % [id, i]
+		elif id == "poste" or id == "cable":
+			np += 1
+			if not (wire[i] & W_POWER):
+				why += " %s sin tendido en %d" % [id, i]
+		elif cat_models[e[1]]["fam"] == "arbol" and road[i] > 0:
+			nv += 1
+	if nm == 0 or np == 0 or nv == 0:
+		why += " sin mobiliario (%d), postes (%d) o árboles de vereda (%d)" % [nm, np, nv]
 	if ns == 0 or nc == 0:
 		why += " sin semáforos (%d) o sin autos (%d)" % [ns, nc]
+	# con la cámara lejos no hay nodos visibles de objetos "solo cerca"
+	var vis := 0
+	if not b_near_on:
+		for cn in bnodes:
+			for k in cn:
+				if cat_models[k / 192]["near_only"] and cn[k].visible and cn[k].multimesh.instance_count > 0:
+					vis += 1
+	if vis > 0:
+		why += " %d nodos de objetos chicos visibles lejos" % vis
 	bt(why == "", "PROP_CHECK faroles %d semáforos %d autos %d " % [nf, ns, nc] + ("ok" if why == "" else "FALLA" + why.substr(0, 400)))
 # toma de cerca sobre el cruce con avenida más cercano al centro (semáforos, faroles, autos)
 func album_street(h: float) -> void:

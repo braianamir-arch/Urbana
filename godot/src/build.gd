@@ -258,6 +258,7 @@ func demolish_cell(c: int) -> void:
 	if road[c] > 0:
 		road[c] = 0
 		stops.erase(c)
+		mark_dirty(c)
 		wire[c] &= ~(W_BIKE | W_TRAM | W_ROUND)
 	tree[c] = 0
 	wire[c] = 0
@@ -453,6 +454,7 @@ func place_stop(c: int, kind: String) -> void:
 		toast("No alcanza la plata")
 		return
 	stops[c] = kind
+	mark_dirty(c)
 	if not creative:
 		money -= 60
 	sim_dirty = true
