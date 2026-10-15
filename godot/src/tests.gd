@@ -856,8 +856,33 @@ func run_album(dir: String) -> void:
 				tot += v
 			print("BENCH frame_ms=%.2f" % (tot / maxf(album_frames.size(), 1) / 1000.0))
 	var need := 180 if album_shots[album_k][0] == "mediodia" else 90
+	if album_wait == need and album_shots[album_k][0] in ["mediodia", "cerros"]:
+		terrain_check()
 	if album_wait >= need:
 		get_viewport().get_texture().get_image().save_png(dir + "/" + album_shots[album_k][0] + ".png")
 		print("captura ", album_shots[album_k][0])
 		album_k += 1
 		album_wait = 0
+# el terreno suavizado no puede mover el suelo de las celdas ocupadas: en ellas los puntos nuevos de
+# la malla fina tienen que caer sobre los triángulos de antes (bordes = promedio, centro = diagonal a-d)
+func terrain_check() -> void:
+	if not use_tex_terrain() or terrain_hsub.is_empty():
+		print("TERRAIN_CHECK sin malla fina")
+		return
+	var M := 2 * N + 1
+	var bad := 0
+	var cells := 0
+	for z in N:
+		for x in N:
+			if not terrain_busy(x, z):
+				continue
+			cells += 1
+			var a := terrain_hsub[(2 * z) * M + 2 * x]
+			var b := terrain_hsub[(2 * z) * M + 2 * x + 2]
+			var c := terrain_hsub[(2 * z + 2) * M + 2 * x]
+			var d := terrain_hsub[(2 * z + 2) * M + 2 * x + 2]
+			var want := [[2 * x + 1, 2 * z, (a + b) * 0.5], [2 * x + 1, 2 * z + 2, (c + d) * 0.5], [2 * x, 2 * z + 1, (a + c) * 0.5], [2 * x + 2, 2 * z + 1, (b + d) * 0.5], [2 * x + 1, 2 * z + 1, (a + d) * 0.5]]
+			for w in want:
+				if absf(terrain_hsub[int(w[1]) * M + int(w[0])] - float(w[2])) > 0.001:
+					bad += 1
+	print("TERRAIN_CHECK ok (%d celdas ocupadas)" % cells if bad == 0 else "TERRAIN_CHECK FALLA %d puntos" % bad)

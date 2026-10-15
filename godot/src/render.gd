@@ -9,6 +9,9 @@ var city_mat: ShaderMaterial
 var water_mat: ShaderMaterial
 var overlay_mat: ShaderMaterial
 var terrain_mat: ShaderMaterial
+var terrain_simple_mat: ShaderMaterial
+var terrain_tex_loaded: bool = false
+var terrain_hsub := PackedFloat32Array()
 var dtex: ImageTexture
 var ctex: ImageTexture
 var terrain_node: MeshInstance3D
@@ -21,7 +24,8 @@ var sky_mat: ShaderMaterial
 var cloud_drift := Vector2.ZERO
 const SHADER_CITY := preload("res://shaders/city.gdshader")
 const SHADER_WATER := preload("res://shaders/water.gdshader")
-const SHADER_TERRAIN := preload("res://shaders/terrain.gdshader")
+const SHADER_TERRAIN := preload("res://shaders/terrain_simple.gdshader")
+const SHADER_TERRAIN_TEX := preload("res://shaders/terrain.gdshader")
 const SHADER_SKY := preload("res://shaders/sky.gdshader")
 const SHADER_GLOW := preload("res://shaders/glow.gdshader")
 const SHADER_OVERLAY := preload("res://shaders/overlay.gdshader")
@@ -77,11 +81,13 @@ func setup_render() -> void:
 	overlay_mat.shader = so
 	dtex = make_noise_tex(0.045, 11, 4)
 	ctex = make_noise_tex(0.02, 29, 5)
-	terrain_mat = ShaderMaterial.new()
+	terrain_simple_mat = ShaderMaterial.new()
 	var st2 := Shader.new()
 	st2.code = SHADER_TERRAIN.code
-	terrain_mat.shader = st2
-	for m in [city_mat, terrain_mat]:
+	terrain_simple_mat.shader = st2
+	terrain_mat = ShaderMaterial.new()
+	terrain_mat.shader = SHADER_TERRAIN_TEX
+	for m in [city_mat, terrain_mat, terrain_simple_mat]:
 		m.set_shader_parameter("dtex", dtex)
 		m.set_shader_parameter("ctex", ctex)
 	env = Environment.new()
@@ -234,7 +240,8 @@ func apply_fx() -> void:
 	city_mat.set_shader_parameter("ao_on", 1.0 if opts["g_ao"] else 0.0)
 	var dt: float = 1.0 if opts["g_detail"] else 0.0
 	city_mat.set_shader_parameter("det", dt)
-	terrain_mat.set_shader_parameter("det", dt)
+	terrain_simple_mat.set_shader_parameter("det", dt)
+	terrain_dirty = true
 	sky_mat.set_shader_parameter("clouds_on", 1.0 if opts["g_clouds"] else 0.0)
 	cloud_cover = -1.0
 	env.adjustment_enabled = opts["g_grade"]
@@ -324,10 +331,12 @@ func update_fx() -> void:
 			sky_mat.set_shader_parameter("storm", 1.0 if weather in ["Lluvia", "Tormenta", "Nieve"] else 0.0)
 			city_mat.set_shader_parameter("cshadow", cv)
 			terrain_mat.set_shader_parameter("cshadow", cv)
+			terrain_simple_mat.set_shader_parameter("cshadow", cv)
 	elif cloud_cover != 0.0:
 		cloud_cover = 0.0
 		city_mat.set_shader_parameter("cshadow", 0.0)
 		terrain_mat.set_shader_parameter("cshadow", 0.0)
+		terrain_simple_mat.set_shader_parameter("cshadow", 0.0)
 	var want := ""
 	if opts["g_rain"] and opts["quality"] >= 1 and started:
 		if weather == "Lluvia" or weather == "Tormenta":
@@ -348,8 +357,14 @@ func update_fx() -> void:
 		if absf(r - wfx_r) > 5.0:
 			wfx_r = r
 			(wfx.process_material as ParticleProcessMaterial).emission_box_extents = Vector3(r, 1, r)
+func use_tex_terrain() -> bool:
+	return int(opts["quality"]) >= 1 and bool(opts["g_detail"])
 func build_terrain() -> void:
 	terrain_dirty = false
+	if use_tex_terrain():
+		build_terrain_tex()
+		return
+	terrain_node.material_override = terrain_simple_mat
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var s := season()
@@ -396,13 +411,176 @@ func build_terrain() -> void:
 	for z in N + 1:
 		for x in N + 1:
 			himg.set_pixel(x, z, Color(vh[z * (N + 1) + x], 0.0, 0.0))
-	var htex := ImageTexture.create_from_image(himg)
-	city_mat.set_shader_parameter("hmap", htex)
-	water_mat.set_shader_parameter("hmap", htex)
-	water_mat.set_shader_parameter("hinfo", Vector4(N * CELL, half, float(N) / float(N + 1), 0.5 / float(N + 1)))
-	city_mat.set_shader_parameter("hinfo", Vector4(N * CELL, half, float(N) / float(N + 1), 0.5 / float(N + 1)))
+	set_hmap(himg)
 	st.generate_normals()
 	terrain_node.mesh = st.commit()
+	build_outer(grass)
+func set_hmap(himg: Image) -> void:
+	var half := N * CELL * 0.5
+	var htex := ImageTexture.create_from_image(himg)
+	var hi := Vector4(N * CELL, half, float(N) / float(N + 1), 0.5 / float(N + 1))
+	for m in [city_mat, water_mat, terrain_mat]:
+		m.set_shader_parameter("hmap", htex)
+		m.set_shader_parameter("hinfo", hi)
+func load_terrain_tex() -> void:
+	if terrain_tex_loaded:
+		return
+	terrain_tex_loaded = true
+	for mat in ["grass", "dry", "dirt", "rock", "sand", "snow"]:
+		terrain_mat.set_shader_parameter("alb_" + mat, load("res://assets/terrain/%s_alb.webp" % mat))
+	for mat in ["grass", "dirt", "rock", "sand"]:
+		terrain_mat.set_shader_parameter("nrm_" + mat, load("res://assets/terrain/%s_nrm.webp" % mat))
+# celda "ocupada": su suelo no se suaviza (calles, zonas, edificios, diques y árboles se quedan como hoy)
+func terrain_busy(x: int, z: int) -> bool:
+	if not inb(x, z):
+		return false
+	var i := idx(x, z)
+	return road[i] > 0 or zone[i] > 0 or bld[i] > 0 or tree[i] > 0 or (wire[i] & W_LEVEE) != 0
+# Catmull-Rom en el punto medio
+func cr_mid(p0: float, p1: float, p2: float, p3: float) -> float:
+	return (-p0 + 9.0 * p1 + 9.0 * p2 - p3) / 16.0
+# pesos del splat de una celda: pasto, arena, roca, tierra
+func cell_splat(i: int) -> Color:
+	match terr[i]:
+		T_SAND:
+			return Color(0, 1, 0, 0)
+		T_ROCK:
+			return Color(0, 0, 1, 0)
+		T_WATER:
+			return Color(0, 0.35, 0, 0.65)
+	var x := cx(i)
+	var z := cz(i)
+	var sl := 0.0
+	for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if inb(x + o.x, z + o.y):
+			sl = maxf(sl, absf(hgt[idx(x + o.x, z + o.y)] - hgt[i]))
+	var rock := clampf((sl - 0.6) / 0.8, 0.0, 1.0)
+	var dirt := 0.6 if (wdist[i] <= 1.0 and hgt[i] < 0.5) else 0.0
+	var g := maxf(0.0, 1.0 - rock - dirt)
+	return Color(g, 0, rock, dirt)
+# Terreno con texturas (Media y Alta): malla de 2×2 por celda. Las esquinas de celda quedan a la
+# altura de hoy; los puntos nuevos se suavizan, salvo junto a celdas ocupadas, donde caen sobre los
+# mismos triángulos de antes (diagonal a-d), así nada queda flotando ni enterrado.
+func build_terrain_tex() -> void:
+	load_terrain_tex()
+	terrain_node.material_override = terrain_mat
+	var s := season()
+	var half := N * CELL * 0.5
+	var N1 := N + 1
+	var vh := PackedFloat32Array()
+	vh.resize(N1 * N1)
+	var own := PackedFloat32Array()
+	own.resize(N1 * N1)
+	var sp := PackedByteArray()
+	sp.resize(N1 * N1 * 4)
+	for z in N1:
+		for x in N1:
+			var hs := 0.0
+			var cnt := 0
+			var ow := 0.0
+			var c := Color(0, 0, 0, 0)
+			for o in [Vector2i(-1, -1), Vector2i(0, -1), Vector2i(-1, 0), Vector2i(0, 0)]:
+				var xx: int = x + o.x
+				var zz: int = z + o.y
+				if inb(xx, zz):
+					var i := idx(xx, zz)
+					hs += hgt[i]
+					cnt += 1
+					ow += 1.0 if is_owned(i) else 0.0
+					c += cell_splat(i)
+			var k := z * N1 + x
+			vh[k] = hs / maxf(cnt, 1)
+			own[k] = ow / maxf(cnt, 1)
+			c /= maxf(cnt, 1)
+			sp[k * 4] = int(c.r * 255.0)
+			sp[k * 4 + 1] = int(c.g * 255.0)
+			sp[k * 4 + 2] = int(c.b * 255.0)
+			sp[k * 4 + 3] = int(c.a * 255.0)
+	var himg := Image.create(N1, N1, false, Image.FORMAT_RH)
+	for z in N1:
+		for x in N1:
+			himg.set_pixel(x, z, Color(vh[z * N1 + x], 0.0, 0.0))
+	set_hmap(himg)
+	terrain_mat.set_shader_parameter("splat", ImageTexture.create_from_image(Image.create_from_data(N1, N1, false, Image.FORMAT_RGBA8, sp)))
+	terrain_mat.set_shader_parameter("season_dry", [0.08, 0.85, 0.55, 0.0][s] + (0.2 if weather == "Calor" else 0.0))
+	# malla fina: (2N+1)² vértices
+	var M := 2 * N + 1
+	var hsub := PackedFloat32Array()
+	hsub.resize(M * M)
+	for v in M:
+		for u in M:
+			var h := 0.0
+			var x0 := u >> 1
+			var z0 := v >> 1
+			if (u & 1) == 0 and (v & 1) == 0:
+				h = vh[z0 * N1 + x0]
+			elif (u & 1) == 1 and (v & 1) == 0:
+				# borde horizontal entre esquinas x0 y x0+1; lo tocan las celdas (x0, z0-1) y (x0, z0)
+				if terrain_busy(x0, z0 - 1) or terrain_busy(x0, z0):
+					h = (vh[z0 * N1 + x0] + vh[z0 * N1 + x0 + 1]) * 0.5
+				else:
+					h = cr_mid(vh[z0 * N1 + maxi(x0 - 1, 0)], vh[z0 * N1 + x0], vh[z0 * N1 + x0 + 1], vh[z0 * N1 + mini(x0 + 2, N)])
+			elif (u & 1) == 0 and (v & 1) == 1:
+				if terrain_busy(x0 - 1, z0) or terrain_busy(x0, z0):
+					h = (vh[z0 * N1 + x0] + vh[(z0 + 1) * N1 + x0]) * 0.5
+				else:
+					h = cr_mid(vh[maxi(z0 - 1, 0) * N1 + x0], vh[z0 * N1 + x0], vh[(z0 + 1) * N1 + x0], vh[mini(z0 + 2, N) * N1 + x0])
+			else:
+				# centro de la celda (x0, z0)
+				if terrain_busy(x0, z0):
+					h = (vh[z0 * N1 + x0] + vh[(z0 + 1) * N1 + x0 + 1]) * 0.5
+				else:
+					var col4 := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
+					for r in 4:
+						var zz := clampi(z0 - 1 + r, 0, N)
+						col4[r] = cr_mid(vh[zz * N1 + maxi(x0 - 1, 0)], vh[zz * N1 + x0], vh[zz * N1 + x0 + 1], vh[zz * N1 + mini(x0 + 2, N)])
+					h = cr_mid(col4[0], col4[1], col4[2], col4[3])
+			hsub[v * M + u] = h
+	terrain_hsub = hsub
+	var verts := PackedVector3Array()
+	verts.resize(M * M)
+	var nrms := PackedVector3Array()
+	nrms.resize(M * M)
+	var cols := PackedColorArray()
+	cols.resize(M * M)
+	var step := CELL * 0.5
+	for v in M:
+		for u in M:
+			var k := v * M + u
+			verts[k] = Vector3(u * step - half, hsub[k], v * step - half)
+			var hl := hsub[v * M + maxi(u - 1, 0)]
+			var hr := hsub[v * M + mini(u + 1, M - 1)]
+			var hd := hsub[maxi(v - 1, 0) * M + u]
+			var hu := hsub[mini(v + 1, M - 1) * M + u]
+			nrms[k] = Vector3(hl - hr, 2.0 * step, hd - hu).normalized()
+			var ow := own[(v >> 1) * N1 + (u >> 1)]
+			if (u & 1) == 1 or (v & 1) == 1:
+				ow = (ow + own[mini((v + 1) >> 1, N) * N1 + mini((u + 1) >> 1, N)]) * 0.5
+			cols[k] = Color(1, 1, 1, ow)
+	var ids := PackedInt32Array()
+	ids.resize((M - 1) * (M - 1) * 6)
+	var n := 0
+	for v in M - 1:
+		for u in M - 1:
+			var a := v * M + u
+			# misma diagonal que el terreno de hoy (a-d)
+			ids[n] = a
+			ids[n + 1] = a + 1
+			ids[n + 2] = a + M + 1
+			ids[n + 3] = a
+			ids[n + 4] = a + M + 1
+			ids[n + 5] = a + M
+			n += 6
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_NORMAL] = nrms
+	arr[Mesh.ARRAY_COLOR] = cols
+	arr[Mesh.ARRAY_INDEX] = ids
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	terrain_node.mesh = am
+	var grass: Color = [Color(0.42, 0.62, 0.28), Color(0.58, 0.55, 0.28), Color(0.62, 0.66, 0.6), Color(0.45, 0.68, 0.32)][s]
 	build_outer(grass)
 func terrain_color(i: int, grass: Color) -> Color:
 	var c: Color
@@ -1159,6 +1337,7 @@ func update_light() -> void:
 	env.fog_density = 0.0005 + cloudy * 0.0012 + (0.0005 if hour > 5.5 and hour < 8.0 else 0.0)
 	city_mat.set_shader_parameter("night", nf)
 	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
+	terrain_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)
 	water_mat.set_shader_parameter("night", nf)
 	city_mat.set_shader_parameter("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
 	env.glow_intensity = lerpf(0.22, 0.9, nf)

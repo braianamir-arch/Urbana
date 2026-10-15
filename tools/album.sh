@@ -10,7 +10,7 @@ python3 "$ROOT/tools/godot_modules.py" check >/dev/null || { echo "main.gd no es
 export XDG_DATA_HOME="$OUT/home"; rm -rf "$XDG_DATA_HOME"; mkdir -p "$XDG_DATA_HOME"
 timeout 1200 xvfb-run -a -s "-screen 0 1280x720x24" "$GODOT" --path "$ROOT/godot" --rendering-method mobile \
 	--rendering-driver vulkan --fixed-fps 60 --resolution 1280x720 --audio-driver Dummy -- "--test=album=$OUT${2:+:$2}" > "$OUT/album.log" 2>&1
-if grep -qE "SCRIPT ERROR|SHADER ERROR" "$OUT/album.log" || ! grep -q "ALBUM OK" "$OUT/album.log"; then
+if grep -qE "SCRIPT ERROR|SHADER ERROR|TERRAIN_CHECK FALLA" "$OUT/album.log" || ! grep -q "ALBUM OK" "$OUT/album.log"; then
 	echo "FALLA álbum (ver $OUT/album.log)"; exit 1
 fi
 grep "^BENCH" "$OUT/album.log"
