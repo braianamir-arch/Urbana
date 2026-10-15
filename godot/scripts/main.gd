@@ -2947,7 +2947,7 @@ func setup_render() -> void:
 	add_child(terrain_node)
 	water_node = MeshInstance3D.new()
 	var wp := PlaneMesh.new()
-	wp.size = Vector2(N * CELL * 5.0, N * CELL * 5.0)
+	wp.size = Vector2(N * CELL * 10.0, N * CELL * 10.0)
 	wp.subdivide_width = 90
 	wp.subdivide_depth = 90
 	water_node.mesh = wp
@@ -3059,7 +3059,8 @@ func apply_fx() -> void:
 	city_mat.set_shader_parameter("det", dt)
 	terrain_simple_mat.set_shader_parameter("det", dt)
 	terrain_dirty = true
-	sky_mat.set_shader_parameter("clouds_on", 1.0 if opts["g_clouds"] else 0.0)
+	# calidad Baja: cielo nuevo pero sin nubes
+	sky_mat.set_shader_parameter("clouds_on", 1.0 if (opts["g_clouds"] and int(opts["quality"]) >= 1) else 0.0)
 	cloud_cover = -1.0
 	env.adjustment_enabled = opts["g_grade"]
 	env.adjustment_saturation = 1.12
@@ -3134,7 +3135,7 @@ func config_wfx(kind: String) -> void:
 	wfx.preprocess = wfx.lifetime
 	wfx_r = 0.0
 func update_fx() -> void:
-	if opts["g_clouds"]:
+	if opts["g_clouds"] and int(opts["quality"]) >= 1:
 		cloud_drift += wind * get_process_delta_time() * 0.0035
 		sky_mat.set_shader_parameter("cloud_off", cloud_drift)
 		var cv := 0.45
@@ -3429,60 +3430,93 @@ func terrain_color(i: int, grass: Color) -> Color:
 		c = c.darkened(0.28)
 	return c
 var outer_nodes: Array = []
+var far_mat: ShaderMaterial
+# Horizonte: un anillo de terreno alrededor del mapa (hasta 5 veces su tamaño) con lomas suaves que se
+# pierden en la bruma. Junto al borde copia la altura del mapa (sin escalón); donde el borde es agua,
+# baja bajo el nivel del agua para que el agua siga hasta el horizonte.
 func build_outer(grass: Color) -> void:
 	for n in outer_nodes:
 		n.queue_free()
 	outer_nodes.clear()
 	var size := N * CELL
-	var sides := [[Vector2i(-1, 0), 0], [Vector2i(1, 0), 0], [Vector2i(0, -1), 0], [Vector2i(0, 1), 0]]
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = grass.darkened(0.12)
-	mat.roughness = 1.0
-	for sd in sides:
-		var dir: Vector2i = sd[0]
-		var water := 0
-		for k in N:
-			var x := 0
-			var z := 0
-			if dir.x != 0:
-				x = 0 if dir.x < 0 else N - 1
-				z = k
-			else:
-				z = 0 if dir.y < 0 else N - 1
-				x = k
-			if terr[idx(x, z)] == T_WATER:
-				water += 1
-		if water > N / 3:
-			continue
-		var m := MeshInstance3D.new()
-		var pm := PlaneMesh.new()
-		pm.size = Vector2(size * 2.0, size * 2.0) if dir.x != 0 else Vector2(size, size * 2.0)
-		m.mesh = pm
-		m.material_override = mat
-		m.position = Vector3(dir.x * size * 1.5, -0.05, dir.y * size * 1.5)
-		if dir.y != 0:
-			pm.size = Vector2(size * 4.0, size * 2.0)
-		add_child(m)
-		outer_nodes.append(m)
-		for h in 4:
-			var hill := MeshInstance3D.new()
-			var sm := SphereMesh.new()
-			sm.radius = 1.0
-			sm.height = 2.0
-			hill.mesh = sm
-			var hm := StandardMaterial3D.new()
-			hm.albedo_color = grass.darkened(0.25).lerp(Color(0.5, 0.6, 0.7), 0.3)
-			hill.material_override = hm
-			var off := (h - 1.5) * size * 0.55
-			var p := Vector3(dir.x * size * 1.4, -6.0, dir.y * size * 1.4)
-			if dir.x != 0:
-				p.z = off
-			else:
-				p.x = off
-			hill.position = p
-			hill.scale = Vector3(size * 0.35, 30.0 + h * 6.0, size * 0.3)
-			add_child(hill)
-			outer_nodes.append(hill)
+	var half := size * 0.5
+	var stp := size / 16.0
+	var R := 80
+	var G := 2 * R + 1
+	var nz := FastNoiseLite.new()
+	nz.seed = map_seed + 991
+	nz.frequency = 0.0016
+	nz.fractal_octaves = 4
+	var hv := PackedFloat32Array()
+	hv.resize(G * G)
+	for j in G:
+		for i in G:
+			var wx := (i - R) * stp
+			var wz := (j - R) * stp
+			# distancia al cuadrado del mapa (0 adentro y en el borde)
+			var dxo := maxf(absf(wx) - half, 0.0)
+			var dzo := maxf(absf(wz) - half, 0.0)
+			var dist := sqrt(dxo * dxo + dzo * dzo)
+			var bx := clampi(int((clampf(wx, -half, half - 0.01) + half) / CELL), 0, N - 1)
+			var bz := clampi(int((clampf(wz, -half, half - 0.01) + half) / CELL), 0, N - 1)
+			var bi := idx(bx, bz)
+			var base: float = WATER_Y - 2.5 if terr[bi] == T_WATER else hgt[bi]
+			var t := smoothstep(0.0, size * 1.2, dist)
+			var hills := (nz.get_noise_2d(wx, wz) * 0.5 + 0.5) * 70.0 * smoothstep(0.0, size * 0.6, dist)
+			if terr[bi] == T_WATER:
+				hills *= 0.15
+			hv[j * G + i] = lerpf(base, base + hills, t) if terr[bi] != T_WATER else base - 1.0 * t
+	var verts := PackedVector3Array()
+	var nrms := PackedVector3Array()
+	var cols := PackedColorArray()
+	verts.resize(G * G)
+	nrms.resize(G * G)
+	cols.resize(G * G)
+	for j in G:
+		for i in G:
+			var k := j * G + i
+			verts[k] = Vector3((i - R) * stp, hv[k], (j - R) * stp)
+			var hl := hv[j * G + maxi(i - 1, 0)]
+			var hr := hv[j * G + mini(i + 1, G - 1)]
+			var hd := hv[maxi(j - 1, 0) * G + i]
+			var hu := hv[mini(j + 1, G - 1) * G + i]
+			nrms[k] = Vector3(hl - hr, 2.0 * stp, hd - hu).normalized()
+			cols[k] = Color(1, 1, 1, 1)
+	var ids := PackedInt32Array()
+	for j in G - 1:
+		for i in G - 1:
+			# se saltean los cuadros que están adentro del mapa
+			var cxw := (i - R + 0.5) * stp
+			var czw := (j - R + 0.5) * stp
+			if absf(cxw) < half and absf(czw) < half:
+				continue
+			var a := j * G + i
+			ids.append_array(PackedInt32Array([a, a + 1, a + G + 1, a, a + G + 1, a + G]))
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_NORMAL] = nrms
+	arr[Mesh.ARRAY_COLOR] = cols
+	arr[Mesh.ARRAY_INDEX] = ids
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var m := MeshInstance3D.new()
+	m.mesh = am
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if use_tex_terrain():
+		if far_mat == null:
+			far_mat = terrain_mat.duplicate()
+		far_mat.set_shader_parameter("far", 1.0)
+		far_mat.set_shader_parameter("season_dry", terrain_mat.get_shader_parameter("season_dry"))
+		far_mat.set_shader_parameter("snow", terrain_mat.get_shader_parameter("snow"))
+		m.material_override = far_mat
+	else:
+		var sm := StandardMaterial3D.new()
+		sm.albedo_color = grass.darkened(0.12)
+		sm.roughness = 1.0
+		m.material_override = sm
+	add_child(m)
+	outer_nodes.append(m)
 func mark_dirty(i: int) -> void:
 	var x := cx(i)
 	var z := cz(i)
@@ -4169,6 +4203,8 @@ func update_light() -> void:
 	city_mat.set_shader_parameter("night", nf)
 	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
 	terrain_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)
+	if far_mat != null:
+		far_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)
 	water_mat.set_shader_parameter("night", nf)
 	water_mat.set_shader_parameter("wind_dir", wind)
 	water_mat.set_shader_parameter("rain", 1.0 if (weather == "Lluvia" or weather == "Tormenta") and int(opts["quality"]) >= 2 else 0.0)
@@ -9991,6 +10027,12 @@ func album_map(kind: int, want: int) -> void:
 	cam_dist = 120.0
 	cam_pitch = 0.7
 	cam_yaw = 0.5
+# calidad Baja (la última toma: cambia las opciones)
+func album_low() -> void:
+	opts["quality"] = 0
+	apply_quality()
+	apply_fx()
+	album_city(13.0, "Soleado", 3)
 func album_horizon(h: float) -> void:
 	album_city(h, "Soleado", 3)
 	update_light()
@@ -10023,6 +10065,7 @@ func run_album(dir: String) -> void:
 			["cerros", func(): album_map(1, T_ROCK)],
 			["horizonte_dia", func(): album_horizon(13.0)],
 			["horizonte_tarde", func(): album_horizon(19.5)],
+			["baja", func(): album_low()],
 		]
 		# --test=album=<carpeta>:toma1,toma2 saca solo esas tomas
 		if dir.contains(":"):
@@ -10044,7 +10087,10 @@ func run_album(dir: String) -> void:
 		card_queue.clear()
 	album_wait += 1
 	# en el mediodía se mide el tiempo por cuadro (cuadros 60 a 180)
-	if album_shots[album_k][0] == "mediodia" and album_wait >= 60:
+	var bench_shot: bool = album_shots[album_k][0] in ["mediodia", "baja"]
+	if bench_shot and album_wait == 1:
+		album_frames.clear()
+	if bench_shot and album_wait >= 60:
 		var now := Time.get_ticks_usec()
 		if album_wait > 60:
 			album_frames.append(now - album_t)
@@ -10053,8 +10099,8 @@ func run_album(dir: String) -> void:
 			var tot := 0.0
 			for v in album_frames:
 				tot += v
-			print("BENCH frame_ms=%.2f" % (tot / maxf(album_frames.size(), 1) / 1000.0))
-	var need := 180 if album_shots[album_k][0] == "mediodia" else 90
+			print("BENCH frame_ms%s=%.2f" % ["_baja" if album_shots[album_k][0] == "baja" else "", tot / maxf(album_frames.size(), 1) / 1000.0])
+	var need := 180 if bench_shot else 90
 	if album_wait == need and album_shots[album_k][0] in ["mediodia", "cerros"]:
 		terrain_check()
 	if album_wait >= need:

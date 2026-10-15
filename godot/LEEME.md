@@ -23,6 +23,18 @@ como una app aparte y no ve tus ciudades.
 > existente"), es porque se exportó con otra clave de firma: **no desinstales la app vieja**, porque
 > desinstalar borra todas las partidas. Avisá y lo resolvemos; con los códigos copiados no se pierde nada.
 
+## Gráficos (Opciones → Gráficos)
+
+| Calidad | Cielo | Suelo | Agua |
+|---|---|---|---|
+| **Alta** | atmósfera con nubes que se mueven | texturas fotográficas mezcladas (pasto, tierra, roca, arena, nieve) y lomas suaves | olas en dos capas, espuma en la orilla y anillos de gotas cuando llueve |
+| **Media** | igual que Alta | igual que Alta | una capa de olas, sin anillos de lluvia |
+| **Baja** | atmósfera sin nubes | el suelo simple de antes | agua simple |
+
+Si algo anda lento o se cierra, en la misma pantalla se pueden apagar por separado: texturas en suelo
+y paredes, nubes, agua con ondas, niebla, sombras y "color de cine". El botón **Modo seguro** apaga
+todo lo pesado de una vez.
+
 ## Cómo está organizado el código
 
 - `src/` tiene el código **separado por tema**: `world.gd` (mapa), `sim.gd` (simulación),

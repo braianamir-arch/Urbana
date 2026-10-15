@@ -792,6 +792,12 @@ func album_map(kind: int, want: int) -> void:
 	cam_dist = 120.0
 	cam_pitch = 0.7
 	cam_yaw = 0.5
+# calidad Baja (la última toma: cambia las opciones)
+func album_low() -> void:
+	opts["quality"] = 0
+	apply_quality()
+	apply_fx()
+	album_city(13.0, "Soleado", 3)
 func album_horizon(h: float) -> void:
 	album_city(h, "Soleado", 3)
 	update_light()
@@ -824,6 +830,7 @@ func run_album(dir: String) -> void:
 			["cerros", func(): album_map(1, T_ROCK)],
 			["horizonte_dia", func(): album_horizon(13.0)],
 			["horizonte_tarde", func(): album_horizon(19.5)],
+			["baja", func(): album_low()],
 		]
 		# --test=album=<carpeta>:toma1,toma2 saca solo esas tomas
 		if dir.contains(":"):
@@ -845,7 +852,10 @@ func run_album(dir: String) -> void:
 		card_queue.clear()
 	album_wait += 1
 	# en el mediodía se mide el tiempo por cuadro (cuadros 60 a 180)
-	if album_shots[album_k][0] == "mediodia" and album_wait >= 60:
+	var bench_shot: bool = album_shots[album_k][0] in ["mediodia", "baja"]
+	if bench_shot and album_wait == 1:
+		album_frames.clear()
+	if bench_shot and album_wait >= 60:
 		var now := Time.get_ticks_usec()
 		if album_wait > 60:
 			album_frames.append(now - album_t)
@@ -854,8 +864,8 @@ func run_album(dir: String) -> void:
 			var tot := 0.0
 			for v in album_frames:
 				tot += v
-			print("BENCH frame_ms=%.2f" % (tot / maxf(album_frames.size(), 1) / 1000.0))
-	var need := 180 if album_shots[album_k][0] == "mediodia" else 90
+			print("BENCH frame_ms%s=%.2f" % ["_baja" if album_shots[album_k][0] == "baja" else "", tot / maxf(album_frames.size(), 1) / 1000.0])
+	var need := 180 if bench_shot else 90
 	if album_wait == need and album_shots[album_k][0] in ["mediodia", "cerros"]:
 		terrain_check()
 	if album_wait >= need:
