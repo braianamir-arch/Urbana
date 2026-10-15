@@ -848,6 +848,9 @@ func run_album(dir: String) -> void:
 			["cerros", func(): album_map(1, T_ROCK)],
 			["horizonte_dia", func(): album_horizon(13.0)],
 			["horizonte_tarde", func(): album_horizon(19.5)],
+			["catalogo", func(): album_catalog(-1)],
+			["catalogo_casas", func(): album_catalog(0)],
+			["catalogo_deptos", func(): album_catalog(1)],
 			["baja", func(): album_low()],
 		]
 		# --test=album=<carpeta>:toma1,toma2 saca solo esas tomas
@@ -1050,3 +1053,61 @@ func building_check(tag: String) -> void:
 	if n == 0:
 		why += " ningún edificio"
 	bt(why == "", "BUILDING_CHECK %s (%d lotes) " % [tag, n] + ("ok" if why == "" else "FALLA" + why))
+# hoja del catálogo: todos los modelos (versión cerca) en filas sobre una losa, encima de la ciudad
+var cat_root: Node3D
+func album_catalog(focus_row: int) -> void:
+	album_city(13.0, "Soleado", 3)
+	if cat_root:
+		cat_root.queue_free()
+	var root := Node3D.new()
+	cat_root = root
+	add_child(root)
+	var y0 := 60.0
+	var x := 0.0
+	var z := 0.0
+	var row := 0
+	var cols := 9
+	var pos: Array = []
+	for m in cat_models.size():
+		var md: Dictionary = cat_models[m]
+		var sp := 10.0 if md["big"] else 5.5
+		if m > 0 and m % cols == 0:
+			z -= 12.0
+			x = 0.0
+		pos.append(Vector3(x + sp * 0.5, y0, z))
+		x += sp
+	var cen := Vector3.ZERO
+	for p in pos:
+		cen += p
+	cen /= maxf(pos.size(), 1)
+	var slab := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(70, 0.4, -z + 16)
+	slab.mesh = bm
+	slab.position = Vector3(cen.x, y0 - 0.2, cen.z)
+	var sm := StandardMaterial3D.new()
+	sm.albedo_color = Color(0.5, 0.52, 0.5)
+	slab.material_override = sm
+	root.add_child(slab)
+	for m in cat_models.size():
+		var md: Dictionary = cat_models[m]
+		var l: int = md["levels"][md["levels"].size() - 1]
+		var fl: Array = md["floors"].get(l, [0])
+		var node := new_mm_node(cat_mesh(m, fl[fl.size() / 2], LOD_NEAR), building_mat)
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		remove_child(node)
+		root.add_child(node)
+		var mm := node.multimesh
+		mm.instance_count = 1
+		var p: Vector3 = pos[m]
+		var col := tint(res_wall(m), m)
+		mm.buffer = PackedFloat32Array([1, 0, 0, p.x, 0, 1, 0, p.y, 0, 0, 1, p.z, col.r, col.g, col.b, 1, 0, float(m % 8) / 8.0, hsh(m, 42), 0])
+	if focus_row >= 0:
+		cen = Vector3(cen.x, y0 + 2.0, -12.0 * focus_row)
+	var dd := 62.0 if focus_row < 0 else 24.0
+	cam_goal = cen
+	cam_target = cen
+	cam_dist_goal = dd
+	cam_dist = dd
+	cam_pitch = 0.42 if focus_row < 0 else 0.3
+	cam_yaw = 0.25 if focus_row < 0 else 0.15
