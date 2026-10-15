@@ -467,6 +467,17 @@ func build_terrain_tex() -> void:
 	var s := season()
 	var half := N * CELL * 0.5
 	var N1 := N + 1
+	# datos por celda, una sola vez
+	var csp := PackedColorArray()
+	csp.resize(N * N)
+	var cown := PackedFloat32Array()
+	cown.resize(N * N)
+	var busy := PackedByteArray()
+	busy.resize(N * N)
+	for i in N * N:
+		csp[i] = cell_splat(i)
+		cown[i] = 1.0 if is_owned(i) else 0.0
+		busy[i] = 1 if (road[i] > 0 or zone[i] > 0 or bld[i] > 0 or tree[i] > 0 or (wire[i] & W_LEVEE) != 0) else 0
 	var vh := PackedFloat32Array()
 	vh.resize(N1 * N1)
 	var own := PackedFloat32Array()
@@ -479,28 +490,26 @@ func build_terrain_tex() -> void:
 			var cnt := 0
 			var ow := 0.0
 			var c := Color(0, 0, 0, 0)
-			for o in [Vector2i(-1, -1), Vector2i(0, -1), Vector2i(-1, 0), Vector2i(0, 0)]:
-				var xx: int = x + o.x
-				var zz: int = z + o.y
-				if inb(xx, zz):
-					var i := idx(xx, zz)
+			for zz in range(z - 1, z + 1):
+				if zz < 0 or zz >= N:
+					continue
+				for xx in range(x - 1, x + 1):
+					if xx < 0 or xx >= N:
+						continue
+					var i := zz * N + xx
 					hs += hgt[i]
 					cnt += 1
-					ow += 1.0 if is_owned(i) else 0.0
-					c += cell_splat(i)
+					ow += cown[i]
+					c += csp[i]
 			var k := z * N1 + x
-			vh[k] = hs / maxf(cnt, 1)
-			own[k] = ow / maxf(cnt, 1)
-			c /= maxf(cnt, 1)
-			sp[k * 4] = int(c.r * 255.0)
-			sp[k * 4 + 1] = int(c.g * 255.0)
-			sp[k * 4 + 2] = int(c.b * 255.0)
-			sp[k * 4 + 3] = int(c.a * 255.0)
-	var himg := Image.create(N1, N1, false, Image.FORMAT_RH)
-	for z in N1:
-		for x in N1:
-			himg.set_pixel(x, z, Color(vh[z * N1 + x], 0.0, 0.0))
-	set_hmap(himg)
+			var fc := 1.0 / maxf(cnt, 1)
+			vh[k] = hs * fc
+			own[k] = ow * fc
+			sp[k * 4] = int(c.r * fc * 255.0)
+			sp[k * 4 + 1] = int(c.g * fc * 255.0)
+			sp[k * 4 + 2] = int(c.b * fc * 255.0)
+			sp[k * 4 + 3] = int(c.a * fc * 255.0)
+	set_hmap(Image.create_from_data(N1, N1, false, Image.FORMAT_RF, vh.to_byte_array()))
 	terrain_mat.set_shader_parameter("splat", ImageTexture.create_from_image(Image.create_from_data(N1, N1, false, Image.FORMAT_RGBA8, sp)))
 	terrain_mat.set_shader_parameter("season_dry", [0.08, 0.85, 0.55, 0.0][s] + (0.2 if weather == "Calor" else 0.0))
 	# malla fina: (2N+1)² vértices
@@ -516,25 +525,30 @@ func build_terrain_tex() -> void:
 				h = vh[z0 * N1 + x0]
 			elif (u & 1) == 1 and (v & 1) == 0:
 				# borde horizontal entre esquinas x0 y x0+1; lo tocan las celdas (x0, z0-1) y (x0, z0)
-				if terrain_busy(x0, z0 - 1) or terrain_busy(x0, z0):
+				if (z0 > 0 and x0 < N and busy[(z0 - 1) * N + x0] == 1) or (z0 < N and x0 < N and busy[z0 * N + x0] == 1):
 					h = (vh[z0 * N1 + x0] + vh[z0 * N1 + x0 + 1]) * 0.5
 				else:
 					h = cr_mid(vh[z0 * N1 + maxi(x0 - 1, 0)], vh[z0 * N1 + x0], vh[z0 * N1 + x0 + 1], vh[z0 * N1 + mini(x0 + 2, N)])
 			elif (u & 1) == 0 and (v & 1) == 1:
-				if terrain_busy(x0 - 1, z0) or terrain_busy(x0, z0):
+				if (x0 > 0 and z0 < N and busy[z0 * N + x0 - 1] == 1) or (x0 < N and z0 < N and busy[z0 * N + x0] == 1):
 					h = (vh[z0 * N1 + x0] + vh[(z0 + 1) * N1 + x0]) * 0.5
 				else:
 					h = cr_mid(vh[maxi(z0 - 1, 0) * N1 + x0], vh[z0 * N1 + x0], vh[(z0 + 1) * N1 + x0], vh[mini(z0 + 2, N) * N1 + x0])
 			else:
 				# centro de la celda (x0, z0)
-				if terrain_busy(x0, z0):
+				if busy[z0 * N + x0] == 1:
 					h = (vh[z0 * N1 + x0] + vh[(z0 + 1) * N1 + x0 + 1]) * 0.5
 				else:
-					var col4 := PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
-					for r in 4:
-						var zz := clampi(z0 - 1 + r, 0, N)
-						col4[r] = cr_mid(vh[zz * N1 + maxi(x0 - 1, 0)], vh[zz * N1 + x0], vh[zz * N1 + x0 + 1], vh[zz * N1 + mini(x0 + 2, N)])
-					h = cr_mid(col4[0], col4[1], col4[2], col4[3])
+					var xa := maxi(x0 - 1, 0)
+					var xd := mini(x0 + 2, N)
+					var r0 := maxi(z0 - 1, 0) * N1
+					var r1 := z0 * N1
+					var r2 := (z0 + 1) * N1
+					var r3 := mini(z0 + 2, N) * N1
+					h = cr_mid(cr_mid(vh[r0 + xa], vh[r0 + x0], vh[r0 + x0 + 1], vh[r0 + xd]),
+						cr_mid(vh[r1 + xa], vh[r1 + x0], vh[r1 + x0 + 1], vh[r1 + xd]),
+						cr_mid(vh[r2 + xa], vh[r2 + x0], vh[r2 + x0 + 1], vh[r2 + xd]),
+						cr_mid(vh[r3 + xa], vh[r3 + x0], vh[r3 + x0 + 1], vh[r3 + xd]))
 			hsub[v * M + u] = h
 	terrain_hsub = hsub
 	var verts := PackedVector3Array()
