@@ -4543,7 +4543,6 @@ func cat_add(id: String, zones: Array, levels: Array, big: bool, floors: Diction
 func cat_register() -> void:
 	cat_models.clear()
 	cat_cache.clear()
-	cat_add("caja", [Z_C, Z_M], [1, 2, 3, 4], false, {1: [2], 2: [4], 3: [7], 4: [12]}, rc_caja)
 	for id in ["chorizo", "chalet", "casa_rejas", "ladrillo_terraza", "ph", "moderna", "galeria", "esquina_ochava", "chorizo_b", "chalet_b"]:
 		cat_add(id, [Z_R], [1], false, {}, Callable(self, "rc_" + id))
 	for k in range(1, 9):
@@ -4552,7 +4551,22 @@ func cat_register() -> void:
 		cat_add(id, [Z_R], [4], false, {4: [12, 16, 20]}, Callable(self, "rc_" + id))
 	for id in ["torre_grande_a", "torre_grande_b"]:
 		cat_add(id, [Z_R], [3, 4], true, {3: [6, 8], 4: [12, 16, 20]}, Callable(self, "rc_" + id))
-	cat_add("caja_ind", [Z_I], [1, 2, 3, 4], false, {1: [2], 2: [4], 3: [6], 4: [8]}, rc_caja)
+	# comercio y mixta (la mixta es comercio abajo y viviendas arriba)
+	cat_add("almacen", [Z_C, Z_M], [1], false, {}, rc_almacen)
+	cat_add("kiosco", [Z_C], [1], false, {}, rc_kiosco)
+	cat_add("locales_a", [Z_C, Z_M], [2, 3], false, {2: [3, 4], 3: [6, 8]}, rc_locales_a)
+	cat_add("locales_b", [Z_C, Z_M], [2, 3], false, {2: [3, 4], 3: [6, 8]}, rc_locales_b)
+	cat_add("oficinas_a", [Z_C], [3], false, {3: [6, 8, 10]}, rc_oficinas_a)
+	cat_add("oficinas_b", [Z_C], [3], false, {3: [6, 8, 10]}, rc_oficinas_b)
+	cat_add("torre_oficinas", [Z_C, Z_M], [4], false, {4: [12, 16, 20]}, rc_torre_oficinas)
+	cat_add("torre_oficinas_grande", [Z_C, Z_M], [3, 4], true, {3: [6, 8], 4: [12, 16, 20]}, rc_torre_oficinas_grande)
+	# industria
+	cat_add("galpon_chapa", [Z_I], [1], false, {}, rc_galpon_chapa)
+	cat_add("fabrica_ladrillo", [Z_I], [2], false, {}, rc_fabrica_ladrillo)
+	cat_add("planta_silos", [Z_I], [3], false, {}, rc_planta_silos)
+	cat_add("fabrica_grande", [Z_I], [3, 4], false, {}, rc_fabrica_grande)
+	cat_add("complejo", [Z_I], [4], false, {}, rc_complejo)
+	cat_add("complejo_grande", [Z_I], [3, 4], true, {}, rc_complejo_grande)
 	bset.clear()
 	for m in cat_models.size():
 		var md: Dictionary = cat_models[m]
@@ -4647,15 +4661,6 @@ func flush_buildings(ch: int) -> void:
 				if nodes.has(key * 3 + lod):
 					nodes[key * 3 + lod].multimesh.instance_count = 0
 # --- recetas: (versión, pisos, ancho del lote). Frente hacia +Z, base en y = 0.
-func rc_caja(lod: int, f: int, w: float) -> void:
-	var s := w * 0.8
-	var h := maxf(f, 2) * FLOOR_H
-	if lod == LOD_FAR:
-		mb_box(Vector3.ZERO, Vector3(s, h, s), BM_PLASTER, 1, 63 - 8)
-		return
-	mb_box(Vector3.ZERO, Vector3(s, h, s), BM_PLASTER, 1, 63 - 8 - 4)
-	mb_gable(Vector3(0, h, 0), s + 0.2, s + 0.2, 1.0, BM_TILES, 0, true, BM_PLASTER, 1)
-	mb_box(Vector3(0, 0, s * 0.5), Vector3(0.45, 0.95, 0.04), BM_WOOD, 0)
 # --- piezas
 # Cara plana con huecos rectangulares (en el marco local de la pared: x a lo largo, y arriba, z hacia
 # afuera). holes: [x0, x1, y0, y1] ordenados por x. Arma bandas arriba y abajo de cada hueco y pilares.
@@ -5073,6 +5078,171 @@ func rc_torre_grande_b(lod: int, f: int, _w: float) -> void:
 		mb_flat(t, top, BM_CONCRETE, 0)
 		mb_parapet(t, top, 0.3, 0.1, BM_CONCRETE, 1)
 		crown(Vector3(x, 0, 0), top, f, lod, 0.9)
+# --- comercio
+func mb_cone(c: Vector3, r: float, h: float, seg: int, mat: int, tm: int) -> void:
+	for k in seg:
+		var a0 := TAU * k / seg
+		var a1 := TAU * (k + 1) / seg
+		mb_tri(Vector3(c.x + cos(a1) * r, c.y, c.z + sin(a1) * r), Vector3(c.x + cos(a0) * r, c.y, c.z + sin(a0) * r), c + Vector3(0, h, 0), mat, tm)
+# cartel sobre el frente (segundo color) con el borde claro
+func mb_sign(x: float, y: float, z: float, wd: float, h: float) -> void:
+	mb_box(Vector3(x, y, z), Vector3(wd, h, 0.08), BM_PLAIN, 2, 63 - 32)
+	mb_box(Vector3(x, y - 0.03, z + 0.02), Vector3(wd + 0.06, 0.03, 0.1), BM_PAINTED, 0)
+func rc_almacen(lod: int, _f: int, _w: float) -> void:
+	var pts := rect_pts(-1.45, -1.3, 1.45, 1.15)
+	var top := mb_walls(pts, 0.0, 1, lod, BM_PLASTER, 1, {"gf": 2.0, "shop": true, "door": 1, "cornice": lod != LOD_FAR}, 0.95)
+	roof_extras(pts, top, lod, false, 0.3)
+	mb_sign(0, 1.66, 1.17, 2.7, 0.3)
+	if lod != LOD_FAR:
+		mb_awning(-1.45, 1.45, 1.6, 1.17, 0.45)
+func rc_kiosco(lod: int, _f: int, _w: float) -> void:
+	var back := rect_pts(-1.45, -1.4, 1.45, 0.3)
+	var top := mb_walls(back, 0.0, 1, lod, BM_PLASTER, 1, {"gf": 2.2, "shutters": true, "sill": 0.5, "wh": 1.0}, 0.95)
+	roof_extras(back, top, lod, false, 0.25)
+	# kiosco de vidrio adelante, con techito y cartel
+	var k := rect_pts(-0.75, 0.3, 0.75, 1.2)
+	var kt := mb_walls(k, 0.0, 1, lod, BM_PAINTED, 2, {"gf": 1.35, "shop": true, "door": 0}, 0.5)
+	mb_box(Vector3(0, kt, 0.75), Vector3(1.75, 0.12, 1.15), BM_PAINTED, 2)
+	mb_sign(0, kt + 0.12, 1.15, 1.4, 0.32)
+func locales(lod: int, f: int, mat: int, tm: int, balc: String) -> void:
+	var pts := DEPTO_F
+	var top := mb_walls(pts, 0.0, f, lod, mat, tm, {"gf": 1.8, "shop": true, "door": 0, "balc": balc, "cornice": lod != LOD_FAR, "shutters": balc == "frances"}, 0.95)
+	roof_extras(pts, top, lod, true)
+	if lod != LOD_FAR:
+		mb_awning(-1.4, 1.4, 1.62, 1.17, 0.42)
+	mb_sign(0.2, 1.7, 1.17, 2.0, 0.22)
+func rc_locales_a(lod: int, f: int, _w: float) -> void:
+	locales(lod, f, BM_PLASTER, 1, "frances")
+func rc_locales_b(lod: int, f: int, _w: float) -> void:
+	locales(lod, f, BM_BRICK, 0, "hierro")
+func rc_oficinas_a(lod: int, f: int, _w: float) -> void:
+	var pts := rect_pts(-1.45, -1.4, 1.45, 1.3)
+	var top := mb_walls(pts, 0.0, f, lod, BM_CONCRETE, 0, {"gf": 1.8, "shop": true, "door": 1, "bands": true, "ww": 0.88, "wh": 0.8, "sill": 0.26}, 1.0)
+	roof_extras(pts, top, lod, false, 0.35)
+	crown(Vector3(0, 0, -0.3), top, f, lod, 0.9)
+func rc_oficinas_b(lod: int, f: int, _w: float) -> void:
+	var base := rect_pts(-1.5, -1.45, 1.5, 1.35)
+	var t0 := mb_walls(base, 0.0, 1, lod, BM_CONCRETE, 0, {"gf": 2.0, "shop": true, "door": 1}, 1.0)
+	mb_flat(base, t0, BM_CONCRETE, 0)
+	var t := rect_pts(-1.35, -1.35, 1.35, 1.25)
+	var top := mb_walls(t, t0, f - 1, lod, BM_DARK, 0, {"curtain": true, "glass": BM_GLASS}, 0.68)
+	mb_flat(t, top, BM_CONCRETE, 0)
+	mb_parapet(t, top, 0.3, 0.08, BM_DARK, 0)
+	crown(Vector3(0, 0, -0.2), top, f, lod, 0.8)
+func spire(c: Vector3, top: float, lod: int, s: float) -> void:
+	# remate: piso técnico más chico y aguja
+	var r := rect_pts(c.x - 0.75 * s, c.z - 0.75 * s, c.x + 0.75 * s, c.z + 0.75 * s)
+	var t2 := mb_walls(r, top, 1, LOD_FAR, BM_PAINTED, 1, {"curtain": true, "glass": BM_MIRROR}, 0.6)
+	mb_flat(r, t2, BM_PAINTED, 1)
+	if lod != LOD_FAR:
+		mb_cone(Vector3(c.x, t2, c.z), 0.35 * s, 2.6 * s, 8, BM_PAINTED, 0)
+func rc_torre_oficinas(lod: int, f: int, _w: float) -> void:
+	var base := rect_pts(-1.55, -1.55, 1.55, 1.55)
+	var t0 := mb_walls(base, 0.0, 2, lod, BM_CONCRETE, 0, {"gf": 2.0, "shop": true, "door": 1, "bands": true}, 1.0)
+	mb_flat(base, t0, BM_CONCRETE, 0)
+	var t := rect_pts(-1.3, -1.3, 1.3, 1.3)
+	var top := mb_walls(t, t0, f - 2, lod, BM_PAINTED, 1, {"curtain": true, "glass": BM_MIRROR}, 0.65)
+	mb_flat(t, top, BM_CONCRETE, 0)
+	spire(Vector3.ZERO, top, lod, 1.0)
+func rc_torre_oficinas_grande(lod: int, f: int, _w: float) -> void:
+	var pod := rect_pts(-3.55, -3.55, 3.55, 3.55)
+	var t0 := mb_walls(pod, 0.0, 3, lod, BM_CONCRETE, 0, {"gf": 2.0, "shop": true, "door": 2, "bands": true}, 1.2)
+	mb_flat(pod, t0, BM_CONCRETE, 0)
+	mb_parapet(pod, t0, 0.35, 0.1, BM_CONCRETE, 0)
+	var t := rect_pts(-2.3, -2.3, 2.3, 2.3)
+	var top := mb_walls(t, t0, f - 3, lod, BM_DARK, 0, {"curtain": true, "glass": BM_GLASS}, 0.72)
+	mb_flat(t, top, BM_CONCRETE, 0)
+	if f >= 12:
+		spire(Vector3.ZERO, top, lod, 1.6)
+	else:
+		crown(Vector3.ZERO, top, f, lod, 1.4)
+# --- industria
+# portón de chapa hundido (marco del modelo, frente +Z)
+func mb_gate(x: float, z: float, wd: float, h: float) -> void:
+	mb_quad(Vector3(x - wd * 0.5, 0, z + 0.01), Vector3(x + wd * 0.5, 0, z + 0.01), Vector3(x + wd * 0.5, h, z + 0.01), Vector3(x - wd * 0.5, h, z + 0.01), BM_SHEET, 2)
+# techo de dientes de sierra: cada diente tiene una cara inclinada de chapa y una vertical vidriada
+func mb_sawtooth(x0: float, x1: float, z0: float, z1: float, y: float, n: int, h: float) -> void:
+	var dz := (z1 - z0) / n
+	for k in n:
+		var a := z0 + dz * k
+		var b := a + dz
+		mb_quad(Vector3(x0, y, b), Vector3(x1, y, b), Vector3(x1, y + h, a), Vector3(x0, y + h, a), BM_SHEET, 0)
+		mb_quad(Vector3(x1, y, a), Vector3(x0, y, a), Vector3(x0, y + h, a), Vector3(x1, y + h, a), BM_GLASS, 0, Vector2(k, 30), Vector2(k + 3, 31))
+		mb_tri(Vector3(x1, y, b), Vector3(x1, y, a), Vector3(x1, y + h, a), BM_BRICK, 0)
+		mb_tri(Vector3(x0, y, a), Vector3(x0, y, b), Vector3(x0, y + h, a), BM_BRICK, 0)
+func mb_chimney(c: Vector3, h: float, r: float) -> void:
+	mb_cyl(c, r, h, 10, BM_BRICK, 0)
+	mb_cyl(c + Vector3(0, h - 0.4, 0), r + 0.05, 0.25, 10, BM_CONCRETE, 0)
+func rc_galpon_chapa(lod: int, _f: int, _w: float) -> void:
+	var pts := rect_pts(-1.5, -1.45, 1.5, 1.35)
+	var top := mb_walls(pts, 0.0, 1, lod, BM_SHEET, 1, {"gf": 2.2, "sill": 1.45, "wh": 0.45, "ww": 0.8}, 1.0)
+	mb_gable(Vector3(0, top, -0.05), 3.0, 2.8, 0.75, BM_SHEET, 0, false, BM_SHEET, 1, 0.0 if lod == LOD_FAR else 0.12)
+	mb_gate(0.2, 1.35, 1.4, 1.5)
+	if lod == LOD_NEAR:
+		mb_box(Vector3(-1.05, 0, 1.38), Vector3(0.45, 0.95, 0.05), BM_PAINTED, 2)
+func rc_fabrica_ladrillo(lod: int, _f: int, _w: float) -> void:
+	var pts := rect_pts(-1.5, -1.5, 1.5, 1.35)
+	var top := mb_walls(pts, 0.0, 1, lod, BM_BRICK, 0, {"gf": 3.0, "door": 0, "sill": 0.9, "wh": 1.5, "ww": 0.55}, 0.8)
+	mb_flat(pts, top, BM_CONCRETE, 0)
+	if lod == LOD_FAR:
+		mb_box(Vector3(0, top, -0.08), Vector3(2.9, 0.5, 2.7), BM_SHEET, 0, 63 - 8)
+	else:
+		mb_sawtooth(-1.45, 1.45, -1.45, 1.3, top, 3, 0.9)
+	mb_gate(0.7, 1.35, 1.1, 1.8)
+func rc_planta_silos(lod: int, _f: int, _w: float) -> void:
+	var b := rect_pts(-1.5, -0.2, 1.5, 1.4)
+	var top := mb_walls(b, 0.0, 1, lod, BM_CONCRETE, 1, {"gf": 2.6, "door": 2, "sill": 1.6, "wh": 0.6}, 0.9)
+	mb_flat(b, top, BM_CONCRETE, 0)
+	if lod != LOD_FAR:
+		mb_parapet(b, top, 0.2, 0.08, BM_CONCRETE, 0)
+	var seg := 8 if lod == LOD_FAR else 14
+	for x in [-0.95, 0.15]:
+		mb_cyl(Vector3(x, 0, -0.85), 0.55, 6.0, seg, BM_PAINTED, 1)
+		mb_cone(Vector3(x, 6.0, -0.85), 0.58, 0.6, seg, BM_SHEET, 0)
+	mb_chimney(Vector3(1.05, 0, -0.95), 9.0 if lod != LOD_FAR else 9.0, 0.28)
+	if lod == LOD_NEAR:
+		mb_box(Vector3(-0.4, 5.4, -0.85), Vector3(1.6, 0.25, 0.3), BM_PAINTED, 0)
+		mb_gate(-0.6, 1.4, 1.0, 1.6)
+func rc_fabrica_grande(lod: int, _f: int, _w: float) -> void:
+	var pts := rect_pts(-1.55, -1.55, 1.55, 1.4)
+	var top := mb_walls(pts, 0.0, 2, lod, BM_BRICK, 0, {"gf": 2.4, "door": 0, "bands": true, "ww": 0.7, "wh": 0.95}, 0.85)
+	mb_flat(pts, top, BM_CONCRETE, 0)
+	mb_parapet(pts, top, 0.3, 0.1, BM_BRICK, 0)
+	mb_chimney(Vector3(1.0, top, -1.0), 5.5, 0.25)
+	mb_gate(0.6, 1.4, 1.2, 1.9)
+	if lod != LOD_FAR:
+		mb_box(Vector3(-0.6, top, -0.4), Vector3(1.0, 0.7, 1.0), BM_SHEET, 0, 63 - 8)
+func rc_complejo(lod: int, _f: int, _w: float) -> void:
+	var a := rect_pts(-1.55, -1.55, 0.3, 1.4)
+	var t1 := mb_walls(a, 0.0, 1, lod, BM_CONCRETE, 1, {"gf": 5.5, "door": 0, "sill": 3.6, "wh": 1.2, "ww": 0.9}, 1.0)
+	mb_flat(a, t1, BM_SHEET, 0)
+	var b := rect_pts(0.3, -1.55, 1.55, 1.4)
+	var t2 := mb_walls(b, 0.0, 1, lod, BM_SHEET, 1, {"gf": 3.0, "sill": 1.8, "wh": 0.6}, 1.0)
+	mb_gable(Vector3(0.925, t2, -0.075), 1.25, 2.95, 0.6, BM_SHEET, 0, false, BM_SHEET, 1)
+	mb_chimney(Vector3(-1.1, t1, -1.1), 6.5, 0.26)
+	mb_chimney(Vector3(-0.4, t1, -1.1), 5.0, 0.2)
+	mb_gate(0.92, 1.4, 1.0, 2.0)
+	if lod == LOD_NEAR:
+		for k in 3:
+			mb_cyl(Vector3(-1.15 + k * 0.6, t1, 0.4), 0.22, 0.9, 10, BM_PAINTED, 0)
+func rc_complejo_grande(lod: int, _f: int, _w: float) -> void:
+	var a := rect_pts(-3.5, -3.5, 1.0, 3.3)
+	var t1 := mb_walls(a, 0.0, 1, lod, BM_BRICK, 0, {"gf": 3.4, "door": 1, "sill": 1.0, "wh": 1.7, "ww": 0.6}, 0.9)
+	mb_flat(a, t1, BM_CONCRETE, 0)
+	if lod == LOD_FAR:
+		mb_box(Vector3(-1.25, t1, -0.1), Vector3(4.4, 0.6, 6.7), BM_SHEET, 0, 63 - 8)
+	else:
+		mb_sawtooth(-3.45, 0.95, -3.45, 3.25, t1, 6, 0.9)
+	var seg := 8 if lod == LOD_FAR else 14
+	for z in [-2.6, -1.2, 0.2]:
+		mb_cyl(Vector3(2.3, 0, z), 0.62, 7.5, seg, BM_PAINTED, 1)
+		mb_cone(Vector3(2.3, 7.5, z), 0.65, 0.6, seg, BM_SHEET, 0)
+	var b := rect_pts(1.4, 1.2, 3.5, 3.4)
+	var t2 := mb_walls(b, 0.0, 2, lod, BM_CONCRETE, 1, {"gf": 1.8, "door": 0}, 0.9)
+	mb_flat(b, t2, BM_CONCRETE, 0)
+	mb_chimney(Vector3(3.1, 0, -3.1), 11.0, 0.32)
+	mb_gate(-2.0, 3.3, 1.6, 2.4)
+	mb_gate(-0.2, 3.3, 1.6, 2.4)
 # ================================================================ src/camera.gd
 # Cámara, intro y gestos táctiles, mouse y teclado.
 var intro_full: bool = false
@@ -10581,6 +10751,8 @@ func run_album(dir: String) -> void:
 			["catalogo", func(): album_catalog(-1)],
 			["catalogo_casas", func(): album_catalog(0)],
 			["catalogo_deptos", func(): album_catalog(1)],
+			["catalogo_comercio", func(): album_catalog(3)],
+			["catalogo_industria", func(): album_catalog(4)],
 			["baja", func(): album_low()],
 		]
 		# --test=album=<carpeta>:toma1,toma2 saca solo esas tomas
@@ -10820,6 +10992,8 @@ func album_catalog(focus_row: int) -> void:
 	slab.material_override = sm
 	root.add_child(slab)
 	for m in cat_models.size():
+		if focus_row >= 0 and m / cols != focus_row:
+			continue
 		var md: Dictionary = cat_models[m]
 		var l: int = md["levels"][md["levels"].size() - 1]
 		var fl: Array = md["floors"].get(l, [0])
@@ -10833,7 +11007,13 @@ func album_catalog(focus_row: int) -> void:
 		var col := tint(res_wall(m), m)
 		mm.buffer = PackedFloat32Array([1, 0, 0, p.x, 0, 1, 0, p.y, 0, 0, 1, p.z, col.r, col.g, col.b, 1, 0, float(m % 8) / 8.0, hsh(m, 42), 0])
 	if focus_row >= 0:
-		cen = Vector3(cen.x, y0 + 2.0, -12.0 * focus_row)
+		var rx := 0.0
+		var rn := 0
+		for m in pos.size():
+			if m / cols == focus_row:
+				rx += pos[m].x
+				rn += 1
+		cen = Vector3(rx / maxf(rn, 1), y0 + 2.0, -12.0 * focus_row)
 	var dd := 62.0 if focus_row < 0 else 24.0
 	cam_goal = cen
 	cam_target = cen

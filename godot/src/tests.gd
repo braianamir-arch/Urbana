@@ -851,6 +851,8 @@ func run_album(dir: String) -> void:
 			["catalogo", func(): album_catalog(-1)],
 			["catalogo_casas", func(): album_catalog(0)],
 			["catalogo_deptos", func(): album_catalog(1)],
+			["catalogo_comercio", func(): album_catalog(3)],
+			["catalogo_industria", func(): album_catalog(4)],
 			["baja", func(): album_low()],
 		]
 		# --test=album=<carpeta>:toma1,toma2 saca solo esas tomas
@@ -1090,6 +1092,8 @@ func album_catalog(focus_row: int) -> void:
 	slab.material_override = sm
 	root.add_child(slab)
 	for m in cat_models.size():
+		if focus_row >= 0 and m / cols != focus_row:
+			continue
 		var md: Dictionary = cat_models[m]
 		var l: int = md["levels"][md["levels"].size() - 1]
 		var fl: Array = md["floors"].get(l, [0])
@@ -1103,7 +1107,13 @@ func album_catalog(focus_row: int) -> void:
 		var col := tint(res_wall(m), m)
 		mm.buffer = PackedFloat32Array([1, 0, 0, p.x, 0, 1, 0, p.y, 0, 0, 1, p.z, col.r, col.g, col.b, 1, 0, float(m % 8) / 8.0, hsh(m, 42), 0])
 	if focus_row >= 0:
-		cen = Vector3(cen.x, y0 + 2.0, -12.0 * focus_row)
+		var rx := 0.0
+		var rn := 0
+		for m in pos.size():
+			if m / cols == focus_row:
+				rx += pos[m].x
+				rn += 1
+		cen = Vector3(rx / maxf(rn, 1), y0 + 2.0, -12.0 * focus_row)
 	var dd := 62.0 if focus_row < 0 else 24.0
 	cam_goal = cen
 	cam_target = cen
