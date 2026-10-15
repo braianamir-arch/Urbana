@@ -15,6 +15,8 @@ SUELO = (40, 240, 560, 700)
 # franja de cielo arriba y franja justo sobre el horizonte (tomas bajas)
 CIELO = (0, 1280, 0, 60)
 HORIZONTE = (120, 600, 150, 225)
+# calle en las tomas de cerca sobre casas (abajo a la derecha)
+CALLE = (1000, 1240, 460, 720)
 
 
 def load(d, name):
@@ -107,9 +109,8 @@ def main():
     if cc is None or cl is None:
         check("cerca_lluvia", False, "falta la captura")
     else:
-        h = cc.shape[0] // 2
-        a, b2 = cl[h:].mean(), cc[h:].mean()
-        check("cerca_lluvia: calles más oscuras (≤ 0,9 × con sol)", a <= 0.9 * b2, f"{a:.0f} vs {b2:.0f}")
+        a, b2 = zone(cl, CALLE).mean(), zone(cc, CALLE).mean()
+        check("cerca_lluvia: calle más oscura (≤ 0,9 × con sol)", a <= 0.9 * b2, f"{a:.0f} vs {b2:.0f}")
     sys.exit(0 if all(results) else 1)
 
 

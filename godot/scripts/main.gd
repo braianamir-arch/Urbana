@@ -4632,7 +4632,12 @@ func cat_mesh(m: int, floors: int, lod: int) -> ArrayMesh:
 	cat_cache[key] = mesh
 	return mesh
 # --- dibujo por bloque
+# torres: paleta propia (vidrios y marcos azulados, verdosos, arena, pizarra) para que el centro no sea
+# todo del mismo gris
+const TOWER_PAL := [Color(0.45, 0.62, 0.78), Color(0.35, 0.58, 0.55), Color(0.72, 0.64, 0.5), Color(0.3, 0.34, 0.42), Color(0.8, 0.76, 0.68), Color(0.5, 0.52, 0.72), Color(0.72, 0.5, 0.42)]
 func building_color(i: int, z: int, v: int, wall: Color) -> Color:
+	if lvl[i] >= 4 or (z == Z_C and lvl[i] >= 3):
+		return tint(TOWER_PAL[(v / 3 + i) % TOWER_PAL.size()], i)
 	match z:
 		Z_C:
 			return tint(res_wall(v + 3), i)

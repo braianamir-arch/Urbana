@@ -142,6 +142,8 @@ void fragment() {
 		vec3 refl = mirror(wpos, wnrm, CAMERA_POSITION_WORLD, night);
 #endif
 		float k = vmat > 10.5 && vmat < 11.5 ? 0.82 : 0.25 + 0.6 * fr;
+		// el vidrio toma un poco el color del edificio (espejados azulados, verdosos, dorados)
+		refl *= mix(vec3(1.0), COLOR.rgb * 1.4, 0.4);
 		col = mix(inside, refl, k);
 		rough = 0.06;
 		float litp = 0.55 * (1.0 - 0.45 * late);
