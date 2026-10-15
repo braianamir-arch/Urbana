@@ -260,6 +260,7 @@ func apply_fx() -> void:
 	city_mat.set_shader_parameter("wind", 1.0 if opts["g_wind"] else 0.0)
 	city_mat.set_shader_parameter("ao_on", 1.0 if opts["g_ao"] else 0.0)
 	bmat_param("ao_on", 1.0 if opts["g_ao"] else 0.0)
+	bmat_param("wind", 1.0 if opts["g_wind"] else 0.0)
 	set_city_tex(use_tex_terrain())
 	var dt: float = 1.0 if opts["g_detail"] else 0.0
 	city_mat.set_shader_parameter("det", dt)

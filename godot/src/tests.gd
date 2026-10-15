@@ -1069,6 +1069,18 @@ func catalog_check() -> void:
 						why += " la versión lejos no es más liviana (%d >= %d)" % [vs.size(), nv[0]]
 					bt(why == "", tag + ("ok" if why == "" else "FALLA" + why))
 	print("BENCH catalog_ms=%d" % ((Time.get_ticks_usec() - t0) / 1000))
+	# etapa 2c-e: arreglos de texturas con 13 capas y modelos "solo cerca"
+	var ta: Resource = load("res://assets/city/city_alb.webp")
+	var tn: Resource = load("res://assets/city/city_nrm.webp")
+	var nl: int = ta.get_layers() if ta is TextureLayered else 0
+	var nn2: int = tn.get_layers() if tn is TextureLayered else 0
+	bt(nl == 13 and nn2 == 13, "TEXTURE_CHECK capas %d y %d " % [nl, nn2] + ("ok" if nl == 13 and nn2 == 13 else "FALLA (se esperaban 13)"))
+	cat_add("prueba_cerca", [], [], false, {}, rc_test_box, true)
+	var pm := cat_models.size() - 1
+	var mid_empty := cat_mesh(pm, 0, LOD_MID).get_surface_count() == 0 and cat_mesh(pm, 0, LOD_FAR).get_surface_count() == 0
+	var near_full := cat_mesh(pm, 0, LOD_NEAR).get_surface_count() == 1
+	bt(mid_empty and near_full, "CATALOG_CHECK solo cerca " + ("ok" if mid_empty and near_full else "FALLA"))
+	cat_models.pop_back()
 # cada lote construido tiene exactamente un modelo de su zona, nivel y tamaño, y nada más
 func building_check(tag: String) -> void:
 	bcheck_on = true
@@ -1196,3 +1208,5 @@ func album_close(z: int, lvls: Array, h: float, w: String, d: int) -> void:
 	cam_dist = 30.0
 	cam_pitch = 0.42
 	cam_yaw = 0.5 + face_rot(maxi(best, 0))
+func rc_test_box(_lod: int, _f: int, _w: float) -> void:
+	mb_box(Vector3.ZERO, Vector3(0.5, 0.5, 0.5), BM_PLAIN, 0)

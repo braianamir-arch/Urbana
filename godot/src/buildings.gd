@@ -1,5 +1,5 @@
 # Edificios de la etapa 2: constructor de mallas, recetas y catálogo.
-# Materiales (UV2.x del vértice). 0-9 son capas del arreglo de texturas; el resto los dibuja el shader.
+# Materiales (UV2.x del vértice). 0-12 son capas del arreglo de texturas; el resto los dibuja el shader.
 const BM_PLAIN := 0
 const BM_BRICK := 1
 const BM_PLASTER := 2
@@ -10,10 +10,15 @@ const BM_WOOD := 6
 const BM_PAINTED := 7
 const BM_ASPHALT := 8
 const BM_SIDEWALK := 9
-const BM_GLASS := 10
-const BM_MIRROR := 11
-const BM_DARK := 12
-const BM_FARWIN := 13
+const BM_BARK := 10
+const BM_LEAF := 11
+const BM_TURF := 12
+const BM_GLASS := 20
+const BM_MIRROR := 21
+const BM_DARK := 22
+const BM_EMIT := 23
+const BM_SIGNAL := 24
+const BM_FARWIN := 30
 const LOD_NEAR := 0
 const LOD_MID := 1
 const LOD_FAR := 2
@@ -50,6 +55,8 @@ var bnear_ok := PackedByteArray()
 # prueba: celda -> {m, n, dark} (lo llena emit_building cuando bcheck_on)
 var bcheck_on: bool = false
 var bcheck_log: Dictionary = {}
+# prueba: [celda, modelo] de cada instancia emitida (todas las familias)
+var mcheck_log: Array = []
 func mb_begin() -> void:
 	mb_v = PackedVector3Array()
 	mb_n = PackedVector3Array()
@@ -172,8 +179,9 @@ func mb_end() -> ArrayMesh:
 		m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	return m
 # --- catálogo
-func cat_add(id: String, zones: Array, levels: Array, big: bool, floors: Dictionary, recipe: Callable) -> void:
-	cat_models.append({"id": id, "zones": zones, "levels": levels, "big": big, "floors": floors, "recipe": recipe})
+# near_only: objetos chicos que solo existen en la versión cerca (las otras dos quedan vacías)
+func cat_add(id: String, zones: Array, levels: Array, big: bool, floors: Dictionary, recipe: Callable, near_only := false, fam := "edificio") -> void:
+	cat_models.append({"id": id, "zones": zones, "levels": levels, "big": big, "floors": floors, "recipe": recipe, "near_only": near_only, "fam": fam})
 func cat_register() -> void:
 	cat_models.clear()
 	cat_cache.clear()
@@ -230,6 +238,10 @@ func cat_mesh(m: int, floors: int, lod: int) -> ArrayMesh:
 		return cat_cache[key]
 	var md: Dictionary = cat_models[m]
 	mb_begin()
+	if md["near_only"] and lod != LOD_NEAR:
+		var empty := ArrayMesh.new()
+		cat_cache[key] = empty
+		return empty
 	md["recipe"].call(lod, floors, CELL * (1.85 if md["big"] else 0.82))
 	var mesh := mb_end()
 	cat_cache[key] = mesh
@@ -253,20 +265,26 @@ func emit_building(i: int, x: float, y: float, z: float, rot: float, wall: Color
 		return
 	var md: Dictionary = cat_models[pk.x]
 	var sc := 1.85 / 0.82 if part[i] == i and not md["big"] else 1.0
-	var key := pk.x * 64 + pk.y
-	if not _binst.has(key):
-		_binst[key] = PackedFloat32Array()
-	var b: PackedFloat32Array = _binst[key]
-	var c := cos(rot) * sc
-	var s := sin(rot) * sc
 	var col := building_color(i, zone[i], vari[i], wall)
-	b.append_array([c, 0.0, s, x, 0.0, 1.0, 0.0, y, -s, 0.0, c, z, col.r, col.g, col.b, 1.0, 1.0 if dark else 0.0, float(int(hsh(i, 44) * 8.0)) / 8.0, hsh(i, 42), 0.0])
-	_binst[key] = b
+	emit_model(pk.x, pk.y, x, y, z, rot, sc, col, Vector4(1.0 if dark else 0.0, float(int(hsh(i, 44) * 8.0)) / 8.0, hsh(i, 42), 0.0))
 	if bcheck_on:
 		if bcheck_log.has(i):
 			bcheck_log[i]["n"] += 1
 		else:
 			bcheck_log[i] = {"m": pk.x, "n": 1, "dark": dark}
+# una instancia del modelo m (pisos/variante f) en el bloque que se está armando; escala uniforme en
+# planta (sc) y rotación sobre Y. cust = (quemado, segundo color, semilla, dato del modelo)
+func emit_model(m: int, f: int, x: float, y: float, z: float, rot: float, sc: float, col: Color, cust: Vector4) -> void:
+	var key := m * 64 + f
+	if not _binst.has(key):
+		_binst[key] = PackedFloat32Array()
+	var b: PackedFloat32Array = _binst[key]
+	var c := cos(rot) * sc
+	var s := sin(rot) * sc
+	b.append_array([c, 0.0, s, x, 0.0, 1.0, 0.0, y, -s, 0.0, c, z, col.r, col.g, col.b, col.a, cust.x, cust.y, cust.z, cust.w])
+	_binst[key] = b
+	if bcheck_on:
+		mcheck_log.append([world_to_cell(Vector3(x, 0, z)), m])
 # vuelca las instancias juntadas por build_chunk en los nodos del bloque (uno por modelo y versión)
 func flush_buildings(ch: int) -> void:
 	var q: int = opts["quality"]
@@ -280,7 +298,10 @@ func flush_buildings(ch: int) -> void:
 	for key in _binst:
 		var buf: PackedFloat32Array = _binst[key]
 		var cnt := buf.size() / 20
-		for lod in ([LOD_FAR] if q == 0 else ([LOD_NEAR, LOD_MID, LOD_FAR] if near_ok else [LOD_MID, LOD_FAR])):
+		var lods: Array = [LOD_FAR] if q == 0 else ([LOD_NEAR, LOD_MID, LOD_FAR] if near_ok else [LOD_MID, LOD_FAR])
+		if cat_models[key / 64]["near_only"]:
+			lods = [LOD_NEAR] if near_ok else []
+		for lod in lods:
 			var nk: int = key * 3 + lod
 			var node: MultiMeshInstance3D = nodes.get(nk)
 			if node == null:

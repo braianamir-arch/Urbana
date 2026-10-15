@@ -21,7 +21,7 @@ OUT = ROOT / "godot" / "scripts" / "main.gd"
 SHADER_DIR = ROOT / "godot" / "shaders"
 
 # orden en que se juntan; state va primero porque tiene el 'extends' y lo compartido
-ORDER = ["state", "world", "sim", "build", "render", "buildings", "camera", "agents", "ui", "audio", "save", "tests", "main"]
+ORDER = ["state", "world", "sim", "build", "render", "buildings", "trees", "props", "specials", "camera", "agents", "ui", "audio", "save", "tests", "main"]
 ABOUT = {
     "state": "Estado compartido y constantes (lo usan varios módulos)",
     "world": "El mapa: celdas, terreno, generación y utilidades",
@@ -29,6 +29,9 @@ ABOUT = {
     "build": "Herramientas de construir, demoler, rotondas, paradas y líneas",
     "render": "Cómo se dibuja la ciudad: mallas, chunks, terreno, agua, luz y clima",
     "buildings": "Edificios de la etapa 2: constructor de mallas, recetas y catálogo",
+    "trees": "Árboles de la etapa 2c: recetas por especie y ubicación",
+    "props": "Objetos de calle de la etapa 2d: faroles, semáforos, autos, mobiliario, postes y carteles",
+    "specials": "Edificios especiales de la etapa 2e: una receta por cada uno",
     "camera": "Cámara, intro y gestos táctiles, mouse y teclado",
     "agents": "Autos, gente, transporte, barcos, aviones, cine, partículas y choques",
     "ui": "Interfaz: HUD, abanico, bandejas, hojas, tarjetas, tutorial e íconos",

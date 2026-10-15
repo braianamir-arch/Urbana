@@ -37,3 +37,6 @@ cada edificio. Todos de **ambientCG**, licencia **CC0 1.0**.
 | 7 | Metal pintado | Metal027 — https://ambientcg.com/view?id=Metal027 |
 | 8 | Asfalto | Asphalt025C — https://ambientcg.com/view?id=Asphalt025C |
 | 9 | Baldosas de vereda | PavingStones128 — https://ambientcg.com/view?id=PavingStones128 |
+| 10 | Corteza | Bark014 — https://ambientcg.com/view?id=Bark014 |
+| 11 | Follaje (copas de árboles; se pasa a gris para teñirla según la estación) | Grass001 — https://ambientcg.com/view?id=Grass001 |
+| 12 | Césped corto (canchas, parques) | Grass005 — https://ambientcg.com/view?id=Grass005 |

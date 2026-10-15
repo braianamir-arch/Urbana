@@ -5,7 +5,8 @@ uniform float snow = 0.0;
 uniform float wet = 0.0;
 uniform float cshadow = 0.0;
 uniform float ao_on = 0.0;
-uniform float tex_on = 0.0;     // 0 en calidad Baja: colores lisos
+uniform float tex_on = 0.0;
+uniform float wind = 0.0;       // 1 con viento (g_wind): mueve el follaje     // 0 en calidad Baja: colores lisos
 uniform vec4 hinfo = vec4(1.0, 0.0, 1.0, 0.0);
 uniform sampler2D hmap : filter_linear, repeat_disable;
 uniform sampler2D ctex : filter_linear, repeat_enable;
@@ -21,15 +22,16 @@ varying flat float vtm;
 varying flat vec4 cust;
 
 // color medio de cada capa (sirve sin texturas y en las fachadas lejanas, para que no cambie el tono)
-const vec3 BASE[10] = vec3[](
+const vec3 BASE[13] = vec3[](
 	vec3(0.776), vec3(0.583, 0.457, 0.387), vec3(0.798), vec3(0.388, 0.377, 0.357),
 	vec3(0.459, 0.270, 0.177), vec3(0.799), vec3(0.309, 0.210, 0.189), vec3(0.799),
-	vec3(0.166, 0.168, 0.156), vec3(0.624, 0.605, 0.552));
-const float ROUGH[10] = float[](0.8, 0.58, 0.79, 0.69, 0.7, 0.41, 0.73, 0.65, 0.44, 0.53);
+	vec3(0.166, 0.168, 0.156), vec3(0.624, 0.605, 0.552), vec3(0.474, 0.399, 0.313), vec3(0.795),
+	vec3(0.396, 0.516, 0.168));
+const float ROUGH[13] = float[](0.8, 0.58, 0.79, 0.69, 0.7, 0.41, 0.73, 0.65, 0.44, 0.53, 0.62, 0.54, 0.7);
 // tamaño en metros de una repetición de la textura
-const float SCALE[10] = float[](2.0, 0.85, 1.5, 1.6, 0.9, 1.0, 1.1, 1.0, 3.0, 1.2);
-// ganancia por capa (el hormigón de la foto es oscuro)
-const float GAIN[10] = float[](1.0, 1.0, 1.0, 1.25, 1.0, 0.68, 1.0, 0.85, 1.0, 1.0);
+const float SCALE[13] = float[](2.0, 0.85, 1.5, 1.6, 0.9, 1.0, 1.1, 1.0, 3.0, 1.2, 1.0, 1.2, 2.0);
+// ganancia por capa (el hormigón de la foto es oscuro; chapa y metal se ven muy claros)
+const float GAIN[13] = float[](1.0, 1.0, 1.0, 1.25, 1.0, 0.68, 1.0, 0.85, 1.0, 1.0, 1.0, 1.0, 1.0);
 // segundo color (persianas, toldos, carteles, portones)
 const vec3 ACCENT[8] = vec3[](
 	vec3(0.18, 0.36, 0.24), vec3(0.45, 0.28, 0.16), vec3(0.62, 0.16, 0.14), vec3(0.16, 0.28, 0.5),
@@ -62,15 +64,15 @@ void fragment() {
 	float rough;
 	float metal = 0.0;
 	vec3 emit = vec3(0.0);
-	bool glass = m == 10 || m == 11;
+	bool glass = m == 20 || m == 21;
 	bool up = wnrm.y > 0.7;
 	vec2 wid = vec2(0.0);
 	vec2 wf = vec2(0.5);
 	int tmi = int(vtm + 0.5);
 	bool shutpx = false;
-	if (m >= 13) {
+	if (m >= 30) {
 		// fachada media/lejana: ventanas dibujadas sobre una grilla (columna, piso)
-		int b = clamp(m - 13, 0, 9);
+		int b = clamp(m - 30, 0, 12);
 		if (tex_on > 0.5) {
 			vec2 hh = normalize(vec2(wnrm.z, -wnrm.x) + vec2(0.0001));
 			vec2 uvm = abs(wnrm.y) < 0.7 ? vec2(dot(wpos.xz, hh), -wpos.y) : wpos.xz;
@@ -96,9 +98,14 @@ void fragment() {
 	} else if (glass) {
 		wid = floor(UV);
 		wf = fract(UV);
-	} else if (m == 12) {
+	} else if (m >= 22) {
+		// 22 oscuro, 23 brillo de noche (faroles), 24 luz de semáforo
 		col = vec3(0.07, 0.075, 0.08);
 		rough = 0.5;
+		if (m == 23) {
+			col = vec3(0.92, 0.88, 0.76);
+			emit += vec3(1.0, 0.82, 0.55) * night * 2.2;
+		}
 	} else {
 		if (tex_on > 0.5) {
 			vec3 uvw = vec3(UV / SCALE[m], float(m));
@@ -114,7 +121,7 @@ void fragment() {
 			rough = ROUGH[m];
 		}
 	}
-	if (!glass && m != 12) {
+	if (!glass && m < 22) {
 		if (shutpx) {
 			col = ACCENT[int(cust.y * 8.0 + 0.5) % 8] * 0.8;
 		} else if (tmi == 1) {
@@ -141,7 +148,7 @@ void fragment() {
 #else
 		vec3 refl = mirror(wpos, wnrm, CAMERA_POSITION_WORLD, night);
 #endif
-		float k = vmat > 10.5 && vmat < 11.5 ? 0.82 : 0.25 + 0.6 * fr;
+		float k = vmat > 20.5 && vmat < 21.5 ? 0.82 : 0.25 + 0.6 * fr;
 		// el vidrio toma un poco el color del edificio (espejados azulados, verdosos, dorados)
 		refl *= mix(vec3(1.0), COLOR.rgb * 1.4, 0.4);
 		col = mix(inside, refl, k);

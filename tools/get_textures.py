@@ -128,6 +128,9 @@ CITY_LAYERS = [
     ("metal", "Metal027", True),
     ("asfalto", "Asphalt025C", False),
     ("vereda", "PavingStones128", False),
+    ("corteza", "Bark014", False),
+    ("follaje", "Grass001", True),
+    ("cesped", "Grass005", False),
 ]
 CITY_SIZE = 1024
 
