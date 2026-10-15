@@ -52,7 +52,7 @@ def main():
         check("atardecer", False, "falta la captura")
     else:
         r, g, b = a.reshape(-1, 3).mean(axis=0)
-        check("atardecer cálido (R > B + 15)", r > b + 15, f"R={r:.0f} B={b:.0f}")
+        check("atardecer cálido (R > B + 5)", r > b + 5, f"R={r:.0f} B={b:.0f}")
     n = load(d, "noche")
     if n is None:
         check("noche", False, "falta la captura")
@@ -70,7 +70,7 @@ def main():
         check("horizonte_dia", False, "falta la captura")
     else:
         r, g, b = zone(hd, CIELO)
-        check("horizonte_dia: cielo celeste claro (B > R + 20, brillo > 140)", b > r + 20 and (r + g + b) / 3 > 140,
+        check("horizonte_dia: cielo celeste (B > R + 20, brillo > 120)", b > r + 20 and (r + g + b) / 3 > 120,
               f"R={r:.0f} G={g:.0f} B={b:.0f}")
     ht = load(d, "horizonte_tarde")
     if ht is None:

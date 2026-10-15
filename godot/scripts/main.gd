@@ -2822,8 +2822,6 @@ var city_mat: ShaderMaterial
 var water_mat: ShaderMaterial
 var overlay_mat: ShaderMaterial
 var terrain_mat: ShaderMaterial
-var cloud_mat: ShaderMaterial
-var cloud_node: MeshInstance3D
 var dtex: ImageTexture
 var ctex: ImageTexture
 var terrain_node: MeshInstance3D
@@ -2832,11 +2830,12 @@ var chunk_nodes: Array = []
 var overlay_node: MultiMeshInstance3D
 var moon: DirectionalLight3D
 var env: Environment
-var sky_mat: ProceduralSkyMaterial
+var sky_mat: ShaderMaterial
+var cloud_drift := Vector2.ZERO
 const SHADER_CITY := preload("res://shaders/city.gdshader")
 const SHADER_WATER := preload("res://shaders/water.gdshader")
 const SHADER_TERRAIN := preload("res://shaders/terrain.gdshader")
-const SHADER_CLOUD := preload("res://shaders/cloud.gdshader")
+const SHADER_SKY := preload("res://shaders/sky.gdshader")
 const SHADER_GLOW := preload("res://shaders/glow.gdshader")
 const SHADER_OVERLAY := preload("res://shaders/overlay.gdshader")
 func setup_render() -> void:
@@ -2895,31 +2894,32 @@ func setup_render() -> void:
 	var st2 := Shader.new()
 	st2.code = SHADER_TERRAIN.code
 	terrain_mat.shader = st2
-	cloud_mat = ShaderMaterial.new()
-	var sc2 := Shader.new()
-	sc2.code = SHADER_CLOUD.code
-	cloud_mat.shader = sc2
 	for m in [city_mat, terrain_mat]:
 		m.set_shader_parameter("dtex", dtex)
 		m.set_shader_parameter("ctex", ctex)
-	cloud_mat.set_shader_parameter("ctex", ctex)
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
-	sky_mat = ProceduralSkyMaterial.new()
+	sky_mat = ShaderMaterial.new()
+	sky_mat.shader = SHADER_SKY
+	sky_mat.set_shader_parameter("cloud_tex", ctex)
 	sky.sky_material = sky_mat
+	sky.process_mode = Sky.PROCESS_MODE_INCREMENTAL
+	sky.radiance_size = Sky.RADIANCE_SIZE_128
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.ambient_light_energy = 1.0
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 0.82
+	env.ambient_light_sky_contribution = 0.55
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	env.tonemap_exposure = 1.0
 	env.glow_hdr_threshold = 1.3
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.7, 0.78, 0.9)
 	env.fog_density = 0.0007
 	env.fog_sky_affect = 0.3
+	env.fog_aerial_perspective = 0.45
 	env.fog_height = 8.0
-	env.fog_height_density = 0.004
+	env.fog_height_density = 0.0
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -2937,16 +2937,6 @@ func setup_render() -> void:
 	terrain_node = MeshInstance3D.new()
 	terrain_node.material_override = terrain_mat
 	add_child(terrain_node)
-	cloud_node = MeshInstance3D.new()
-	var cp := PlaneMesh.new()
-	cp.size = Vector2(1800, 1800)
-	cp.subdivide_width = 1
-	cp.subdivide_depth = 1
-	cloud_node.mesh = cp
-	cloud_node.material_override = cloud_mat
-	cloud_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	cloud_node.position = Vector3(0, 170, 0)
-	add_child(cloud_node)
 	water_node = MeshInstance3D.new()
 	var wp := PlaneMesh.new()
 	wp.size = Vector2(N * CELL * 5.0, N * CELL * 5.0)
@@ -3058,18 +3048,18 @@ func apply_fx() -> void:
 	var dt: float = 1.0 if opts["g_detail"] else 0.0
 	city_mat.set_shader_parameter("det", dt)
 	terrain_mat.set_shader_parameter("det", dt)
-	cloud_node.visible = opts["g_clouds"]
+	sky_mat.set_shader_parameter("clouds_on", 1.0 if opts["g_clouds"] else 0.0)
 	cloud_cover = -1.0
 	env.adjustment_enabled = opts["g_grade"]
-	env.adjustment_saturation = 1.03
-	env.adjustment_contrast = 1.05
+	env.adjustment_saturation = 1.12
+	env.adjustment_contrast = 1.12
 	if vig_layer == null:
 		vig_layer = CanvasLayer.new()
 		vig_layer.layer = 2
 		var gt := GradientTexture2D.new()
 		var gr := Gradient.new()
 		gr.offsets = PackedFloat32Array([0.5, 0.7, 0.85, 1.0])
-		gr.colors = PackedColorArray([Color(0, 0, 0, 0), Color(0.03, 0.02, 0.05, 0.04), Color(0.03, 0.02, 0.05, 0.16), Color(0.03, 0.02, 0.05, 0.36)])
+		gr.colors = PackedColorArray([Color(0, 0, 0, 0), Color(0.03, 0.02, 0.05, 0.02), Color(0.03, 0.02, 0.05, 0.08), Color(0.03, 0.02, 0.05, 0.2)])
 		gt.gradient = gr
 		gt.fill = GradientTexture2D.FILL_RADIAL
 		gt.fill_from = Vector2(0.5, 0.5)
@@ -3133,8 +3123,9 @@ func config_wfx(kind: String) -> void:
 	wfx.preprocess = wfx.lifetime
 	wfx_r = 0.0
 func update_fx() -> void:
-	if cloud_node.visible:
-		cloud_node.position = Vector3(cam_target.x, 170.0, cam_target.z)
+	if opts["g_clouds"]:
+		cloud_drift += wind * get_process_delta_time() * 0.0035
+		sky_mat.set_shader_parameter("cloud_off", cloud_drift)
 		var cv := 0.45
 		if weather == "Nublado":
 			cv = 0.85
@@ -3142,7 +3133,8 @@ func update_fx() -> void:
 			cv = 0.95
 		if cv != cloud_cover:
 			cloud_cover = cv
-			cloud_mat.set_shader_parameter("cover", cv)
+			sky_mat.set_shader_parameter("cover", cv)
+			sky_mat.set_shader_parameter("storm", 1.0 if weather in ["Lluvia", "Tormenta", "Nieve"] else 0.0)
 			city_mat.set_shader_parameter("cshadow", cv)
 			terrain_mat.set_shader_parameter("cshadow", cv)
 	elif cloud_cover != 0.0:
@@ -3948,33 +3940,52 @@ func update_light() -> void:
 	if srot.distance_to(sun_rot) > 0.8:
 		sun_rot = srot
 		sun.rotation_degrees = srot
-	var gold := clampf(1.0 - up * 2.2, 0.0, 1.0) * (1.0 - nf)
-	sun.light_color = Color(1.0, 0.96, 0.9).lerp(Color(1.0, 0.56, 0.26), gold)
+	# dirección real del sol para el cielo (de noche baja del horizonte)
+	var elev := up * 62.0
+	if hour <= sunrise or hour >= sunset:
+		var nh := fmod(hour - sunset + 24.0, 24.0) / (24.0 - (sunset - sunrise))
+		elev = -sin(nh * PI) * 25.0
+	var sky_az := az if (hour > sunrise and hour < sunset) else lerpf(250.0, 290.0, fmod(hour - sunset + 24.0, 24.0) / (24.0 - (sunset - sunrise)))
+	var sdir := Basis.from_euler(Vector3(deg_to_rad(-elev), deg_to_rad(sky_az), 0.0)).z
+	sky_mat.set_shader_parameter("sun_dir", sdir)
+	sky_mat.set_shader_parameter("moon_dir", moon.global_transform.basis.z)
+	var se := sdir.y
+	sun.light_color = sun_color_at(se)
 	var cloudy := 0.0
 	if weather == "Lluvia" or weather == "Tormenta" or weather == "Nieve":
 		cloudy = 0.55
 	elif weather == "Nublado":
 		cloudy = 0.3
-	sun.light_energy = 1.0 * (1.0 - nf) * (1.0 - cloudy * 0.6)
-	env.tonemap_exposure = lerpf(0.8, 0.98, nf)
-	sun.visible = nf < 0.98
+	var day_k := smoothstep(-0.02, 0.12, se)
+	sun.light_energy = 1.6 * day_k * (1.0 - cloudy * 0.6)
+	env.tonemap_exposure = lerpf(1.0, 1.35, nf)
+	sun.visible = se > -0.02
 	moon.light_energy = 0.28 * nf
-	var top := Color(0.22, 0.45, 0.85).lerp(Color(0.02, 0.03, 0.09), nf).lerp(Color(0.45, 0.5, 0.56), cloudy * (1.0 - nf))
-	var hor := Color(0.68, 0.8, 0.95).lerp(Color(0.06, 0.08, 0.16), nf).lerp(Color(0.95, 0.6, 0.35), gold * 0.8)
-	sky_mat.sky_top_color = top
-	sky_mat.sky_horizon_color = hor
-	sky_mat.ground_horizon_color = hor
-	sky_mat.ground_bottom_color = top.darkened(0.3)
-	sky_mat.sun_angle_max = 30.0
-	env.ambient_light_energy = lerpf(0.55, 0.35, nf)
+	var hor := sky_horizon(se, cloudy)
+	# la luz ambiente sigue al cielo real (no al factor de noche de las ventanas): cálida con el sol bajo
+	var sky_day := smoothstep(-0.16, 0.10, se)
+	var low_sun := 1.0 - smoothstep(0.0, 0.35, se)
+	env.ambient_light_color = Color(0.62, 0.6, 0.56).lerp(hor, 0.35 + 0.35 * low_sun).lerp(Color(0.06, 0.07, 0.12), 1.0 - sky_day)
+	env.ambient_light_energy = lerpf(0.45, 0.5, sky_day)
+	env.ambient_light_sky_contribution = lerpf(0.55, 0.2, low_sun * sky_day)
 	env.fog_light_color = hor
-	env.fog_density = 0.0007 + cloudy * 0.0012 + (0.0005 if hour > 5.5 and hour < 8.0 else 0.0)
+	env.fog_density = 0.0005 + cloudy * 0.0012 + (0.0005 if hour > 5.5 and hour < 8.0 else 0.0)
 	city_mat.set_shader_parameter("night", nf)
 	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
 	water_mat.set_shader_parameter("night", nf)
-	cloud_mat.set_shader_parameter("night", nf)
 	city_mat.set_shader_parameter("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
 	env.glow_intensity = lerpf(0.22, 0.9, nf)
+# color del sol según la altura (seno de la elevación): blanco cálido arriba, dorado cerca del horizonte
+func sun_color_at(se: float) -> Color:
+	var t := clampf(se / 0.35, 0.0, 1.0)
+	return Color(1.0, 0.5, 0.22).lerp(Color(1.0, 0.96, 0.9), t)
+# color del horizonte (para la bruma), igual que en sky.gdshader
+func sky_horizon(se: float, cloudy: float) -> Color:
+	var day := smoothstep(-0.16, 0.10, se)
+	var low := 1.0 - smoothstep(-0.05, 0.38, se)
+	var c := Color(0.62, 0.75, 0.93).lerp(Color(0.95, 0.55, 0.35), low * 0.8)
+	c = c.lerp(Color(0.6, 0.62, 0.65), cloudy)
+	return Color(0.03, 0.045, 0.095).lerp(c, day)
 const COL_WHITE := Color(0.93, 0.92, 0.88)
 const COL_CREAM := Color(0.9, 0.83, 0.68)
 const COL_BRICK := Color(0.68, 0.35, 0.26)
@@ -9749,6 +9760,17 @@ func album_city(h: float, w: String, d: int) -> void:
 	cam_dist = 110.0
 	cam_pitch = 0.75
 	cam_yaw = 0.5
+# agua "abierta": casi todo alrededor es agua (para no apuntar a un charco)
+func album_open_water(i: int) -> bool:
+	var n := 0
+	var w := 0
+	for dz in range(-6, 7, 2):
+		for dx in range(-6, 7, 2):
+			if inb(cx(i) + dx, cz(i) + dz):
+				n += 1
+				if terr[idx(cx(i) + dx, cz(i) + dz)] == T_WATER:
+					w += 1
+	return w >= n * 0.8
 func album_map(kind: int, want: int) -> void:
 	new_game(kind, 0, true, false, 3)
 	enter_game(false)
@@ -9758,7 +9780,7 @@ func album_map(kind: int, want: int) -> void:
 	var best := -1
 	var bd := 1e9
 	for i in N * N:
-		if terr[i] == want:
+		if terr[i] == want and (want != T_WATER or album_open_water(i)):
 			var dd := Vector2(cx(i) - N / 2, cz(i) - N / 2).length()
 			if dd < bd:
 				bd = dd
@@ -9779,12 +9801,15 @@ func album_horizon(h: float) -> void:
 	cam_pitch = 0.22
 	cam_dist_goal = 170.0
 	cam_dist = 170.0
+var album_dir: String = ""
 func run_album(dir: String) -> void:
 	test_frame += 1
 	if test_frame < 5:
 		return
+	if album_dir != "":
+		dir = album_dir
 	if album_k < 0:
-		DirAccess.make_dir_recursive_absolute(dir)
+		DirAccess.make_dir_recursive_absolute(dir.get_slice(":", 0))
 		album_shots = [
 			["amanecer", func(): album_city(6.8, "Soleado", 3)],
 			["mediodia", func(): album_city(13.0, "Soleado", 3)],
@@ -9800,6 +9825,12 @@ func run_album(dir: String) -> void:
 			["horizonte_dia", func(): album_horizon(13.0)],
 			["horizonte_tarde", func(): album_horizon(19.5)],
 		]
+		# --test=album=<carpeta>:toma1,toma2 saca solo esas tomas
+		if dir.contains(":"):
+			var only := dir.get_slice(":", 1).split(",")
+			dir = dir.get_slice(":", 0)
+			album_shots = album_shots.filter(func(sh): return sh[0] in only)
+		album_dir = dir
 		album_k = 0
 		album_wait = 0
 	if album_k >= album_shots.size():

@@ -760,6 +760,17 @@ func album_city(h: float, w: String, d: int) -> void:
 	cam_dist = 110.0
 	cam_pitch = 0.75
 	cam_yaw = 0.5
+# agua "abierta": casi todo alrededor es agua (para no apuntar a un charco)
+func album_open_water(i: int) -> bool:
+	var n := 0
+	var w := 0
+	for dz in range(-6, 7, 2):
+		for dx in range(-6, 7, 2):
+			if inb(cx(i) + dx, cz(i) + dz):
+				n += 1
+				if terr[idx(cx(i) + dx, cz(i) + dz)] == T_WATER:
+					w += 1
+	return w >= n * 0.8
 func album_map(kind: int, want: int) -> void:
 	new_game(kind, 0, true, false, 3)
 	enter_game(false)
@@ -769,7 +780,7 @@ func album_map(kind: int, want: int) -> void:
 	var best := -1
 	var bd := 1e9
 	for i in N * N:
-		if terr[i] == want:
+		if terr[i] == want and (want != T_WATER or album_open_water(i)):
 			var dd := Vector2(cx(i) - N / 2, cz(i) - N / 2).length()
 			if dd < bd:
 				bd = dd
@@ -790,12 +801,15 @@ func album_horizon(h: float) -> void:
 	cam_pitch = 0.22
 	cam_dist_goal = 170.0
 	cam_dist = 170.0
+var album_dir: String = ""
 func run_album(dir: String) -> void:
 	test_frame += 1
 	if test_frame < 5:
 		return
+	if album_dir != "":
+		dir = album_dir
 	if album_k < 0:
-		DirAccess.make_dir_recursive_absolute(dir)
+		DirAccess.make_dir_recursive_absolute(dir.get_slice(":", 0))
 		album_shots = [
 			["amanecer", func(): album_city(6.8, "Soleado", 3)],
 			["mediodia", func(): album_city(13.0, "Soleado", 3)],
@@ -811,6 +825,12 @@ func run_album(dir: String) -> void:
 			["horizonte_dia", func(): album_horizon(13.0)],
 			["horizonte_tarde", func(): album_horizon(19.5)],
 		]
+		# --test=album=<carpeta>:toma1,toma2 saca solo esas tomas
+		if dir.contains(":"):
+			var only := dir.get_slice(":", 1).split(",")
+			dir = dir.get_slice(":", 0)
+			album_shots = album_shots.filter(func(sh): return sh[0] in only)
+		album_dir = dir
 		album_k = 0
 		album_wait = 0
 	if album_k >= album_shots.size():
