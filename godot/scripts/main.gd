@@ -3481,7 +3481,7 @@ func build_outer(grass: Color) -> void:
 			var hd := hv[maxi(j - 1, 0) * G + i]
 			var hu := hv[mini(j + 1, G - 1) * G + i]
 			nrms[k] = Vector3(hl - hr, 2.0 * stp, hd - hu).normalized()
-			cols[k] = Color(1, 1, 1, 1)
+			cols[k] = Color(1, 1, 1, 0)  # el campo lejano se ve como zona no comprada
 	var ids := PackedInt32Array()
 	for j in G - 1:
 		for i in G - 1:

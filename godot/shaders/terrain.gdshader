@@ -139,6 +139,6 @@ void fragment() {
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 
 	ALBEDO = col.rgb;
-	ROUGHNESS = mix(clamp(col.a, 0.4, 1.0), 0.5, wb);
-	SPECULAR = 0.25;
+	ROUGHNESS = mix(clamp(col.a, 0.65, 1.0), 0.5, wb);
+	SPECULAR = 0.12;
 }
