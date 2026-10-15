@@ -96,6 +96,7 @@ func setup_render() -> void:
 	for m in [city_mat, terrain_mat, terrain_simple_mat]:
 		m.set_shader_parameter("dtex", dtex)
 		m.set_shader_parameter("ctex", ctex)
+	building_mat.set_shader_parameter("ctex", ctex)
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
@@ -253,6 +254,8 @@ func apply_fx() -> void:
 		return
 	city_mat.set_shader_parameter("wind", 1.0 if opts["g_wind"] else 0.0)
 	city_mat.set_shader_parameter("ao_on", 1.0 if opts["g_ao"] else 0.0)
+	building_mat.set_shader_parameter("ao_on", 1.0 if opts["g_ao"] else 0.0)
+	set_city_tex(use_tex_terrain())
 	var dt: float = 1.0 if opts["g_detail"] else 0.0
 	city_mat.set_shader_parameter("det", dt)
 	terrain_simple_mat.set_shader_parameter("det", dt)
@@ -346,11 +349,13 @@ func update_fx() -> void:
 			sky_mat.set_shader_parameter("cover", cv)
 			sky_mat.set_shader_parameter("storm", 1.0 if weather in ["Lluvia", "Tormenta", "Nieve"] else 0.0)
 			city_mat.set_shader_parameter("cshadow", cv)
+			building_mat.set_shader_parameter("cshadow", cv)
 			terrain_mat.set_shader_parameter("cshadow", cv)
 			terrain_simple_mat.set_shader_parameter("cshadow", cv)
 	elif cloud_cover != 0.0:
 		cloud_cover = 0.0
 		city_mat.set_shader_parameter("cshadow", 0.0)
+		building_mat.set_shader_parameter("cshadow", 0.0)
 		terrain_mat.set_shader_parameter("cshadow", 0.0)
 		terrain_simple_mat.set_shader_parameter("cshadow", 0.0)
 	var want := ""
@@ -373,6 +378,18 @@ func update_fx() -> void:
 		if absf(r - wfx_r) > 5.0:
 			wfx_r = r
 			(wfx.process_material as ParticleProcessMaterial).emission_box_extents = Vector3(r, 1, r)
+# texturas de fachadas y calles: se cargan recién cuando hacen falta (nunca en calidad Baja)
+var city_tex_loaded: bool = false
+func set_city_tex(on: bool) -> void:
+	if on and not city_tex_loaded:
+		var a: Resource = load("res://assets/city/city_alb.webp")
+		var n: Resource = load("res://assets/city/city_nrm.webp")
+		for m in [building_mat, city_mat]:
+			m.set_shader_parameter("alb_arr", a)
+			m.set_shader_parameter("nrm_arr", n)
+		city_tex_loaded = true
+	for m in [building_mat, city_mat]:
+		m.set_shader_parameter("tex_on", 1.0 if on else 0.0)
 func use_tex_terrain() -> bool:
 	return int(opts["quality"]) >= 1 and bool(opts["g_detail"])
 func build_terrain() -> void:
@@ -435,7 +452,7 @@ func set_hmap(himg: Image) -> void:
 	var half := N * CELL * 0.5
 	var htex := ImageTexture.create_from_image(himg)
 	var hi := Vector4(N * CELL, half, float(N) / float(N + 1), 0.5 / float(N + 1))
-	for m in [city_mat, water_mat, terrain_mat]:
+	for m in [city_mat, water_mat, terrain_mat, building_mat]:
 		m.set_shader_parameter("hmap", htex)
 		m.set_shader_parameter("hinfo", hi)
 func load_terrain_tex() -> void:
@@ -909,6 +926,7 @@ func emit_road(i: int, p: Vector3) -> void:
 		y = 0.6
 		em(M_BOX, p.x, WATER_Y - 1.0, p.z, 0.8, 1.6 + y, 0.8, 0.0, Color(0.5, 0.5, 0.5))
 	var sidewalk := Color(0.62, 0.6, 0.56)
+	var am := -20.0 if t >= 2 else 0.0
 	var corner := cnt == 2 and ((e and s) or (e and n) or (w and s) or (w and n)) and not bridge
 	if corner:
 		var cxo := 1.0 if e else -1.0
@@ -920,21 +938,21 @@ func emit_road(i: int, p: Vector3) -> void:
 			rot = -PI * 0.5
 		elif cxo > 0 and czo < 0:
 			rot = PI * 0.5
-		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 1.02, 0.17, CELL * 1.02, rot, sidewalk)
-		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 0.86, 0.2, CELL * 0.86, rot, col)
+		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 1.02, 0.17, CELL * 1.02, rot, sidewalk, 0, 0, 0, -21)
+		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 0.86, 0.2, CELL * 0.86, rot, col, 0, 0, 0, am)
 		return
-	em(M_BOX, p.x, y, p.z, CELL, 0.2, CELL, 0.0, col)
+	em(M_BOX, p.x, y, p.z, CELL, 0.2, CELL, 0.0, col, 0, 0, 0, am)
 	var horiz := (e or w) and not (s or n)
 	var vert := (s or n) and not (e or w)
 	if t >= 2 and not bridge:
 		if not n and (horiz or cnt <= 1):
-			em(M_BOX, p.x, y, p.z - CELL * 0.44, CELL, 0.26, CELL * 0.12, 0.0, sidewalk)
+			em(M_BOX, p.x, y, p.z - CELL * 0.44, CELL, 0.26, CELL * 0.12, 0.0, sidewalk, 0, 0, 0, -21)
 		if not s and (horiz or cnt <= 1):
-			em(M_BOX, p.x, y, p.z + CELL * 0.44, CELL, 0.26, CELL * 0.12, 0.0, sidewalk)
+			em(M_BOX, p.x, y, p.z + CELL * 0.44, CELL, 0.26, CELL * 0.12, 0.0, sidewalk, 0, 0, 0, -21)
 		if not e and (vert or cnt <= 1):
-			em(M_BOX, p.x + CELL * 0.44, y, p.z, CELL * 0.12, 0.26, CELL, 0.0, sidewalk)
+			em(M_BOX, p.x + CELL * 0.44, y, p.z, CELL * 0.12, 0.26, CELL, 0.0, sidewalk, 0, 0, 0, -21)
 		if not w and (vert or cnt <= 1):
-			em(M_BOX, p.x - CELL * 0.44, y, p.z, CELL * 0.12, 0.26, CELL, 0.0, sidewalk)
+			em(M_BOX, p.x - CELL * 0.44, y, p.z, CELL * 0.12, 0.26, CELL, 0.0, sidewalk, 0, 0, 0, -21)
 	if wire[i] & W_ROUND:
 		em(M_CYL, p.x, y, p.z, CELL * 0.45, 0.35, CELL * 0.45, 0.0, Color(0.3, 0.6, 0.3))
 		em(M_SPH, p.x, y + 0.3, p.z, 1.0, 1.4, 1.0, 0.0, Color(0.25, 0.5, 0.25))
@@ -1440,6 +1458,10 @@ func update_light() -> void:
 	env.fog_density = 0.0005 + cloudy * 0.0012 + (0.0005 if hour > 5.5 and hour < 8.0 else 0.0)
 	city_mat.set_shader_parameter("night", nf)
 	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
+	building_mat.set_shader_parameter("night", nf)
+	building_mat.set_shader_parameter("late", 1.0 if hour >= 1.0 and hour < 6.0 else 0.0)
+	building_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
+	building_mat.set_shader_parameter("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
 	terrain_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)
 	if far_mat != null:
 		far_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)

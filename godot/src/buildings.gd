@@ -37,6 +37,7 @@ var building_mat: ShaderMaterial
 var bnodes: Array = []
 var _binst: Dictionary = {}
 var bq_last: int = -1
+var b_near_on: bool = false
 # prueba: celda -> {m, n, dark} (lo llena emit_building cuando bcheck_on)
 var bcheck_on: bool = false
 var bcheck_log: Dictionary = {}
@@ -268,15 +269,7 @@ func flush_buildings(ch: int) -> void:
 			if node == null:
 				node = new_mm_node(cat_mesh(key / 64, key % 64, lod), building_mat)
 				nodes[nk] = node
-			node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-			if q == 0:
-				node.visibility_range_begin = 0.0
-				node.visibility_range_end = 0.0
-			else:
-				node.visibility_range_begin = [0.0, 120.0, 340.0][lod]
-				node.visibility_range_begin_margin = 0.0 if lod == LOD_NEAR else 20.0
-				node.visibility_range_end = [140.0, 380.0, 0.0][lod]
-				node.visibility_range_end_margin = 20.0
+			lod_ranges(node, lod, q)
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if lod != LOD_FAR or q == 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			node.multimesh.instance_count = cnt
 			node.multimesh.buffer = buf
@@ -284,6 +277,29 @@ func flush_buildings(ch: int) -> void:
 			for lod in [LOD_NEAR, LOD_MID]:
 				if nodes.has(key * 3 + lod):
 					nodes[key * 3 + lod].multimesh.instance_count = 0
+# Distancias de cada versión (medidas desde el centro del bloque). La versión cerca solo se usa con la
+# cámara acercada: a la distancia normal sus detalles no se ven y costaban un 30 % más por cuadro.
+func lod_ranges(node: GeometryInstance3D, lod: int, q: int) -> void:
+	node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	node.visible = lod != LOD_NEAR or (b_near_on and q > 0)
+	if q == 0:
+		node.visibility_range_begin = 0.0
+		node.visibility_range_end = 0.0
+		return
+	var begin: float = [0.0, 120.0 if b_near_on else 0.0, 340.0][lod]
+	node.visibility_range_begin = begin
+	node.visibility_range_begin_margin = 0.0 if begin == 0.0 else 20.0
+	node.visibility_range_end = [140.0, 380.0, 0.0][lod]
+	node.visibility_range_end_margin = 20.0
+func update_building_lod() -> void:
+	var want := cam_dist < (75.0 if b_near_on else 65.0)
+	if want == b_near_on:
+		return
+	b_near_on = want
+	var q: int = opts["quality"]
+	for nodes in bnodes:
+		for k in nodes:
+			lod_ranges(nodes[k], k % 3, q)
 # --- recetas: (versión, pisos, ancho del lote). Frente hacia +Z, base en y = 0.
 # --- piezas
 # Cara plana con huecos rectangulares (en el marco local de la pared: x a lo largo, y arriba, z hacia
@@ -495,8 +511,9 @@ func mb_awning(x0: float, x1: float, y: float, z: float, depth: float) -> void:
 	mb_quad(Vector3(x0, y - 0.42, z + depth), Vector3(x1, y - 0.42, z + depth), Vector3(x1, y - 0.3, z + depth), Vector3(x0, y - 0.3, z + depth), BM_PLAIN, 2)
 
 # --- recetas residenciales
+# terraza: baldosas coloradas en las casas (pocos pisos) y membrana/hormigón en los edificios
 func roof_extras(pts: Array, top: float, lod: int, tank: bool, par := 0.3) -> float:
-	mb_flat(pts, top, BM_CONCRETE, 0)
+	mb_flat(pts, top, BM_TILES if top < 4.0 else BM_CONCRETE, 0)
 	if par > 0.0:
 		mb_parapet(pts, top, par, 0.1, BM_PLASTER, 1)
 	if lod == LOD_FAR or not tank:

@@ -10,6 +10,10 @@ uniform sampler2D dtex : filter_linear_mipmap, repeat_enable;
 uniform sampler2D ctex : filter_linear, repeat_enable;
 uniform float det = 0.0;
 uniform float cshadow = 0.0;
+// etapa 2: asfalto (cust.w = -20) y vereda (-21) con las texturas de la ciudad
+uniform float tex_on = 0.0;
+uniform sampler2DArray alb_arr : filter_linear_mipmap, repeat_enable;
+uniform sampler2DArray nrm_arr : hint_normal, filter_linear_mipmap, repeat_enable;
 varying vec3 wpos;
 varying vec3 wnrm;
 varying vec4 cust;
@@ -98,6 +102,15 @@ void fragment() {
 				col = mix(glass, fincol, fin);
 				emit += vec3(1.0, 0.75, 0.45) * litw * night * (1.0 - fin) * (mi == 8 ? 1.1 : 0.8);
 				rough = mix(0.08, 0.7, fin);
+			}
+		} else if (mi == 20 || mi == 21) {
+			// calle: la foto, con el tono de cada tipo de calle (el color de la instancia relativo al de base)
+			if (tex_on > 0.5) {
+				bool asph = mi == 20;
+				vec3 uvw = vec3(wpos.xz / (asph ? 3.0 : 1.2), asph ? 8.0 : 9.0);
+				vec4 t = texture(alb_arr, uvw);
+				col = t.rgb * COLOR.rgb / (asph ? vec3(0.23) : vec3(0.62, 0.6, 0.56)) * (asph ? 1.25 : 1.0);
+				rough = t.a;
 			}
 		} else if (mi == 7) {
 			vec2 sc = vec2(mu.x / 1.1 + mod(floor(mu.y / 0.55), 2.0) * 0.5, mu.y / 0.55);

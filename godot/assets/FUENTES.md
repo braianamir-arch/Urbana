@@ -17,3 +17,23 @@ repetición).
 
 El agua (`water/water_nrm.webp`, `water/foam.webp`) se genera con ruido en el mismo script; no viene de
 ninguna biblioteca.
+
+## Ciudad (etapa 2)
+
+Fachadas, techos y calles salen de dos arreglos de texturas (`city/city_alb.webp`: color con la
+rugosidad en el alfa; `city/city_nrm.webp`: normales), una capa de 1024² por material, armados con
+`python3 tools/get_textures.py ciudad`. Revoque, chapa y metal se pasan a gris para que tomen el color de
+cada edificio. Todos de **ambientCG**, licencia **CC0 1.0**.
+
+| Capa | Material del juego | ambientCG |
+|---|---|---|
+| 0 | Liso | generado (ruido suave) |
+| 1 | Ladrillo visto | Bricks085 — https://ambientcg.com/view?id=Bricks085 |
+| 2 | Revoque | Plaster001 — https://ambientcg.com/view?id=Plaster001 |
+| 3 | Hormigón | Concrete031 — https://ambientcg.com/view?id=Concrete031 |
+| 4 | Tejas coloniales | RoofingTiles006 — https://ambientcg.com/view?id=RoofingTiles006 |
+| 5 | Chapa acanalada | CorrugatedSteel005 — https://ambientcg.com/view?id=CorrugatedSteel005 |
+| 6 | Madera | WoodSiding005 — https://ambientcg.com/view?id=WoodSiding005 |
+| 7 | Metal pintado | Metal027 — https://ambientcg.com/view?id=Metal027 |
+| 8 | Asfalto | Asphalt025C — https://ambientcg.com/view?id=Asphalt025C |
+| 9 | Baldosas de vereda | PavingStones128 — https://ambientcg.com/view?id=PavingStones128 |

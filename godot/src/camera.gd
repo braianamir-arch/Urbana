@@ -39,6 +39,7 @@ func place_camera() -> void:
 	var off := Vector3(sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), cos(cam_yaw) * cos(cam_pitch)) * cam_dist
 	cam.position = cam_target + off
 	cam.look_at(cam_target, Vector3.UP)
+	update_building_lod()
 	if sun and not OS.has_feature("android"):
 		sun.directional_shadow_max_distance = clampf(cam_dist * 2.2, 80.0, 420.0)
 func start_intro(full: bool) -> void:

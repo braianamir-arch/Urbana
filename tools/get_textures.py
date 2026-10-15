@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Baja y prepara las texturas CC0 de ambientCG para el terreno, y genera las del agua.
 
-Uso: python3 tools/get_textures.py
+Uso: python3 tools/get_textures.py [terreno|ciudad]  (sin nada: todo)
 Deja en godot/assets/terrain/<mat>_alb.webp (RGB = color, A = rugosidad, 2048²) y
 <mat>_nrm.webp (normal OpenGL, 1024²); en godot/assets/water/ water_nrm.webp y foam.webp
 (generadas con ruido periódico, semilla fija). Es reproducible.
@@ -15,6 +15,7 @@ import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
+CITY = ROOT / "godot" / "assets" / "city"
 TERRAIN = ROOT / "godot" / "assets" / "terrain"
 WATER = ROOT / "godot" / "assets" / "water"
 CACHE = ROOT / "out" / "ambientcg"
@@ -113,6 +114,61 @@ def water():
     print("agua: generada")
 
 
+# ciudad: una capa por material del juego (orden = BM_* de godot/src/buildings.gd).
+# None = "liso" (gris neutro generado). Las capas que se tiñen con el color del edificio se pasan a gris
+# con brillo medio 0,8 para que el tinte mande.
+CITY_LAYERS = [
+    ("liso", None, True),
+    ("ladrillo", "Bricks085", False),
+    ("revoque", "Plaster001", True),
+    ("hormigon", "Concrete031", False),
+    ("tejas", "RoofingTiles006", False),
+    ("chapa", "CorrugatedSteel005", True),
+    ("madera", "WoodSiding005", False),
+    ("metal", "Metal027", True),
+    ("asfalto", "Asphalt025C", False),
+    ("vereda", "PavingStones128", False),
+]
+CITY_SIZE = 1024
+
+
+def neutral(img, mean=0.8):
+    a = np.asarray(img.convert("L"), dtype=np.float64) / 255.0
+    a = a / max(a.mean(), 1e-3) * mean
+    g = (np.clip(a, 0, 1) * 255).astype(np.uint8)
+    return Image.merge("RGB", (Image.fromarray(g),) * 3)
+
+
+def city():
+    CITY.mkdir(parents=True, exist_ok=True)
+    S = CITY_SIZE
+    alb = Image.new("RGBA", (S, S * len(CITY_LAYERS)))
+    nrm = Image.new("RGB", (S, S * len(CITY_LAYERS)))
+    for k, (name, asset, gray) in enumerate(CITY_LAYERS):
+        if asset is None:
+            n = periodic_noise(S, 5, 4242 + k)
+            col = Image.fromarray((np.dstack([0.78 + (n - 0.5) * 0.06] * 3) * 255).astype(np.uint8), "RGB")
+            rough = Image.new("L", (S, S), 205)
+            nm = Image.new("RGB", (S, S), (128, 128, 255))
+        else:
+            zf = fetch(asset)
+            col = flatten(member(zf, "_Color.jpg").convert("RGB").resize((S, S), Image.LANCZOS))
+            if gray:
+                col = neutral(col)
+            rough = member(zf, "_Roughness.jpg").convert("L").resize((S, S), Image.LANCZOS)
+            nm = member(zf, "_NormalGL.jpg").convert("RGB").resize((S, S), Image.LANCZOS)
+        alb.paste(Image.merge("RGBA", (*col.split(), rough)), (0, S * k))
+        nrm.paste(nm, (0, S * k))
+        print(f"ciudad {k} {name}: {asset or 'generado'}")
+    alb.save(CITY / "city_alb.webp", quality=90, method=6)
+    nrm.save(CITY / "city_nrm.webp", quality=92, method=6)
+
+
 if __name__ == "__main__":
-    terrain()
-    water()
+    import sys
+    what = sys.argv[1] if len(sys.argv) > 1 else "todo"
+    if what in ("terreno", "todo"):
+        terrain()
+        water()
+    if what in ("ciudad", "todo"):
+        city()
