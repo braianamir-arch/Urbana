@@ -6,7 +6,7 @@ godot/scripts/main.gd, que es el único script que usa Godot. Así cada tema
 queda separado para trabajar, pero en ejecución es un solo script: el mismo
 rendimiento que el original.
 
-  godot_modules.py build              junta godot/src en godot/scripts/main.gd
+  godot_modules.py build [--to F]     junta godot/src en godot/scripts/main.gd (o en F)
   godot_modules.py check              sale con 1 si main.gd no coincide con godot/src
   godot_modules.py split <main.gd>    (una sola vez) reparte un script único en godot/src
 """
@@ -232,7 +232,8 @@ def main():
         if bad:
             raise SystemExit("orden de inicialización roto:\n  " + "\n  ".join(bad))
         if cmd == "build":
-            OUT.write_text(text)
+            dest = Path(sys.argv[sys.argv.index("--to") + 1]) if "--to" in sys.argv else OUT
+            dest.write_text(text)
             print(f"main.gd armado ({text.count(chr(10))} líneas)")
         else:
             same = OUT.exists() and OUT.read_text() == text

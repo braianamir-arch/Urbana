@@ -17,6 +17,12 @@ como una app aparte y no ve tus ciudades.
 - Si tu APK anterior usaba otro (lo ves en tu proyecto viejo: **Proyecto → Exportar → Android →
   Package → Unique Name**), poné ese mismo acá antes de exportar.
 
+> ⚠️ **Antes de instalar el APK nuevo, hacé una copia de tus ciudades.** En el juego: menú →
+> **Guardar y cargar** → **Exportar y copiar**, y pegá cada código en un lugar seguro (una nota,
+> un mail a vos mismo). Si Android dice que no puede instalar el APK nuevo ("conflicto con un paquete
+> existente"), es porque se exportó con otra clave de firma: **no desinstales la app vieja**, porque
+> desinstalar borra todas las partidas. Avisá y lo resolvemos; con los códigos copiados no se pierde nada.
+
 ## Cómo está organizado el código
 
 - `src/` tiene el código **separado por tema**: `world.gd` (mapa), `sim.gd` (simulación),
