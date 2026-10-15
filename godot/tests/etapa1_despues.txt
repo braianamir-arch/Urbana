@@ -1,0 +1,7 @@
+# Mediciones después de la etapa 1 (misma máquina: Vulkan por software lavapipe; Godot 4.7)
+frame_ms Media/Alta (mediodía, 120 cuadros): 453.73  (antes 428,5 → +5,9 %; límite +25 %)
+frame_ms Baja: 199.62  (antes 268,43 → −25,6 %; límite +10 %)
+terrain_ms (3 × build_terrain): 579  (antes ~502 → 1,15×; límite 2×)
+pck Android: 43970296 bytes  (antes 424776 → +43,5 MB; límite +100 MB)
+Simulación: líneas SIM idénticas a la referencia. compat_test: ok.
+Verificador de colores (tools/check_album.py): 11/11 ok.
