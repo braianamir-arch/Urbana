@@ -75,6 +75,8 @@ func setup_render() -> void:
 	var sw := Shader.new()
 	sw.code = SHADER_WATER.code
 	water_mat.shader = sw
+	water_mat.set_shader_parameter("nrm_tex", load("res://assets/water/water_nrm.webp"))
+	water_mat.set_shader_parameter("foam_tex", load("res://assets/water/foam.webp"))
 	overlay_mat = ShaderMaterial.new()
 	var so := Shader.new()
 	so.code = SHADER_OVERLAY.code
@@ -207,7 +209,9 @@ func apply_quality() -> void:
 	if env:
 		env.fog_enabled = opts["g_fog"]
 	if water_node:
-		if opts["g_water"]:
+		# calidad Baja: agua simple; Media: una capa de olas y sin anillos de lluvia; Alta: todo
+		if opts["g_water"] and q >= 1:
+			water_mat.set_shader_parameter("layers", 2.0 if q >= 2 else 1.0)
 			water_node.material_override = water_mat
 		else:
 			if water_simple_mat == null:
@@ -1353,6 +1357,8 @@ func update_light() -> void:
 	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
 	terrain_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)
 	water_mat.set_shader_parameter("night", nf)
+	water_mat.set_shader_parameter("wind_dir", wind)
+	water_mat.set_shader_parameter("rain", 1.0 if (weather == "Lluvia" or weather == "Tormenta") and int(opts["quality"]) >= 2 else 0.0)
 	city_mat.set_shader_parameter("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
 	env.glow_intensity = lerpf(0.22, 0.9, nf)
 # color del sol según la altura (seno de la elevación): blanco cálido arriba, dorado cerca del horizonte
