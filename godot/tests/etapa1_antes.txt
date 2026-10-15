@@ -1,0 +1,4 @@
+# Mediciones antes de la etapa 1 (esta máquina: Vulkan por software lavapipe; Godot 4.7)
+frame_ms (renderer Mobile, calidad por defecto, ciudad de prueba al mediodía, 120 cuadros): 426.54 / 430.36  → promedio 428.5
+terrain_ms (3 × build_terrain, headless): 485 / 526 / 494 → promedio 502
+pck Android (export-pack): 424776 bytes

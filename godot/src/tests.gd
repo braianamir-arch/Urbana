@@ -96,6 +96,9 @@ func shot_to(dir: String, nm: String) -> void:
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(dir + "/" + nm + ".png")
 func run_test() -> void:
+	if test_mode.begins_with("album="):
+		run_album(test_mode.substr(6))
+		return
 	if test_mode in ["compat_save", "compat_load", "fresh", "pause"]:
 		run_extra()
 		return
@@ -666,6 +669,10 @@ func run_sim() -> void:
 	for k in 300:
 		agents_process(1.0 / 60.0)
 	print("BENCH agents_ms=%d cars=%d peds=%d" % [(Time.get_ticks_usec() - t0) / 1000, cars.size(), peds.size()])
+	t0 = Time.get_ticks_usec()
+	for k in 3:
+		build_terrain()
+	print("BENCH terrain_ms=%d" % ((Time.get_ticks_usec() - t0) / 1000))
 	print("SIM OK")
 	get_tree().quit()
 # --- pruebas de compatibilidad y casos de borde (etapa 0)
@@ -728,3 +735,109 @@ func run_extra() -> void:
 				var clean := FileAccess.get_file_as_string("user://ultimo_paso.txt").contains("cierre limpio")
 				print("PAUSE OK" if saved and clean else "PAUSE FALLA guardada=%s limpio=%s" % [saved, clean])
 				get_tree().quit()
+# --- álbum de capturas (etapa 1): se corre con el renderer Mobile (tools/album.sh)
+var album_shots: Array = []
+var album_k: int = -1
+var album_wait: int = 0
+var album_t: int = 0
+var album_frames: Array = []
+func album_hour(h: float) -> void:
+	day_timer = (h - 6.0) / 24.0 * DAY_SECONDS
+	speed = 0
+func album_city(h: float, w: String, d: int) -> void:
+	if album_k == 0 or test_city == false:
+		new_test_city()
+		enter_game(false)
+		skip_intro()
+	day = d
+	weather = w
+	album_hour(h)
+	terrain_dirty = true
+	mark_all_dirty()
+	cam_goal = Vector3.ZERO
+	cam_target = cam_goal
+	cam_dist_goal = 110.0
+	cam_dist = 110.0
+	cam_pitch = 0.75
+	cam_yaw = 0.5
+func album_map(kind: int, want: int) -> void:
+	new_game(kind, 0, true, false, 3)
+	enter_game(false)
+	skip_intro()
+	weather = "Soleado"
+	album_hour(13.0)
+	var best := -1
+	var bd := 1e9
+	for i in N * N:
+		if terr[i] == want:
+			var dd := Vector2(cx(i) - N / 2, cz(i) - N / 2).length()
+			if dd < bd:
+				bd = dd
+				best = i
+	if best >= 0:
+		cam_goal = cell_pos(best)
+	cam_target = cam_goal
+	cam_dist_goal = 120.0
+	cam_dist = 120.0
+	cam_pitch = 0.7
+	cam_yaw = 0.5
+func album_horizon(h: float) -> void:
+	album_city(h, "Soleado", 3)
+	update_light()
+	# mirar hacia el sol: la luz apunta a -Z, así que el sol está en +Z de su base
+	var to_sun: Vector3 = sun.global_transform.basis.z
+	cam_yaw = atan2(-to_sun.x, -to_sun.z)
+	cam_pitch = 0.22
+	cam_dist_goal = 170.0
+	cam_dist = 170.0
+func run_album(dir: String) -> void:
+	test_frame += 1
+	if test_frame < 5:
+		return
+	if album_k < 0:
+		DirAccess.make_dir_recursive_absolute(dir)
+		album_shots = [
+			["amanecer", func(): album_city(6.8, "Soleado", 3)],
+			["mediodia", func(): album_city(13.0, "Soleado", 3)],
+			["atardecer", func(): album_city(19.5, "Soleado", 3)],
+			["noche", func(): album_city(23.0, "Soleado", 3)],
+			["lluvia", func(): album_city(13.0, "Lluvia", 3)],
+			["nieve", func(): album_city(13.0, "Nieve", 23)],
+			["otono", func(): album_city(13.0, "Soleado", 13)],
+			["rio", func(): album_map(0, T_WATER)],
+			["costa", func(): album_map(2, T_WATER)],
+			["islas", func(): album_map(3, T_WATER)],
+			["cerros", func(): album_map(1, T_ROCK)],
+			["horizonte_dia", func(): album_horizon(13.0)],
+			["horizonte_tarde", func(): album_horizon(19.5)],
+		]
+		album_k = 0
+		album_wait = 0
+	if album_k >= album_shots.size():
+		print("ALBUM OK")
+		get_tree().quit()
+		return
+	card_queue.clear()
+	card_panel.visible = false
+	ui_layer.visible = false
+	if album_wait == 0:
+		album_shots[album_k][1].call()
+		card_queue.clear()
+	album_wait += 1
+	# en el mediodía se mide el tiempo por cuadro (cuadros 60 a 180)
+	if album_shots[album_k][0] == "mediodia" and album_wait >= 60:
+		var now := Time.get_ticks_usec()
+		if album_wait > 60:
+			album_frames.append(now - album_t)
+		album_t = now
+		if album_wait == 180:
+			var tot := 0.0
+			for v in album_frames:
+				tot += v
+			print("BENCH frame_ms=%.2f" % (tot / maxf(album_frames.size(), 1) / 1000.0))
+	var need := 180 if album_shots[album_k][0] == "mediodia" else 90
+	if album_wait >= need:
+		get_viewport().get_texture().get_image().save_png(dir + "/" + album_shots[album_k][0] + ".png")
+		print("captura ", album_shots[album_k][0])
+		album_k += 1
+		album_wait = 0
