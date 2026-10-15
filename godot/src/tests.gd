@@ -981,6 +981,12 @@ func run_buildings() -> void:
 	zone[ks[2]] = 0
 	building_check("cambios")
 	bt(bool(bcheck_log[ks[0]]["dark"]), "BUILDING_CHECK quemado oscuro " + ("ok" if bcheck_log[ks[0]]["dark"] else "FALLA"))
+	var nn := [0, 0, 0]
+	for c in bnodes:
+		for k in c:
+			if c[k].multimesh.instance_count > 0:
+				nn[k % 3] += 1
+	print("BENCH nodos_edificios cerca=%d media=%d lejos=%d" % nn)
 	print("BUILDINGS OK" if bt_fail == 0 else "BUILDINGS FALLA")
 	get_tree().quit()
 # cada modelo arma sus 3 versiones, entra en su lote y tiene la altura de su nivel

@@ -111,6 +111,8 @@ void fragment() {
 				vec4 t = texture(alb_arr, uvw);
 				col = t.rgb * COLOR.rgb / (asph ? vec3(0.23) : vec3(0.62, 0.6, 0.56)) * (asph ? 1.25 : 1.0);
 				rough = t.a;
+				// mojado: más oscuro (el brillo lo pone la rugosidad más abajo)
+				col *= 1.0 - (asph ? 0.3 : 0.38) * wet;
 			}
 		} else if (mi == 7) {
 			vec2 sc = vec2(mu.x / 1.1 + mod(floor(mu.y / 0.55), 2.0) * 0.5, mu.y / 0.55);

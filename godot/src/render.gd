@@ -24,6 +24,7 @@ var sky_mat: ShaderMaterial
 var cloud_drift := Vector2.ZERO
 const SHADER_CITY := preload("res://shaders/city.gdshader")
 const SHADER_BUILDING := preload("res://shaders/building.gdshader")
+const SHADER_BUILDING_LITE := preload("res://shaders/building_lite.gdshader")
 const SHADER_WATER := preload("res://shaders/water.gdshader")
 const SHADER_TERRAIN := preload("res://shaders/terrain_simple.gdshader")
 const SHADER_TERRAIN_TEX := preload("res://shaders/terrain.gdshader")
@@ -75,6 +76,8 @@ func setup_render() -> void:
 	cat_register()
 	building_mat = ShaderMaterial.new()
 	building_mat.shader = SHADER_BUILDING
+	building_lite_mat = ShaderMaterial.new()
+	building_lite_mat.shader = SHADER_BUILDING_LITE
 	water_mat = ShaderMaterial.new()
 	var sw := Shader.new()
 	sw.code = SHADER_WATER.code
@@ -96,7 +99,7 @@ func setup_render() -> void:
 	for m in [city_mat, terrain_mat, terrain_simple_mat]:
 		m.set_shader_parameter("dtex", dtex)
 		m.set_shader_parameter("ctex", ctex)
-	building_mat.set_shader_parameter("ctex", ctex)
+	bmat_param("ctex", ctex)
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
@@ -254,7 +257,7 @@ func apply_fx() -> void:
 		return
 	city_mat.set_shader_parameter("wind", 1.0 if opts["g_wind"] else 0.0)
 	city_mat.set_shader_parameter("ao_on", 1.0 if opts["g_ao"] else 0.0)
-	building_mat.set_shader_parameter("ao_on", 1.0 if opts["g_ao"] else 0.0)
+	bmat_param("ao_on", 1.0 if opts["g_ao"] else 0.0)
 	set_city_tex(use_tex_terrain())
 	var dt: float = 1.0 if opts["g_detail"] else 0.0
 	city_mat.set_shader_parameter("det", dt)
@@ -349,13 +352,13 @@ func update_fx() -> void:
 			sky_mat.set_shader_parameter("cover", cv)
 			sky_mat.set_shader_parameter("storm", 1.0 if weather in ["Lluvia", "Tormenta", "Nieve"] else 0.0)
 			city_mat.set_shader_parameter("cshadow", cv)
-			building_mat.set_shader_parameter("cshadow", cv)
+			bmat_param("cshadow", cv)
 			terrain_mat.set_shader_parameter("cshadow", cv)
 			terrain_simple_mat.set_shader_parameter("cshadow", cv)
 	elif cloud_cover != 0.0:
 		cloud_cover = 0.0
 		city_mat.set_shader_parameter("cshadow", 0.0)
-		building_mat.set_shader_parameter("cshadow", 0.0)
+		bmat_param("cshadow", 0.0)
 		terrain_mat.set_shader_parameter("cshadow", 0.0)
 		terrain_simple_mat.set_shader_parameter("cshadow", 0.0)
 	var want := ""
@@ -384,11 +387,11 @@ func set_city_tex(on: bool) -> void:
 	if on and not city_tex_loaded:
 		var a: Resource = load("res://assets/city/city_alb.webp")
 		var n: Resource = load("res://assets/city/city_nrm.webp")
-		for m in [building_mat, city_mat]:
+		for m in [building_mat, building_lite_mat, city_mat]:
 			m.set_shader_parameter("alb_arr", a)
 			m.set_shader_parameter("nrm_arr", n)
 		city_tex_loaded = true
-	for m in [building_mat, city_mat]:
+	for m in [building_mat, building_lite_mat, city_mat]:
 		m.set_shader_parameter("tex_on", 1.0 if on else 0.0)
 func use_tex_terrain() -> bool:
 	return int(opts["quality"]) >= 1 and bool(opts["g_detail"])
@@ -452,7 +455,7 @@ func set_hmap(himg: Image) -> void:
 	var half := N * CELL * 0.5
 	var htex := ImageTexture.create_from_image(himg)
 	var hi := Vector4(N * CELL, half, float(N) / float(N + 1), 0.5 / float(N + 1))
-	for m in [city_mat, water_mat, terrain_mat, building_mat]:
+	for m in [city_mat, water_mat, terrain_mat, building_mat, building_lite_mat]:
 		m.set_shader_parameter("hmap", htex)
 		m.set_shader_parameter("hinfo", hi)
 func load_terrain_tex() -> void:
@@ -1458,10 +1461,10 @@ func update_light() -> void:
 	env.fog_density = 0.0005 + cloudy * 0.0012 + (0.0005 if hour > 5.5 and hour < 8.0 else 0.0)
 	city_mat.set_shader_parameter("night", nf)
 	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
-	building_mat.set_shader_parameter("night", nf)
-	building_mat.set_shader_parameter("late", 1.0 if hour >= 1.0 and hour < 6.0 else 0.0)
-	building_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
-	building_mat.set_shader_parameter("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
+	bmat_param("night", nf)
+	bmat_param("late", 1.0 if hour >= 1.0 and hour < 6.0 else 0.0)
+	bmat_param("snow", 0.8 if weather == "Nieve" else 0.0)
+	bmat_param("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
 	terrain_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)
 	if far_mat != null:
 		far_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)

@@ -25,11 +25,15 @@ como una app aparte y no ve tus ciudades.
 
 ## Gráficos (Opciones → Gráficos)
 
-| Calidad | Cielo | Suelo | Agua |
-|---|---|---|---|
-| **Alta** | atmósfera con nubes que se mueven | texturas fotográficas mezcladas (pasto, tierra, roca, arena, nieve) y lomas suaves | olas en dos capas, espuma en la orilla y anillos de gotas cuando llueve |
-| **Media** | igual que Alta | igual que Alta | una capa de olas, sin anillos de lluvia |
-| **Baja** | atmósfera sin nubes | el suelo simple de antes | agua simple |
+| Calidad | Cielo | Suelo | Agua | Edificios y calles |
+|---|---|---|---|---|
+| **Alta** | atmósfera con nubes que se mueven | texturas fotográficas mezcladas (pasto, tierra, roca, arena, nieve) y lomas suaves | olas en dos capas, espuma en la orilla y anillos de gotas cuando llueve | ~40 modelos (casas porteñas, departamentos, torres, comercios, fábricas) con ladrillo, revoque, tejas, chapa y vidrio de verdad; de cerca, ventanas hundidas, balcones, rejas y persianas |
+| **Media** | igual que Alta | igual que Alta | una capa de olas, sin anillos de lluvia | igual que Alta |
+| **Baja** | atmósfera sin nubes | el suelo simple de antes | agua simple | los mismos modelos en su versión simple, con colores lisos |
+
+Los edificios tienen tres versiones según la distancia. La más detallada (balcones, rejas, marcos)
+aparece cuando acercás la cámara; desde la vista normal se ven las fachadas con las ventanas pintadas,
+que es mucho más liviano para el celular.
 
 Si algo anda lento o se cierra, en la misma pantalla se pueden apagar por separado: texturas en suelo
 y paredes, nubes, agua con ondas, niebla, sombras y "color de cine". El botón **Modo seguro** apaga

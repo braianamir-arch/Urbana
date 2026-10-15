@@ -2837,6 +2837,7 @@ var sky_mat: ShaderMaterial
 var cloud_drift := Vector2.ZERO
 const SHADER_CITY := preload("res://shaders/city.gdshader")
 const SHADER_BUILDING := preload("res://shaders/building.gdshader")
+const SHADER_BUILDING_LITE := preload("res://shaders/building_lite.gdshader")
 const SHADER_WATER := preload("res://shaders/water.gdshader")
 const SHADER_TERRAIN := preload("res://shaders/terrain_simple.gdshader")
 const SHADER_TERRAIN_TEX := preload("res://shaders/terrain.gdshader")
@@ -2888,6 +2889,8 @@ func setup_render() -> void:
 	cat_register()
 	building_mat = ShaderMaterial.new()
 	building_mat.shader = SHADER_BUILDING
+	building_lite_mat = ShaderMaterial.new()
+	building_lite_mat.shader = SHADER_BUILDING_LITE
 	water_mat = ShaderMaterial.new()
 	var sw := Shader.new()
 	sw.code = SHADER_WATER.code
@@ -2909,7 +2912,7 @@ func setup_render() -> void:
 	for m in [city_mat, terrain_mat, terrain_simple_mat]:
 		m.set_shader_parameter("dtex", dtex)
 		m.set_shader_parameter("ctex", ctex)
-	building_mat.set_shader_parameter("ctex", ctex)
+	bmat_param("ctex", ctex)
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
@@ -3067,7 +3070,7 @@ func apply_fx() -> void:
 		return
 	city_mat.set_shader_parameter("wind", 1.0 if opts["g_wind"] else 0.0)
 	city_mat.set_shader_parameter("ao_on", 1.0 if opts["g_ao"] else 0.0)
-	building_mat.set_shader_parameter("ao_on", 1.0 if opts["g_ao"] else 0.0)
+	bmat_param("ao_on", 1.0 if opts["g_ao"] else 0.0)
 	set_city_tex(use_tex_terrain())
 	var dt: float = 1.0 if opts["g_detail"] else 0.0
 	city_mat.set_shader_parameter("det", dt)
@@ -3162,13 +3165,13 @@ func update_fx() -> void:
 			sky_mat.set_shader_parameter("cover", cv)
 			sky_mat.set_shader_parameter("storm", 1.0 if weather in ["Lluvia", "Tormenta", "Nieve"] else 0.0)
 			city_mat.set_shader_parameter("cshadow", cv)
-			building_mat.set_shader_parameter("cshadow", cv)
+			bmat_param("cshadow", cv)
 			terrain_mat.set_shader_parameter("cshadow", cv)
 			terrain_simple_mat.set_shader_parameter("cshadow", cv)
 	elif cloud_cover != 0.0:
 		cloud_cover = 0.0
 		city_mat.set_shader_parameter("cshadow", 0.0)
-		building_mat.set_shader_parameter("cshadow", 0.0)
+		bmat_param("cshadow", 0.0)
 		terrain_mat.set_shader_parameter("cshadow", 0.0)
 		terrain_simple_mat.set_shader_parameter("cshadow", 0.0)
 	var want := ""
@@ -3197,11 +3200,11 @@ func set_city_tex(on: bool) -> void:
 	if on and not city_tex_loaded:
 		var a: Resource = load("res://assets/city/city_alb.webp")
 		var n: Resource = load("res://assets/city/city_nrm.webp")
-		for m in [building_mat, city_mat]:
+		for m in [building_mat, building_lite_mat, city_mat]:
 			m.set_shader_parameter("alb_arr", a)
 			m.set_shader_parameter("nrm_arr", n)
 		city_tex_loaded = true
-	for m in [building_mat, city_mat]:
+	for m in [building_mat, building_lite_mat, city_mat]:
 		m.set_shader_parameter("tex_on", 1.0 if on else 0.0)
 func use_tex_terrain() -> bool:
 	return int(opts["quality"]) >= 1 and bool(opts["g_detail"])
@@ -3265,7 +3268,7 @@ func set_hmap(himg: Image) -> void:
 	var half := N * CELL * 0.5
 	var htex := ImageTexture.create_from_image(himg)
 	var hi := Vector4(N * CELL, half, float(N) / float(N + 1), 0.5 / float(N + 1))
-	for m in [city_mat, water_mat, terrain_mat, building_mat]:
+	for m in [city_mat, water_mat, terrain_mat, building_mat, building_lite_mat]:
 		m.set_shader_parameter("hmap", htex)
 		m.set_shader_parameter("hinfo", hi)
 func load_terrain_tex() -> void:
@@ -4271,10 +4274,10 @@ func update_light() -> void:
 	env.fog_density = 0.0005 + cloudy * 0.0012 + (0.0005 if hour > 5.5 and hour < 8.0 else 0.0)
 	city_mat.set_shader_parameter("night", nf)
 	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
-	building_mat.set_shader_parameter("night", nf)
-	building_mat.set_shader_parameter("late", 1.0 if hour >= 1.0 and hour < 6.0 else 0.0)
-	building_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
-	building_mat.set_shader_parameter("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
+	bmat_param("night", nf)
+	bmat_param("late", 1.0 if hour >= 1.0 and hour < 6.0 else 0.0)
+	bmat_param("snow", 0.8 if weather == "Nieve" else 0.0)
+	bmat_param("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
 	terrain_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)
 	if far_mat != null:
 		far_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)
@@ -4432,6 +4435,11 @@ var cat_cache: Dictionary = {}
 var bset: Dictionary = {}
 # dibujo: por bloque, clave (modelo * 64 + pisos) * 3 + versión -> MultiMeshInstance3D
 var building_mat: ShaderMaterial
+var building_lite_mat: ShaderMaterial
+# el mismo parámetro en las dos variantes del shader de edificios
+func bmat_param(n: String, v: Variant) -> void:
+	building_mat.set_shader_parameter(n, v)
+	building_lite_mat.set_shader_parameter(n, v)
 var bnodes: Array = []
 var _binst: Dictionary = {}
 var bq_last: int = -1
@@ -4665,7 +4673,7 @@ func flush_buildings(ch: int) -> void:
 			var nk: int = key * 3 + lod
 			var node: MultiMeshInstance3D = nodes.get(nk)
 			if node == null:
-				node = new_mm_node(cat_mesh(key / 64, key % 64, lod), building_mat)
+				node = new_mm_node(cat_mesh(key / 64, key % 64, lod), building_mat if lod == LOD_NEAR else building_lite_mat)
 				nodes[nk] = node
 			lod_ranges(node, lod, q)
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if lod != LOD_FAR or q == 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -4678,17 +4686,18 @@ func flush_buildings(ch: int) -> void:
 # Distancias de cada versión (medidas desde el centro del bloque). La versión cerca solo se usa con la
 # cámara acercada: a la distancia normal sus detalles no se ven y costaban un 30 % más por cuadro.
 func lod_ranges(node: GeometryInstance3D, lod: int, q: int) -> void:
-	node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	# sin fundido: Godot lo hace con un tramado de puntos que, a escala de bloque, se veía como granulado
+	node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
 	node.visible = lod != LOD_NEAR or (b_near_on and q > 0)
 	if q == 0:
 		node.visibility_range_begin = 0.0
 		node.visibility_range_end = 0.0
 		return
-	var begin: float = [0.0, 120.0 if b_near_on else 0.0, 340.0][lod]
-	node.visibility_range_begin = begin
-	node.visibility_range_begin_margin = 0.0 if begin == 0.0 else 20.0
-	node.visibility_range_end = [140.0, 380.0, 0.0][lod]
-	node.visibility_range_end_margin = 20.0
+	# cortes exactos: dos versiones a la vez se pisan (caras en el mismo lugar)
+	node.visibility_range_begin = [0.0, 130.0 if b_near_on else 0.0, 200.0][lod]
+	node.visibility_range_begin_margin = 0.0
+	node.visibility_range_end = [130.0, 200.0, 0.0][lod]
+	node.visibility_range_end_margin = 0.0
 func update_building_lod() -> void:
 	var want := cam_dist < (75.0 if b_near_on else 65.0)
 	if want == b_near_on:
@@ -4745,11 +4754,21 @@ func mb_wall_win(p0: Vector3, p1: Vector3, y0: float, floors: int, cols: int, lo
 		mb_xf = keep
 		return y0 + top
 	var pitch := L / cols
-	if lod == LOD_FAR:
+	if lod != LOD_NEAR:
+		# media y lejana: fachada entera con las ventanas dibujadas por el shader. En la máscara de tinte
+		# van además dos marcas: +4 persianas, +8 planta baja vidriera
 		var fm: int = gl if curtain else BM_FARWIN + mat
-		mb_quad(Vector3(0, 0, 0), Vector3(L, 0, 0), Vector3(L, gf, 0), Vector3(0, gf, 0), fm, tm, Vector2(uo, 0), Vector2(uo + cols, 1))
+		var ftm := tm + (4 if o.get("shutters", false) and not curtain else 0)
+		var gtm := ftm + (8 if o.get("shop", false) and not curtain else 0)
+		mb_quad(Vector3(0, 0, 0), Vector3(L, 0, 0), Vector3(L, gf, 0), Vector3(0, gf, 0), fm, gtm, Vector2(uo, 0), Vector2(uo + cols, 1))
 		if floors > 1:
-			mb_quad(Vector3(0, gf, 0), Vector3(L, gf, 0), Vector3(L, top, 0), Vector3(0, top, 0), fm, tm, Vector2(uo, 1), Vector2(uo + cols, floors))
+			mb_quad(Vector3(0, gf, 0), Vector3(L, gf, 0), Vector3(L, top, 0), Vector3(0, top, 0), fm, ftm, Vector2(uo, 1), Vector2(uo + cols, floors))
+		if lod == LOD_MID:
+			if o.get("bands", false):
+				for r in range(1, floors):
+					mb_box(Vector3(L * 0.5, gf + (r - 1) * FLOOR_H - 0.06, 0.0), Vector3(L + 0.04, 0.12, 0.06), BM_CONCRETE, 0, 63 - 32 - 8)
+			if o.get("cornice", false):
+				mb_box(Vector3(L * 0.5, top - 0.16, 0.0), Vector3(L + 0.2, 0.16, 0.14), BM_CONCRETE, 0, 63 - 32)
 		mb_xf = keep
 		return y0 + top
 	var balc: String = o.get("balc", "")
@@ -4785,12 +4804,13 @@ func mb_wall_win(p0: Vector3, p1: Vector3, y0: float, floors: int, cols: int, lo
 			y1w = minf(y1w, yb + fh - 0.06)
 			holes.append([xc - ww * 0.5, xc + ww * 0.5, y0w, y1w, fill, ftm, Vector2(uo + k, r)])
 		if lod == LOD_MID:
+			# pared entera y el vidrio apenas adelante (3 cm, para que de lejos no se pisen)
 			mb_quad(Vector3(0, yb, 0), Vector3(L, yb, 0), Vector3(L, yb + fh, 0), Vector3(0, yb + fh, 0), mat, tm)
 			for h in holes:
 				var uv: Vector2 = h[6]
 				var uva := uv if h[4] == gl else Vector2.ZERO
 				var uvc := uv + Vector2.ONE if h[4] == gl else Vector2.ZERO
-				mb_quad(Vector3(h[0], h[2], 0.015), Vector3(h[1], h[2], 0.015), Vector3(h[1], h[3], 0.015), Vector3(h[0], h[3], 0.015), h[4], h[5], uva, uvc)
+				mb_quad(Vector3(h[0], h[2], 0.03), Vector3(h[1], h[2], 0.03), Vector3(h[1], h[3], 0.03), Vector3(h[0], h[3], 0.03), h[4], h[5], uva, uvc)
 		else:
 			mb_wall_holes(L, yb, yb + fh, holes, mat, tm)
 			for h in holes:
@@ -4927,7 +4947,7 @@ func chorizo(lod: int, w: float, mat: int, tm: int, two: bool) -> void:
 	# zaguán: pared del frente sobre el patio, con la puerta
 	mb_box(Vector3((0.2 + hw) * 0.5, 0, hw - 0.06), Vector3(hw - 0.2, 1.8, 0.12), mat, tm, 63 - 8)
 	if lod != LOD_FAR:
-		mb_quad(Vector3(0.55, 0, hw + 0.005), Vector3(1.15, 0, hw + 0.005), Vector3(1.15, 1.3, hw + 0.005), Vector3(0.55, 1.3, hw + 0.005), BM_WOOD, 2)
+		mb_quad(Vector3(0.55, 0, hw + 0.04), Vector3(1.15, 0, hw + 0.04), Vector3(1.15, 1.3, hw + 0.04), Vector3(0.55, 1.3, hw + 0.04), BM_WOOD, 2)
 		# patio con baldosas y medianera de ladrillo
 		mb_quad(Vector3(0.2, 0.03, hw - 0.12), Vector3(hw, 0.03, hw - 0.12), Vector3(hw, 0.03, -hw), Vector3(0.2, 0.03, -hw), BM_SIDEWALK, 0)
 		mb_box(Vector3(hw - 0.05, 0, -0.06), Vector3(0.1, 1.3, 2.0 * hw - 0.12), BM_BRICK, 0, 63 - 8)
@@ -5198,7 +5218,7 @@ func rc_torre_oficinas_grande(lod: int, f: int, _w: float) -> void:
 # --- industria
 # portón de chapa hundido (marco del modelo, frente +Z)
 func mb_gate(x: float, z: float, wd: float, h: float) -> void:
-	mb_quad(Vector3(x - wd * 0.5, 0, z + 0.01), Vector3(x + wd * 0.5, 0, z + 0.01), Vector3(x + wd * 0.5, h, z + 0.01), Vector3(x - wd * 0.5, h, z + 0.01), BM_SHEET, 2)
+	mb_quad(Vector3(x - wd * 0.5, 0, z + 0.04), Vector3(x + wd * 0.5, 0, z + 0.04), Vector3(x + wd * 0.5, h, z + 0.04), Vector3(x - wd * 0.5, h, z + 0.04), BM_SHEET, 2)
 # techo de dientes de sierra: cada diente tiene una cara inclinada de chapa y una vertical vidriada
 func mb_sawtooth(x0: float, x1: float, z0: float, z1: float, y: float, n: int, h: float) -> void:
 	var dz := (z1 - z0) / n
@@ -10921,6 +10941,12 @@ func run_buildings() -> void:
 	zone[ks[2]] = 0
 	building_check("cambios")
 	bt(bool(bcheck_log[ks[0]]["dark"]), "BUILDING_CHECK quemado oscuro " + ("ok" if bcheck_log[ks[0]]["dark"] else "FALLA"))
+	var nn := [0, 0, 0]
+	for c in bnodes:
+		for k in c:
+			if c[k].multimesh.instance_count > 0:
+				nn[k % 3] += 1
+	print("BENCH nodos_edificios cerca=%d media=%d lejos=%d" % nn)
 	print("BUILDINGS OK" if bt_fail == 0 else "BUILDINGS FALLA")
 	get_tree().quit()
 # cada modelo arma sus 3 versiones, entra en su lote y tiene la altura de su nivel
