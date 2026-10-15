@@ -32,6 +32,7 @@ run() {
 	fi
 }
 run sim sim "SIM OK"
+run buildings buildings "BUILDINGS OK"
 run run run "TEST OK"
 run "ui=$OUT" ui "UI OK"
 run "city=$OUT" city "CITY OK"

@@ -105,6 +105,9 @@ func run_test() -> void:
 	if test_mode == "sim":
 		run_sim()
 		return
+	if test_mode == "buildings":
+		run_buildings()
+		return
 	if test_mode.begins_with("ui="):
 		run_ui(test_mode.substr(3))
 		return
@@ -932,3 +935,62 @@ func seam_check() -> int:
 			if not outer.has(k) or absf(float(outer[k]) - v.y) > 0.001:
 				bad += 1
 	return bad
+# --- etapa 2: catálogo de edificios
+var bt_fail: int = 0
+func bt(ok: bool, msg: String) -> void:
+	if not ok:
+		bt_fail += 1
+	print(msg)
+# alturas permitidas por zona y nivel (techo y tanque incluidos); Mixta usa las de comercio
+const CAT_H := {
+	Z_R: [[2.0, 7.0], [3.5, 9.0], [7.0, 13.0], [14.0, 40.0]],
+	Z_C: [[2.0, 7.0], [3.5, 9.0], [7.0, 20.0], [14.0, 45.0]],
+	Z_I: [[2.0, 7.0], [3.0, 9.0], [3.0, 12.0], [5.0, 14.0]],
+}
+func run_buildings() -> void:
+	test_frame += 1
+	if test_frame != 5:
+		return
+	catalog_check()
+	print("BUILDINGS OK" if bt_fail == 0 else "BUILDINGS FALLA")
+	get_tree().quit()
+# cada modelo arma sus 3 versiones, entra en su lote y tiene la altura de su nivel
+func catalog_check() -> void:
+	cat_models.clear()
+	cat_register()
+	cat_cache.clear()
+	var t0 := Time.get_ticks_usec()
+	for m in cat_models.size():
+		var md: Dictionary = cat_models[m]
+		var w := CELL * (1.85 if md["big"] else 0.82)
+		for l in md["levels"]:
+			var fl: Array = md["floors"].get(l, [0])
+			for f in fl:
+				var nv: Array = []
+				for lod in 3:
+					var tag := "CATALOG_CHECK %s f=%d lod=%d " % [md["id"], f, lod]
+					var mesh: ArrayMesh = cat_mesh(m, f, lod)
+					if mesh == null or mesh.get_surface_count() != 1:
+						bt(false, tag + "FALLA sin malla")
+						nv.append(0)
+						continue
+					var vs: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+					nv.append(vs.size())
+					if vs.is_empty():
+						bt(false, tag + "FALLA sin vértices")
+						continue
+					var ab := mesh.get_aabb()
+					var lim := w * 0.5 + 0.2
+					var why := ""
+					if ab.position.x < -lim or ab.position.z < -lim or ab.end.x > lim or ab.end.z > lim:
+						why += " huella %s > %.2f" % [str(ab), lim]
+					if ab.position.y < -0.5:
+						why += " se hunde %.2f" % ab.position.y
+					for z in md["zones"]:
+						var r: Array = CAT_H[Z_C if z == Z_M else z][l - 1]
+						if ab.end.y < r[0] or ab.end.y > r[1]:
+							why += " altura %.1f fuera de %s (zona %d nivel %d)" % [ab.end.y, str(r), z, l]
+					if lod == 2 and nv[0] > 0 and vs.size() >= nv[0]:
+						why += " la versión lejos no es más liviana (%d >= %d)" % [vs.size(), nv[0]]
+					bt(why == "", tag + ("ok" if why == "" else "FALLA" + why))
+	print("BENCH catalog_ms=%d" % ((Time.get_ticks_usec() - t0) / 1000))
