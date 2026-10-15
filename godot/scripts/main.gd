@@ -3761,6 +3761,15 @@ func emit_road(i: int, p: Vector3) -> void:
 		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 0.86, 0.2, CELL * 0.86, rot, col, 0, 0, 0, am)
 		return
 	em(M_BOX, p.x, y, p.z, CELL, 0.2, CELL, 0.0, col, 0, 0, 0, am)
+	# semáforos en los cruces donde llega una avenida
+	if cnt >= 3 and not bridge:
+		var av: bool = t >= 3
+		for o in [1, -1, N, -N]:
+			var j: int = i + o
+			if j >= 0 and j < N * N and road[j] >= 3:
+				av = true
+		if av:
+			emit_semaforos(i, p, y + 0.2)
 	var horiz := (e or w) and not (s or n)
 	var vert := (s or n) and not (e or w)
 	if t >= 2 and not bridge:
@@ -3799,16 +3808,14 @@ func emit_road(i: int, p: Vector3) -> void:
 		if t >= 2 and (cx(i) + cz(i) * 3) % 3 == 0 and not bridge:
 			var lo := Vector2(0, -CELL * 0.45) if horiz else Vector2(-CELL * 0.45, 0)
 			var ao := Vector2(0, 0.8) if horiz else Vector2(0.8, 0)
-			em(M_BOX, p.x + lo.x, y, p.z + lo.y, 0.12, 2.9, 0.12, 0.0, Color(0.3, 0.3, 0.32))
-			em(M_BOX, p.x + lo.x + ao.x * 0.5, y + 2.85, p.z + lo.y + ao.y * 0.5, 0.09 if horiz else 0.8, 0.09, 0.8 if horiz else 0.09, 0.0, Color(0.3, 0.3, 0.32))
-			em(M_BOX, p.x + lo.x + ao.x, y + 2.78, p.z + lo.y + ao.y, 0.34, 0.1, 0.34, 0.0, Color(1.0, 0.85, 0.55), 0, 1.0)
+			emit_farol(p.x + lo.x, y + 0.26, p.z + lo.y, ao.x, ao.y)
 			lamps[i] = Vector3(p.x + lo.x + ao.x, y, p.z + lo.y + ao.y)
 		if t == 2 and opts["quality"] >= 1:
 			for side in [-1, 1]:
 				var j: int = i + (N * side if horiz else side)
-				if j >= 0 and j < N * N and zone[j] > 0 and lvl[j] >= 1 and hsh(i, side + 7) < 0.45:
+				if j >= 0 and j < N * N and zone[j] > 0 and lvl[j] >= 1 and hsh(i, side + 7) < (0.7 if zone[j] == Z_C else 0.45):
 					var po := Vector2(0, side * CELL * 0.3) if horiz else Vector2(side * CELL * 0.3, 0)
-					em(M_BOX, p.x + po.x, y + 0.15, p.z + po.y, 1.6, 0.6, 0.8, rot, car_color(i * 3 + side))
+					emit_car(i * 3 + side, p.x + po.x, y + 0.2, p.z + po.y, rot)
 func car_color(k: int) -> Color:
 	var pal := [Color(0.85, 0.85, 0.87), Color(0.15, 0.15, 0.17), Color(0.7, 0.12, 0.1), Color(0.2, 0.3, 0.6), Color(0.55, 0.57, 0.6), Color(0.9, 0.75, 0.2), Color(0.25, 0.45, 0.3)]
 	return pal[absi(k) % pal.size()]
@@ -4586,6 +4593,7 @@ func cat_register() -> void:
 	cat_add("complejo", [Z_I], [4], false, {}, rc_complejo)
 	cat_add("complejo_grande", [Z_I], [3, 4], true, {}, rc_complejo_grande)
 	tree_register()
+	prop_register()
 	bset.clear()
 	for m in cat_models.size():
 		var md: Dictionary = cat_models[m]
@@ -5496,6 +5504,97 @@ func emit_trees(i: int, p: Vector3) -> void:
 		emit_model(m, f, x, ground_y(x, z) - 0.05, z, hsh(i, k * 3 + 6) * TAU, sc, crown, Vector4(0, 0, hsh(i, k + 20), 0))
 # ================================================================ src/props.gd
 # Objetos de calle de la etapa 2d: faroles, semáforos, autos, mobiliario, postes y carteles.
+var prop_ids: Dictionary = {}
+const CAR_MODELS := ["sedan", "hatch", "camioneta", "utilitario", "taxi"]
+func prop_register() -> void:
+	prop_ids.clear()
+	for id in ["farol", "semaforo"] + CAR_MODELS:
+		cat_add(id, [], [1], false, {}, Callable(self, "rc_" + id), false, "objeto")
+		prop_ids[id] = cat_models.size() - 1
+# farol: columna, brazo hacia +X y farola que brilla de noche (la cabeza queda en x = 0,8, y = 2,8)
+func rc_farol(lod: int, _f: int, _w: float) -> void:
+	if lod == LOD_FAR:
+		mb_box(Vector3.ZERO, Vector3(0.1, 2.9, 0.1), BM_PAINTED, 0, 63 - 8)
+		return
+	mb_cyl(Vector3.ZERO, 0.09, 0.35, 6, BM_PAINTED, 0)
+	mb_cyl(Vector3.ZERO, 0.05, 2.9, 6 if lod == LOD_NEAR else 4, BM_PAINTED, 0)
+	mb_box(Vector3(0.4, 2.82, 0), Vector3(0.8, 0.05, 0.05), BM_PAINTED, 0)
+	mb_box(Vector3(0.8, 2.7, 0), Vector3(0.34, 0.1, 0.22), BM_PAINTED, 0, 63 - 8)
+	mb_box(Vector3(0.8, 2.66, 0), Vector3(0.3, 0.04, 0.18), BM_EMIT, 0, 8)
+# semáforo: poste y caja con tres luces mirando a +Z (rojo arriba, amarillo, verde abajo)
+func rc_semaforo(lod: int, _f: int, _w: float) -> void:
+	mb_box(Vector3.ZERO, Vector3(0.08, 2.6, 0.08), BM_PAINTED, 0, 63 - 8)
+	mb_box(Vector3(0, 2.0, 0), Vector3(0.24, 0.72, 0.18), BM_DARK, 0, 63 - 8)
+	if lod == LOD_FAR:
+		return
+	for k in 3:
+		var y := 2.55 - k * 0.22
+		mb_quad(Vector3(-0.07, y, 0.095), Vector3(0.07, y, 0.095), Vector3(0.07, y + 0.14, 0.095), Vector3(-0.07, y + 0.14, 0.095), BM_SIGNAL, 0, Vector2(k + 0.01, 0), Vector2(k + 0.99, 1))
+		if lod == LOD_NEAR:
+			mb_box(Vector3(0, y + 0.14, 0.13), Vector3(0.18, 0.025, 0.08), BM_DARK, 0, 63 - 8)
+# autos: largo a lo largo de X (1,6 m), carrocería con el color de la instancia, vidrios y ruedas
+func car_body(lod: int, L: float, W: float, h0: float, h1: float, cab0: float, cab1: float, hc: float, roof_tm: int) -> void:
+	if lod == LOD_FAR:
+		mb_box(Vector3(0, 0.1, 0), Vector3(L, h0 + hc * 0.6, W), BM_PAINTED, 1, 63 - 8)
+		return
+	mb_box(Vector3(0, 0.12, 0), Vector3(L, h0, W), BM_PAINTED, 1, 63 - 8)
+	# cabina: vidrios a los costados, adelante y atrás, techo del color del auto (o del segundo color)
+	var y0 := 0.12 + h0
+	var x0 := cab0 * L - L * 0.5
+	var x1 := cab1 * L - L * 0.5
+	var w2 := W * 0.46
+	var ins := 0.12
+	mb_quad(Vector3(x0, y0, w2), Vector3(x1, y0, w2), Vector3(x1 - ins, y0 + hc, w2 - 0.04), Vector3(x0 + ins, y0 + hc, w2 - 0.04), BM_GLASS, 0, Vector2(0, 50), Vector2(1, 51))
+	mb_quad(Vector3(x1, y0, -w2), Vector3(x0, y0, -w2), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), BM_GLASS, 0, Vector2(1, 50), Vector2(2, 51))
+	mb_quad(Vector3(x1, y0, w2), Vector3(x1, y0, -w2), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), Vector3(x1 - ins, y0 + hc, w2 - 0.04), BM_GLASS, 0, Vector2(2, 50), Vector2(3, 51))
+	mb_quad(Vector3(x0, y0, -w2), Vector3(x0, y0, w2), Vector3(x0 + ins, y0 + hc, w2 - 0.04), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), BM_GLASS, 0, Vector2(3, 50), Vector2(4, 51))
+	mb_quad(Vector3(x0 + ins, y0 + hc, w2 - 0.04), Vector3(x1 - ins, y0 + hc, w2 - 0.04), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), BM_PAINTED if roof_tm == 1 else BM_PLAIN, roof_tm)
+	if lod == LOD_NEAR:
+		# ruedas
+		var keep := mb_xf
+		for sx in [-0.32, 0.32]:
+			for sz in [-1.0, 1.0]:
+				mb_xf = keep * Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(sx * L, 0.13, sz * (W * 0.5 - 0.02)))
+				mb_cyl(Vector3(0, -0.06, 0), 0.13, 0.12, 8, BM_DARK, 0)
+		mb_xf = keep
+		# luces
+		mb_box(Vector3(L * 0.5 + 0.005, 0.28, W * 0.32), Vector3(0.02, 0.06, 0.12), BM_EMIT, 0, 16 + 1)
+		mb_box(Vector3(L * 0.5 + 0.005, 0.28, -W * 0.32), Vector3(0.02, 0.06, 0.12), BM_EMIT, 0, 16 + 1)
+func rc_sedan(lod: int, _f: int, _w: float) -> void:
+	car_body(lod, 1.7, 0.74, 0.22, 0.0, 0.3, 0.75, 0.2, 1)
+func rc_hatch(lod: int, _f: int, _w: float) -> void:
+	car_body(lod, 1.45, 0.72, 0.22, 0.0, 0.32, 0.92, 0.22, 1)
+func rc_camioneta(lod: int, _f: int, _w: float) -> void:
+	car_body(lod, 1.85, 0.8, 0.28, 0.0, 0.42, 0.95, 0.24, 1)
+	if lod != LOD_FAR:
+		# caja de carga
+		mb_box(Vector3(-0.55, 0.4, 0), Vector3(0.7, 0.1, 0.76), BM_PAINTED, 1, 63 - 8)
+func rc_utilitario(lod: int, _f: int, _w: float) -> void:
+	car_body(lod, 1.8, 0.8, 0.5, 0.0, 0.05, 0.95, 0.12, 1)
+func rc_taxi(lod: int, _f: int, _w: float) -> void:
+	# negro con techo amarillo (el amarillo es el segundo color de la instancia)
+	car_body(lod, 1.7, 0.74, 0.22, 0.0, 0.3, 0.75, 0.2, 2)
+# --- ubicación (la llama emit_road)
+# farol en la vereda (x, z) con el brazo hacia (dx, dz)
+func emit_farol(x: float, y: float, z: float, dx: float, dz: float) -> void:
+	emit_model(prop_ids["farol"], 0, x, y, z, atan2(-dz, dx), 1.0, Color(0.25, 0.26, 0.28), Vector4(0, 0, 0, 0))
+# semáforos en las cuatro esquinas de un cruce con avenida, cada uno mirando al tránsito que llega
+func emit_semaforos(i: int, p: Vector3, y: float) -> void:
+	var seed := hsh(i, 90)
+	for k in 4:
+		var sx := 1.0 if k == 0 or k == 3 else -1.0
+		var sz := 1.0 if k < 2 else -1.0
+		var x := p.x + sx * CELL * 0.44
+		var z := p.z + sz * CELL * 0.44
+		# mira hacia afuera por el eje que le toca (0: X, 1: Z)
+		var axis := k % 2
+		var rot := (0.0 if sz > 0 else PI) if axis == 1 else (PI * 0.5 if sx > 0 else -PI * 0.5)
+		emit_model(prop_ids["semaforo"], 0, x, y, z, rot, 1.0, Color(0.2, 0.2, 0.22), Vector4(0, 0, seed, axis))
+func emit_car(k: int, x: float, y: float, z: float, rot: float) -> void:
+	var m: int = prop_ids[CAR_MODELS[int(hsh(k, 91) * 5.0) % 5]]
+	var taxi: bool = m == prop_ids["taxi"]
+	var col: Color = Color(0.06, 0.06, 0.07) if taxi else car_color(k)
+	emit_model(m, 0, x, y, z, rot, 1.0, col, Vector4(0, 6.0 / 8.0, hsh(k, 92), 0))
 # ================================================================ src/specials.gd
 # Edificios especiales de la etapa 2e: una receta por cada uno.
 # ================================================================ src/camera.gd
@@ -11016,6 +11115,8 @@ func run_album(dir: String) -> void:
 			["arboles_otono", func(): album_trees(1 + DAYS_PER_SEASON, "Soleado")],
 			["arboles_invierno", func(): album_trees(1 + DAYS_PER_SEASON * 2, "Nieve")],
 			["catalogo_arboles", func(): album_catalog(-2)],
+			["calle_dia", func(): album_street(13.0)],
+			["calle_noche", func(): album_street(22.5)],
 			["catalogo", func(): album_catalog(-1)],
 			["catalogo_casas", func(): album_catalog(0)],
 			["catalogo_deptos", func(): album_catalog(1)],
@@ -11130,6 +11231,7 @@ func run_buildings() -> void:
 	skip_intro()
 	building_check("ciudad")
 	tree_check()
+	prop_check()
 	# quemar uno, subir de nivel otro y borrar la zona de un tercero
 	var ks: Array = []
 	for i in N * N:
@@ -11440,6 +11542,81 @@ func album_trees(d: int, w: String) -> void:
 	cam_dist = 24.0
 	cam_pitch = 0.35
 	cam_yaw = 0.5
+# objetos de calle: faroles donde están los charcos de luz; semáforos solo en cruces con avenida; autos y
+# mobiliario solo en calle o vereda (nunca sobre agua ni sobre un lote construido)
+func prop_check() -> void:
+	var ids := {}
+	for m in cat_models.size():
+		ids[cat_models[m]["id"]] = m
+	bcheck_on = true
+	mcheck_log.clear()
+	lamps.clear()
+	mark_all_dirty()
+	update_chunks(NCH * NCH)
+	bcheck_on = false
+	var why := ""
+	var nf := 0
+	var ns := 0
+	var nc := 0
+	var cars := ["sedan", "hatch", "camioneta", "utilitario", "taxi"]
+	for e in mcheck_log:
+		var c: Vector2i = e[0]
+		var id: String = cat_models[e[1]]["id"]
+		if not inb(c.x, c.y):
+			why += " %s fuera del mapa" % id
+			continue
+		var i := idx(c.x, c.y)
+		if id == "farol":
+			nf += 1
+		elif id == "semaforo":
+			ns += 1
+			var av := false
+			for o in [0, 1, -1, N, -N]:
+				var j: int = i + o
+				if j >= 0 and j < N * N and road[j] >= 3:
+					av = true
+			if road[i] == 0 or not av:
+				why += " semáforo sin avenida en %d" % i
+		elif id in cars:
+			nc += 1
+			if road[i] == 0 or terr[i] == T_WATER:
+				why += " auto fuera de la calle en %d" % i
+	if nf != lamps.size():
+		why += " faroles %d != luces %d" % [nf, lamps.size()]
+	if ns == 0 or nc == 0:
+		why += " sin semáforos (%d) o sin autos (%d)" % [ns, nc]
+	bt(why == "", "PROP_CHECK faroles %d semáforos %d autos %d " % [nf, ns, nc] + ("ok" if why == "" else "FALLA" + why.substr(0, 400)))
+# toma de cerca sobre el cruce con avenida más cercano al centro (semáforos, faroles, autos)
+func album_street(h: float) -> void:
+	album_city(h, "Soleado", 3)
+	if cat_root:
+		cat_root.queue_free()
+		cat_root = null
+	var best := -1
+	var bd := 1e9
+	for i in N * N:
+		if road[i] >= 2 and terr[i] != T_WATER:
+			var nb := road_n(i)
+			var cnt := int(nb[0]) + int(nb[1]) + int(nb[2]) + int(nb[3])
+			var av: bool = road[i] >= 3
+			for o in [1, -1, N, -N]:
+				var j: int = i + o
+				if j >= 0 and j < N * N and road[j] >= 3:
+					av = true
+			if cnt >= 3 and av:
+				var dd := Vector2(cx(i) - N / 2, cz(i) - N / 2).length()
+				if dd < bd:
+					bd = dd
+					best = i
+	if best >= 0:
+		cam_goal = cell_pos(best)
+	cam_target = cam_goal
+	# la cámara se pone sobre la avenida, mirando a lo largo de ella
+	var along_x := best >= 0 and ((cx(best) < N - 1 and road[best + 1] >= 2) or (cx(best) > 0 and road[best - 1] >= 2))
+	cam_dist_goal = 26.0
+	cam_dist = 26.0
+	cam_pitch = 0.5
+	cam_yaw = (PI * 0.5 if along_x else 0.0) + 0.25
 # ================================================================ src/main.gd
 # Arranque y bucle principal de Godot.
 func _unhandled_input(event: InputEvent) -> void:

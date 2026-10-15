@@ -113,6 +113,18 @@ void fragment() {
 			col = vec3(0.92, 0.88, 0.76);
 			emit += vec3(1.0, 0.82, 0.55) * night * 2.2;
 		}
+		if (m == 24) {
+			// semáforo: ciclo de 12 s (verde 5, amarillo 1, rojo 6); el otro eje va desfasado medio ciclo
+			float t = mod(TIME + floor(cust.z * 12.0) + cust.w * 6.0, 12.0);
+			int on = t < 5.0 ? 2 : (t < 6.0 ? 1 : 0);
+			int li = int(floor(UV.x));
+			vec3 lc = li == 0 ? vec3(1.0, 0.12, 0.08) : (li == 1 ? vec3(1.0, 0.7, 0.1) : vec3(0.2, 1.0, 0.35));
+			col = lc * 0.15;
+			if (li == on) {
+				col = lc * 0.6;
+				emit += lc * (1.2 + night * 1.5);
+			}
+		}
 	} else {
 		if (tex_on > 0.5) {
 			vec3 uvw = vec3(UV / SCALE[m], float(m));

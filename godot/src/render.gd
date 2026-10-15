@@ -948,6 +948,15 @@ func emit_road(i: int, p: Vector3) -> void:
 		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 0.86, 0.2, CELL * 0.86, rot, col, 0, 0, 0, am)
 		return
 	em(M_BOX, p.x, y, p.z, CELL, 0.2, CELL, 0.0, col, 0, 0, 0, am)
+	# semáforos en los cruces donde llega una avenida
+	if cnt >= 3 and not bridge:
+		var av: bool = t >= 3
+		for o in [1, -1, N, -N]:
+			var j: int = i + o
+			if j >= 0 and j < N * N and road[j] >= 3:
+				av = true
+		if av:
+			emit_semaforos(i, p, y + 0.2)
 	var horiz := (e or w) and not (s or n)
 	var vert := (s or n) and not (e or w)
 	if t >= 2 and not bridge:
@@ -986,16 +995,14 @@ func emit_road(i: int, p: Vector3) -> void:
 		if t >= 2 and (cx(i) + cz(i) * 3) % 3 == 0 and not bridge:
 			var lo := Vector2(0, -CELL * 0.45) if horiz else Vector2(-CELL * 0.45, 0)
 			var ao := Vector2(0, 0.8) if horiz else Vector2(0.8, 0)
-			em(M_BOX, p.x + lo.x, y, p.z + lo.y, 0.12, 2.9, 0.12, 0.0, Color(0.3, 0.3, 0.32))
-			em(M_BOX, p.x + lo.x + ao.x * 0.5, y + 2.85, p.z + lo.y + ao.y * 0.5, 0.09 if horiz else 0.8, 0.09, 0.8 if horiz else 0.09, 0.0, Color(0.3, 0.3, 0.32))
-			em(M_BOX, p.x + lo.x + ao.x, y + 2.78, p.z + lo.y + ao.y, 0.34, 0.1, 0.34, 0.0, Color(1.0, 0.85, 0.55), 0, 1.0)
+			emit_farol(p.x + lo.x, y + 0.26, p.z + lo.y, ao.x, ao.y)
 			lamps[i] = Vector3(p.x + lo.x + ao.x, y, p.z + lo.y + ao.y)
 		if t == 2 and opts["quality"] >= 1:
 			for side in [-1, 1]:
 				var j: int = i + (N * side if horiz else side)
-				if j >= 0 and j < N * N and zone[j] > 0 and lvl[j] >= 1 and hsh(i, side + 7) < 0.45:
+				if j >= 0 and j < N * N and zone[j] > 0 and lvl[j] >= 1 and hsh(i, side + 7) < (0.7 if zone[j] == Z_C else 0.45):
 					var po := Vector2(0, side * CELL * 0.3) if horiz else Vector2(side * CELL * 0.3, 0)
-					em(M_BOX, p.x + po.x, y + 0.15, p.z + po.y, 1.6, 0.6, 0.8, rot, car_color(i * 3 + side))
+					emit_car(i * 3 + side, p.x + po.x, y + 0.2, p.z + po.y, rot)
 func car_color(k: int) -> Color:
 	var pal := [Color(0.85, 0.85, 0.87), Color(0.15, 0.15, 0.17), Color(0.7, 0.12, 0.1), Color(0.2, 0.3, 0.6), Color(0.55, 0.57, 0.6), Color(0.9, 0.75, 0.2), Color(0.25, 0.45, 0.3)]
 	return pal[absi(k) % pal.size()]

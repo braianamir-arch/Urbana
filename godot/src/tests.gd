@@ -860,6 +860,8 @@ func run_album(dir: String) -> void:
 			["arboles_otono", func(): album_trees(1 + DAYS_PER_SEASON, "Soleado")],
 			["arboles_invierno", func(): album_trees(1 + DAYS_PER_SEASON * 2, "Nieve")],
 			["catalogo_arboles", func(): album_catalog(-2)],
+			["calle_dia", func(): album_street(13.0)],
+			["calle_noche", func(): album_street(22.5)],
 			["catalogo", func(): album_catalog(-1)],
 			["catalogo_casas", func(): album_catalog(0)],
 			["catalogo_deptos", func(): album_catalog(1)],
@@ -974,6 +976,7 @@ func run_buildings() -> void:
 	skip_intro()
 	building_check("ciudad")
 	tree_check()
+	prop_check()
 	# quemar uno, subir de nivel otro y borrar la zona de un tercero
 	var ks: Array = []
 	for i in N * N:
@@ -1284,3 +1287,78 @@ func album_trees(d: int, w: String) -> void:
 	cam_dist = 24.0
 	cam_pitch = 0.35
 	cam_yaw = 0.5
+# objetos de calle: faroles donde están los charcos de luz; semáforos solo en cruces con avenida; autos y
+# mobiliario solo en calle o vereda (nunca sobre agua ni sobre un lote construido)
+func prop_check() -> void:
+	var ids := {}
+	for m in cat_models.size():
+		ids[cat_models[m]["id"]] = m
+	bcheck_on = true
+	mcheck_log.clear()
+	lamps.clear()
+	mark_all_dirty()
+	update_chunks(NCH * NCH)
+	bcheck_on = false
+	var why := ""
+	var nf := 0
+	var ns := 0
+	var nc := 0
+	var cars := ["sedan", "hatch", "camioneta", "utilitario", "taxi"]
+	for e in mcheck_log:
+		var c: Vector2i = e[0]
+		var id: String = cat_models[e[1]]["id"]
+		if not inb(c.x, c.y):
+			why += " %s fuera del mapa" % id
+			continue
+		var i := idx(c.x, c.y)
+		if id == "farol":
+			nf += 1
+		elif id == "semaforo":
+			ns += 1
+			var av := false
+			for o in [0, 1, -1, N, -N]:
+				var j: int = i + o
+				if j >= 0 and j < N * N and road[j] >= 3:
+					av = true
+			if road[i] == 0 or not av:
+				why += " semáforo sin avenida en %d" % i
+		elif id in cars:
+			nc += 1
+			if road[i] == 0 or terr[i] == T_WATER:
+				why += " auto fuera de la calle en %d" % i
+	if nf != lamps.size():
+		why += " faroles %d != luces %d" % [nf, lamps.size()]
+	if ns == 0 or nc == 0:
+		why += " sin semáforos (%d) o sin autos (%d)" % [ns, nc]
+	bt(why == "", "PROP_CHECK faroles %d semáforos %d autos %d " % [nf, ns, nc] + ("ok" if why == "" else "FALLA" + why.substr(0, 400)))
+# toma de cerca sobre el cruce con avenida más cercano al centro (semáforos, faroles, autos)
+func album_street(h: float) -> void:
+	album_city(h, "Soleado", 3)
+	if cat_root:
+		cat_root.queue_free()
+		cat_root = null
+	var best := -1
+	var bd := 1e9
+	for i in N * N:
+		if road[i] >= 2 and terr[i] != T_WATER:
+			var nb := road_n(i)
+			var cnt := int(nb[0]) + int(nb[1]) + int(nb[2]) + int(nb[3])
+			var av: bool = road[i] >= 3
+			for o in [1, -1, N, -N]:
+				var j: int = i + o
+				if j >= 0 and j < N * N and road[j] >= 3:
+					av = true
+			if cnt >= 3 and av:
+				var dd := Vector2(cx(i) - N / 2, cz(i) - N / 2).length()
+				if dd < bd:
+					bd = dd
+					best = i
+	if best >= 0:
+		cam_goal = cell_pos(best)
+	cam_target = cam_goal
+	# la cámara se pone sobre la avenida, mirando a lo largo de ella
+	var along_x := best >= 0 and ((cx(best) < N - 1 and road[best + 1] >= 2) or (cx(best) > 0 and road[best - 1] >= 2))
+	cam_dist_goal = 26.0
+	cam_dist = 26.0
+	cam_pitch = 0.5
+	cam_yaw = (PI * 0.5 if along_x else 0.0) + 0.25

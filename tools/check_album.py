@@ -119,6 +119,14 @@ def main():
         r, g, b = ap[..., 0], ap[..., 1], ap[..., 2]
         frac = ((b > g + 30) & (r > g + 10)).mean() * 100
         check("arboles_primavera: jacarandá violeta (≥ 0,3 % de píxeles)", frac >= 0.3, f"{frac:.2f} %")
+    # etapa 2d: de noche se ven faroles y semáforos
+    cn2 = load(d, "calle_noche")
+    if cn2 is None:
+        check("calle_noche", False, "falta la captura")
+    else:
+        r, g, b = cn2[..., 0], cn2[..., 1], cn2[..., 2]
+        frac = ((r > 180) & (g > 120) & (r > b + 40)).mean() * 100
+        check("calle_noche: luces de la calle (≥ 0,2 % de píxeles cálidos)", frac >= 0.2, f"{frac:.2f} %")
     sys.exit(0 if all(results) else 1)
 
 
