@@ -1,9 +1,10 @@
 # Mediciones después de la etapa 2a+2b (misma máquina: Vulkan por software lavapipe; Godot 4.7)
-frame_ms Alta (mediodía, 120 cuadros): 525.18  (antes 477,37 → +10,0 %; límite +25 %)
-frame_ms Baja: 206.29  (antes 191,15 en otra corrida; medido alternando con la versión anterior:
+frame_ms Alta (mediodía, 120 cuadros): 493.59  (antes 477,37 → +3,4 %; límite +25 %)
+frame_ms Baja: 198.22  (antes 191,15 en otra corrida; medido alternando con la versión anterior:
   antes 207,3 / 212,7, después 201,6 / 212,1 → −1,5 %; límite +0 %)
 chunks_ms (5 × rehacer todos los bloques): 687  (antes 670 → 1,03×; límite 1,5×)
 catalog_ms (todo el catálogo, todas las versiones): 849  (límite 2000)
 pck Android: 64985896 bytes  (antes 43973736 → +21,0 MB; límite +40 MB)
 Simulación: líneas SIM idénticas a la referencia. compat_test: ok (partidas, primer arranque, pausa, empalme).
 Verificador de colores (tools/check_album.py): 14/14 ok. BUILDING_CHECK y CATALOG_CHECK: ok.
+(Corrida final, después de la revisión: versión cerca armada solo al acercar la cámara.)

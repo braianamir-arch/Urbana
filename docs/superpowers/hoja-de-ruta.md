@@ -4,7 +4,7 @@
 |---|---|---|
 | 0 | Proyecto base en `godot/`, pruebas automáticas | hecha |
 | 1 | Luz, cielo, terreno y agua | hecha |
-| 2a+2b | Materiales reales y edificios con volumen | en revisión del autor |
+| 2a+2b | Materiales reales y edificios con volumen | hecha, falta la aprobación del autor |
 | 2c | Árboles y vegetación | pendiente |
 | 2d | Objetos de calle (faroles, semáforos, autos estacionados, cables) | pendiente |
 | 2e | Edificios especiales (escuela, estadio, usinas, maravillas) | pendiente |
