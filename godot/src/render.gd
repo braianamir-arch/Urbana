@@ -155,6 +155,8 @@ func setup_render() -> void:
 	bnodes.clear()
 	for c in NCH * NCH:
 		bnodes.append({})
+	bnear_ok.resize(NCH * NCH)
+	bnear_ok.fill(0)
 	chunk_dirty.resize(NCH * NCH)
 	chunk_dirty.fill(1)
 	for c in NCH * NCH:

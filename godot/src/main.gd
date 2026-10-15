@@ -63,6 +63,9 @@ func _process(delta: float) -> void:
 	update_chunks(4 if first_chunks or not started else 1)
 	if first_chunks and not chunk_dirty.has(1):
 		first_chunks = false
+	# versiones cerca de los edificios: una cada 3 cuadros, cuando la ciudad ya está dibujada
+	if not first_chunks and int(opts["quality"]) >= 1 and Engine.get_process_frames() % 3 == 0:
+		cat_warm_step()
 	if started:
 		crumb("simulación etapa %d" % sim_stage)
 		sim_process(delta)

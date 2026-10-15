@@ -2968,6 +2968,8 @@ func setup_render() -> void:
 	bnodes.clear()
 	for c in NCH * NCH:
 		bnodes.append({})
+	bnear_ok.resize(NCH * NCH)
+	bnear_ok.fill(0)
 	chunk_dirty.resize(NCH * NCH)
 	chunk_dirty.fill(1)
 	for c in NCH * NCH:
@@ -4446,6 +4448,8 @@ var bnodes: Array = []
 var _binst: Dictionary = {}
 var bq_last: int = -1
 var b_near_on: bool = false
+# por bloque: 1 si su versión cerca está armada con los datos actuales
+var bnear_ok := PackedByteArray()
 # prueba: celda -> {m, n, dark} (lo llena emit_building cuando bcheck_on)
 var bcheck_on: bool = false
 var bcheck_log: Dictionary = {}
@@ -4673,17 +4677,18 @@ func flush_buildings(ch: int) -> void:
 	for k in nodes:
 		if not _binst.has(k / 3):
 			nodes[k].multimesh.instance_count = 0
+	# la versión cerca se arma solo en los bloques cerca de la cámara acercada (armarla cuesta y no se ve)
+	var near_ok: bool = q > 0 and b_near_on and chunk_close(ch)
+	bnear_ok[ch] = 1 if near_ok else 0
 	for key in _binst:
 		var buf: PackedFloat32Array = _binst[key]
 		var cnt := buf.size() / 20
-		# la versión cerca se arma recién cuando la cámara se acerca (armarla cuesta y no se ve)
-		for lod in ([LOD_FAR] if q == 0 else ([LOD_NEAR, LOD_MID, LOD_FAR] if b_near_on else [LOD_MID, LOD_FAR])):
+		for lod in ([LOD_FAR] if q == 0 else ([LOD_NEAR, LOD_MID, LOD_FAR] if near_ok else [LOD_MID, LOD_FAR])):
 			var nk: int = key * 3 + lod
 			var node: MultiMeshInstance3D = nodes.get(nk)
 			if node == null:
 				node = new_mm_node(cat_mesh(key / 64, key % 64, lod), building_mat if lod == LOD_NEAR else building_lite_mat)
 				nodes[nk] = node
-			lod_ranges(node, lod, q)
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if lod != LOD_FAR or q == 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			node.multimesh.instance_count = cnt
 			node.multimesh.buffer = buf
@@ -4691,33 +4696,53 @@ func flush_buildings(ch: int) -> void:
 			for lod in [LOD_NEAR, LOD_MID]:
 				if nodes.has(key * 3 + lod):
 					nodes[key * 3 + lod].multimesh.instance_count = 0
+	for k in nodes:
+		lod_ranges(nodes[k], k % 3, q, near_ok)
+# el centro del bloque está a menos de 200 m (en planta) del punto que mira la cámara
+func chunk_close(ch: int) -> bool:
+	var half := N * CELL * 0.5
+	var c := Vector2(((ch % NCH) + 0.5) * CH * CELL - half, ((ch / NCH) + 0.5) * CH * CELL - half)
+	return c.distance_to(Vector2(cam_target.x, cam_target.z)) < 200.0
 # Distancias de cada versión (medidas desde el centro del bloque). La versión cerca solo se usa con la
 # cámara acercada: a la distancia normal sus detalles no se ven y costaban un 30 % más por cuadro.
-func lod_ranges(node: GeometryInstance3D, lod: int, q: int) -> void:
+func lod_ranges(node: GeometryInstance3D, lod: int, q: int, near_ok: bool) -> void:
 	# sin fundido: Godot lo hace con un tramado de puntos que, a escala de bloque, se veía como granulado
 	node.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_DISABLED
-	node.visible = lod != LOD_NEAR or (b_near_on and q > 0)
+	node.visible = lod != LOD_NEAR or (near_ok and q > 0)
 	if q == 0:
 		node.visibility_range_begin = 0.0
 		node.visibility_range_end = 0.0
 		return
 	# cortes exactos: dos versiones a la vez se pisan (caras en el mismo lugar)
-	node.visibility_range_begin = [0.0, 130.0 if b_near_on else 0.0, 200.0][lod]
+	node.visibility_range_begin = [0.0, 130.0 if near_ok else 0.0, 200.0][lod]
 	node.visibility_range_begin_margin = 0.0
 	node.visibility_range_end = [130.0, 200.0, 0.0][lod]
 	node.visibility_range_end_margin = 0.0
 func update_building_lod() -> void:
-	var want := cam_dist < (75.0 if b_near_on else 65.0)
-	if want == b_near_on:
-		return
-	b_near_on = want
 	var q: int = opts["quality"]
-	if want and q > 0:
-		# los bloques se rehacen de a uno por cuadro y ahí se arman las versiones cerca
-		mark_all_dirty()
+	# margen amplio: pellizcar cerca del límite no prende y apaga una y otra vez
+	var want := cam_dist < (90.0 if b_near_on else 60.0)
+	if want != b_near_on:
+		b_near_on = want
+		for c in bnodes.size():
+			var ok: bool = want and bnear_ok[c] == 1
+			for k in bnodes[c]:
+				lod_ranges(bnodes[c][k], k % 3, q, ok)
+	if b_near_on and q > 0:
+		# solo los bloques cercanos que todavía no tienen su versión cerca (se rehacen de a uno por cuadro)
+		for c in bnodes.size():
+			if bnear_ok[c] == 0 and chunk_dirty[c] == 0 and chunk_close(c):
+				chunk_dirty[c] = 1
+# Prepara de a una las versiones cerca de los modelos que ya hay en la ciudad, para que al acercar la
+# cámara no haya que armarlas todas juntas. Devuelve false cuando no queda ninguna por armar.
+func cat_warm_step() -> bool:
 	for nodes in bnodes:
 		for k in nodes:
-			lod_ranges(nodes[k], k % 3, q)
+			var key: int = k / 3
+			if not cat_cache.has(key * 3 + LOD_NEAR) and nodes[k].multimesh.instance_count > 0:
+				cat_mesh(key / 64, key % 64, LOD_NEAR)
+				return true
+	return false
 # --- recetas: (versión, pisos, ancho del lote). Frente hacia +Z, base en y = 0.
 # --- piezas
 # Cara plana con huecos rectangulares (en el marco local de la pared: x a lo largo, y arriba, z hacia
@@ -10952,10 +10977,37 @@ func run_buildings() -> void:
 	zone[ks[2]] = 0
 	building_check("cambios")
 	bt(bool(bcheck_log[ks[0]]["dark"]), "BUILDING_CHECK quemado oscuro " + ("ok" if bcheck_log[ks[0]]["dark"] else "FALLA"))
+	# acercar la cámara solo rehace los bloques cercanos (no los 16)
+	b_near_on = false
+	chunk_dirty.fill(0)
+	cam_target = Vector3(-N * CELL * 0.5 + 20.0, 0, -N * CELL * 0.5 + 20.0)
+	cam_dist = 30.0
+	update_building_lod()
+	var nd := 0
+	for c in NCH * NCH:
+		nd += chunk_dirty[c]
+	bt(nd <= 4, "BUILDING_CHECK zoom rehace pocos bloques " + ("ok (%d)" % nd if nd <= 4 else "FALLA rehace %d" % nd))
+	update_chunks(NCH * NCH)
+	cam_dist = 110.0
+	update_building_lod()
+	# las versiones cerca se preparan de a poco antes de hacer falta
+	for ck in cat_cache.keys():
+		if ck % 3 == LOD_NEAR:
+			cat_cache.erase(ck)
+	var steps := 0
+	while cat_warm_step() and steps < 10000:
+		steps += 1
+	var miss := 0
+	for i in N * N:
+		if zone[i] > 0 and lvl[i] >= 1 and road[i] == 0 and (part[i] < 0 or part[i] == i):
+			var pk := pick_model(i)
+			if pk.x >= 0 and not cat_cache.has((pk.x * 64 + pk.y) * 3 + LOD_NEAR):
+				miss += 1
+	bt(miss == 0, "BUILDING_CHECK versiones cerca preparadas " + ("ok (%d pasos)" % steps if miss == 0 else "FALLA faltan %d" % miss))
 	var near_nodes := 0
 	for c in bnodes:
 		for k in c:
-			if k % 3 == LOD_NEAR:
+			if k % 3 == LOD_NEAR and c[k].visible:
 				near_nodes += 1
 	bt(b_near_on or near_nodes == 0, "BUILDING_CHECK sin versiones cerca lejos del zoom " + ("ok" if (b_near_on or near_nodes == 0) else "FALLA %d nodos" % near_nodes))
 	var nn := [0, 0, 0]
@@ -11206,6 +11258,9 @@ func _process(delta: float) -> void:
 	update_chunks(4 if first_chunks or not started else 1)
 	if first_chunks and not chunk_dirty.has(1):
 		first_chunks = false
+	# versiones cerca de los edificios: una cada 3 cuadros, cuando la ciudad ya está dibujada
+	if not first_chunks and int(opts["quality"]) >= 1 and Engine.get_process_frames() % 3 == 0:
+		cat_warm_step()
 	if started:
 		crumb("simulación etapa %d" % sim_stage)
 		sim_process(delta)

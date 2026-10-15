@@ -981,10 +981,37 @@ func run_buildings() -> void:
 	zone[ks[2]] = 0
 	building_check("cambios")
 	bt(bool(bcheck_log[ks[0]]["dark"]), "BUILDING_CHECK quemado oscuro " + ("ok" if bcheck_log[ks[0]]["dark"] else "FALLA"))
+	# acercar la cámara solo rehace los bloques cercanos (no los 16)
+	b_near_on = false
+	chunk_dirty.fill(0)
+	cam_target = Vector3(-N * CELL * 0.5 + 20.0, 0, -N * CELL * 0.5 + 20.0)
+	cam_dist = 30.0
+	update_building_lod()
+	var nd := 0
+	for c in NCH * NCH:
+		nd += chunk_dirty[c]
+	bt(nd <= 4, "BUILDING_CHECK zoom rehace pocos bloques " + ("ok (%d)" % nd if nd <= 4 else "FALLA rehace %d" % nd))
+	update_chunks(NCH * NCH)
+	cam_dist = 110.0
+	update_building_lod()
+	# las versiones cerca se preparan de a poco antes de hacer falta
+	for ck in cat_cache.keys():
+		if ck % 3 == LOD_NEAR:
+			cat_cache.erase(ck)
+	var steps := 0
+	while cat_warm_step() and steps < 10000:
+		steps += 1
+	var miss := 0
+	for i in N * N:
+		if zone[i] > 0 and lvl[i] >= 1 and road[i] == 0 and (part[i] < 0 or part[i] == i):
+			var pk := pick_model(i)
+			if pk.x >= 0 and not cat_cache.has((pk.x * 64 + pk.y) * 3 + LOD_NEAR):
+				miss += 1
+	bt(miss == 0, "BUILDING_CHECK versiones cerca preparadas " + ("ok (%d pasos)" % steps if miss == 0 else "FALLA faltan %d" % miss))
 	var near_nodes := 0
 	for c in bnodes:
 		for k in c:
-			if k % 3 == LOD_NEAR:
+			if k % 3 == LOD_NEAR and c[k].visible:
 				near_nodes += 1
 	bt(b_near_on or near_nodes == 0, "BUILDING_CHECK sin versiones cerca lejos del zoom " + ("ok" if (b_near_on or near_nodes == 0) else "FALLA %d nodos" % near_nodes))
 	var nn := [0, 0, 0]
