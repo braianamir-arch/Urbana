@@ -1188,7 +1188,7 @@ func album_catalog(focus_row: int) -> void:
 		var mm := node.multimesh
 		mm.instance_count = 1
 		var p: Vector3 = pos[mi]
-		var col := tint(res_wall(m), m) if fam == "edificio" else tree_colors(TREE_SPECIES.keys()[mi / 3])[0]
+		var col: Color = tint(res_wall(m), m) if fam == "edificio" else tree_colors(TREE_SPECIES.keys()[mi / 3])[0]
 		mm.buffer = PackedFloat32Array([1, 0, 0, p.x, 0, 1, 0, p.y, 0, 0, 1, p.z, col.r, col.g, col.b, 1, 0, float(m % 8) / 8.0, hsh(m, 42), 0])
 	if focus_row >= 0:
 		var rx := 0.0
@@ -1198,7 +1198,7 @@ func album_catalog(focus_row: int) -> void:
 				rx += pos[m].x
 				rn += 1
 		cen = Vector3(rx / maxf(rn, 1), y0 + 2.0, -12.0 * focus_row)
-	var dd := 62.0 if focus_row < 0 else 24.0
+	var dd := (62.0 if fam == "edificio" else 26.0) if focus_row < 0 else 24.0
 	cam_goal = cen
 	cam_target = cen
 	cam_dist_goal = dd
