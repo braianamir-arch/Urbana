@@ -10788,6 +10788,14 @@ func run_album(dir: String) -> void:
 			["cerros", func(): album_map(1, T_ROCK)],
 			["horizonte_dia", func(): album_horizon(13.0)],
 			["horizonte_tarde", func(): album_horizon(19.5)],
+			["cerca_casas", func(): album_close(Z_R, [1], 13.0, "Soleado", 3)],
+			["cerca_deptos", func(): album_close(Z_R, [2, 3], 13.0, "Soleado", 3)],
+			["cerca_torres", func(): album_close(Z_R, [4], 13.0, "Soleado", 3)],
+			["cerca_comercio", func(): album_close(Z_C, [1, 2, 3], 13.0, "Soleado", 3)],
+			["cerca_industria", func(): album_close(Z_I, [1, 2, 3, 4], 13.0, "Soleado", 3)],
+			["cerca_noche", func(): album_close(Z_R, [2, 3], 23.0, "Soleado", 3)],
+			["cerca_lluvia", func(): album_close(Z_R, [1], 13.0, "Lluvia", 3)],
+			["cerca_nieve", func(): album_close(Z_R, [1], 13.0, "Nieve", 23)],
 			["catalogo", func(): album_catalog(-1)],
 			["catalogo_casas", func(): album_catalog(0)],
 			["catalogo_deptos", func(): album_catalog(1)],
@@ -11061,6 +11069,27 @@ func album_catalog(focus_row: int) -> void:
 	cam_dist = dd
 	cam_pitch = 0.42 if focus_row < 0 else 0.3
 	cam_yaw = 0.25 if focus_row < 0 else 0.15
+# toma de cerca sobre el lote de esa zona y nivel más cercano al centro de la ciudad de prueba
+func album_close(z: int, lvls: Array, h: float, w: String, d: int) -> void:
+	album_city(h, w, d)
+	if cat_root:
+		cat_root.queue_free()
+		cat_root = null
+	var best := -1
+	var bd := 1e9
+	for i in N * N:
+		if zone[i] == z and lvl[i] in lvls and road[i] == 0 and (part[i] < 0 or part[i] == i):
+			var dd := Vector2(cx(i) - N / 2, cz(i) - N / 2).length()
+			if dd < bd:
+				bd = dd
+				best = i
+	if best >= 0:
+		cam_goal = cell_pos(best)
+	cam_target = cam_goal
+	cam_dist_goal = 30.0
+	cam_dist = 30.0
+	cam_pitch = 0.42
+	cam_yaw = 0.5 + face_rot(maxi(best, 0))
 # ================================================================ src/main.gd
 # Arranque y bucle principal de Godot.
 func _unhandled_input(event: InputEvent) -> void:

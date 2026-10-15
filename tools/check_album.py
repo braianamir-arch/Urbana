@@ -87,6 +87,29 @@ def main():
         r, g, b = low[..., 0], low[..., 1], low[..., 2]
         frac = ((b > r + 20) & (g > r)).mean() * 100
         check(f"{name}: se ve agua (≥ 2 % de píxeles)", frac >= 2.0, f"{frac:.1f} %")
+    # etapa 2: tomas de cerca
+    cn = load(d, "cerca_noche")
+    if cn is None:
+        check("cerca_noche", False, "falta la captura")
+    else:
+        r, g, b = cn[..., 0], cn[..., 1], cn[..., 2]
+        frac = ((r > 170) & (g > 100) & (r > b + 50)).mean() * 100
+        check("cerca_noche: ventanas encendidas (≥ 0,5 % de píxeles cálidos)", frac >= 0.5, f"{frac:.2f} %")
+    cc = load(d, "cerca_casas")
+    cs = load(d, "cerca_nieve")
+    cl = load(d, "cerca_lluvia")
+    if cc is None or cs is None:
+        check("cerca_nieve", False, "falta la captura")
+    else:
+        fc = (cc.mean(axis=2) > 200).mean()
+        fs = (cs.mean(axis=2) > 200).mean()
+        check("cerca_nieve: techos blancos (≥ 1,5× píxeles claros que con sol)", fs >= 1.5 * fc, f"{fs * 100:.1f} % vs {fc * 100:.1f} %")
+    if cc is None or cl is None:
+        check("cerca_lluvia", False, "falta la captura")
+    else:
+        h = cc.shape[0] // 2
+        a, b2 = cl[h:].mean(), cc[h:].mean()
+        check("cerca_lluvia: calles más oscuras (≤ 0,9 × con sol)", a <= 0.9 * b2, f"{a:.0f} vs {b2:.0f}")
     sys.exit(0 if all(results) else 1)
 
 
