@@ -862,6 +862,8 @@ func run_album(dir: String) -> void:
 			["catalogo_arboles", func(): album_catalog(-2)],
 			["calle_dia", func(): album_street(13.0)],
 			["calle_noche", func(): album_street(22.5)],
+			["catalogo_especiales_a", func(): album_catalog(-3)],
+			["catalogo_especiales_b", func(): album_catalog(-4)],
 			["catalogo", func(): album_catalog(-1)],
 			["catalogo_casas", func(): album_catalog(0)],
 			["catalogo_deptos", func(): album_catalog(1)],
@@ -1022,6 +1024,7 @@ func run_buildings() -> void:
 			if k % 3 == LOD_NEAR and c[k].visible:
 				near_nodes += 1
 	bt(b_near_on or near_nodes == 0, "BUILDING_CHECK sin versiones cerca lejos del zoom " + ("ok" if (b_near_on or near_nodes == 0) else "FALLA %d nodos" % near_nodes))
+	special_check([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 66])
 	var nn := [0, 0, 0]
 	for c in bnodes:
 		for k in c:
@@ -1038,7 +1041,7 @@ func catalog_check() -> void:
 	var t0 := Time.get_ticks_usec()
 	for m in cat_models.size():
 		var md: Dictionary = cat_models[m]
-		var w := CELL * (1.85 if md["big"] else 0.82)
+		var w: float = md.get("w", CELL * (1.85 if md["big"] else 0.82))
 		for l in md["levels"]:
 			var fl: Array = md["floors"].get(l, [0])
 			for f in fl:
@@ -1069,6 +1072,8 @@ func catalog_check() -> void:
 						why += " huella %s > %.2f" % [str(ab), lim]
 					if ab.position.y < -0.5:
 						why += " se hunde %.2f" % ab.position.y
+					if md["fam"] == "especial" and (ab.end.y < 0.05 or ab.end.y > 45.0):
+						why += " altura de especial %.1f fuera de [0, 45]" % ab.end.y
 					if md["fam"] == "arbol" and (ab.end.y < 2.0 or ab.end.y > 9.0):
 						why += " altura de árbol %.1f fuera de [2, 9]" % ab.end.y
 					for z in md["zones"]:
@@ -1079,7 +1084,7 @@ func catalog_check() -> void:
 					var u2: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
 					for vi in ns.size():
 						var mt := int(u2[vi].x + 0.5)
-						if (mt == BM_TILES or mt == BM_SHEET) and ns[vi].y > 0.45 and ns[vi].y < SNOW_NY:
+						if (mt == BM_TILES or mt == BM_SHEET) and ns[vi].y > 0.52 and ns[vi].y < SNOW_NY:
 							why += " techo sin nieve (normal.y %.2f < %.2f)" % [ns[vi].y, SNOW_NY]
 							break
 					if lod == 2 and nv[0] > 0 and vs.size() >= nv[0] and not md["near_only"]:
@@ -1153,19 +1158,25 @@ func album_catalog(focus_row: int) -> void:
 	var row := 0
 	var cols := 9
 	var pos: Array = []
-	var fam := "arbol" if focus_row == -2 else "edificio"
+	var fam := "arbol" if focus_row == -2 else ("especial" if focus_row <= -3 else "edificio")
+	if fam == "especial":
+		cols = 5
 	var mlist: Array = []
 	for m in cat_models.size():
 		if cat_models[m]["fam"] == fam:
 			mlist.append(m)
-	if focus_row == -2:
+	if fam == "especial":
+		# -3: primera mitad de los especiales, -4: segunda mitad
+		var half := mlist.size() / 2
+		mlist = mlist.slice(0, half) if focus_row == -3 else mlist.slice(half)
+	if focus_row <= -2:
 		focus_row = -1
 	for mi in mlist.size():
 		var m: int = mlist[mi]
 		var md: Dictionary = cat_models[m]
-		var sp := 10.0 if md["big"] else 5.5
+		var sp: float = (10.0 if md["big"] else 5.5) if not md.has("w") else md["w"] + 2.5
 		if mi > 0 and mi % cols == 0:
-			z -= 12.0
+			z -= 15.0 if fam == "especial" else 12.0
 			x = 0.0
 		pos.append(Vector3(x + sp * 0.5, y0, z))
 		x += sp
@@ -1196,8 +1207,16 @@ func album_catalog(focus_row: int) -> void:
 		var mm := node.multimesh
 		mm.instance_count = 1
 		var p: Vector3 = pos[mi]
-		var col: Color = tint(res_wall(m), m) if fam == "edificio" else tree_colors(TREE_SPECIES.keys()[mi / 3])[0]
-		mm.buffer = PackedFloat32Array([1, 0, 0, p.x, 0, 1, 0, p.y, 0, 0, 1, p.z, col.r, col.g, col.b, 1, 0, float(m % 8) / 8.0, hsh(m, 42), 0])
+		var col: Color = tint(res_wall(m), m)
+		if fam == "arbol":
+			col = tree_colors(TREE_SPECIES.keys()[mi / 3])[0]
+		elif fam == "especial":
+			var sid := int(String(md["id"]).substr(4))
+			col = DEF[sid]["col"]
+		var acc := float(m % 8) / 8.0
+		if fam == "especial":
+			acc = float(SPECIAL_ACCENT.get(int(String(md["id"]).substr(4)), 5)) / 8.0
+		mm.buffer = PackedFloat32Array([1, 0, 0, p.x, 0, 1, 0, p.y, 0, 0, 1, p.z, col.r, col.g, col.b, 1, 0, acc, hsh(m, 42), 0])
 	if focus_row >= 0:
 		var rx := 0.0
 		var rn := 0
@@ -1206,7 +1225,7 @@ func album_catalog(focus_row: int) -> void:
 				rx += pos[m].x
 				rn += 1
 		cen = Vector3(rx / maxf(rn, 1), y0 + 2.0, -12.0 * focus_row)
-	var dd := (62.0 if fam == "edificio" else 26.0) if focus_row < 0 else 24.0
+	var dd: float = ({"edificio": 62.0, "arbol": 26.0, "especial": 58.0}[fam]) if focus_row < 0 else 24.0
 	cam_goal = cen
 	cam_target = cen
 	cam_dist_goal = dd
@@ -1414,3 +1433,48 @@ func album_street(h: float) -> void:
 	cam_dist = 26.0
 	cam_pitch = 0.5
 	cam_yaw = (PI * 0.5 if along_x else 0.0) + 0.25
+# cada edificio especial tiene exactamente una instancia de su propio modelo (en el ancla) y nada más.
+# Se arma en un mapa vacío: borra la ciudad de prueba (va al final de las pruebas de dibujo)
+func special_check(ids: Array) -> void:
+	for i in N * N:
+		road[i] = 0
+		zone[i] = 0
+		bld[i] = 0
+		part[i] = -1
+		tree[i] = 0
+		wire[i] = 0
+		lvl[i] = 0
+		terr[i] = T_LAND
+	anim_cells.clear()
+	wonder_progress.clear()
+	var anchors := {}
+	var k := 0
+	for id in ids:
+		var sz: int = DEF[id]["sz"]
+		var a := idx(8 + (k % 12) * 9, 8 + (k / 12) * 9)
+		var cells := def_cells(a, sz)
+		for c in cells:
+			bld[c] = id
+			part[c] = cells[0] if sz > 1 else -1
+		anchors[cells[0]] = id
+		if DEF[id]["c"] == "wonder":
+			wonder_progress[cells[0]] = WONDER_STEPS
+		k += 1
+	bcheck_on = true
+	scheck_log.clear()
+	mark_all_dirty()
+	update_chunks(NCH * NCH)
+	bcheck_on = false
+	var why := ""
+	for a in anchors:
+		var id: int = anchors[a]
+		if not special_model.has(id):
+			why += " sin receta %d (%s)" % [id, DEF[id]["n"]]
+			continue
+		var e: Array = scheck_log.get(a, [])
+		if e.size() != 1 or e[0] != special_model[id]:
+			why += " %s: %d instancias" % [DEF[id]["n"], e.size()]
+	for c in scheck_log:
+		if not anchors.has(c):
+			why += " instancia de más en %d" % c
+	bt(why == "", "SPECIAL_CHECK (%d) " % ids.size() + ("ok" if why == "" else "FALLA" + why.substr(0, 500)))

@@ -211,6 +211,7 @@ func cat_register() -> void:
 	cat_add("complejo_grande", [Z_I], [3, 4], true, {}, rc_complejo_grande)
 	tree_register()
 	prop_register()
+	special_register()
 	bset.clear()
 	for m in cat_models.size():
 		var md: Dictionary = cat_models[m]
@@ -244,7 +245,7 @@ func cat_mesh(m: int, floors: int, lod: int) -> ArrayMesh:
 		var empty := ArrayMesh.new()
 		cat_cache[key] = empty
 		return empty
-	md["recipe"].call(lod, floors, CELL * (1.85 if md["big"] else 0.82))
+	md["recipe"].call(lod, floors, md.get("w", CELL * (1.85 if md["big"] else 0.82)))
 	var mesh := mb_end()
 	cat_cache[key] = mesh
 	return mesh

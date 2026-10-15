@@ -894,7 +894,8 @@ func emit_cell(i: int) -> void:
 		emit_road(i, p)
 	elif bld[i] > 0:
 		if part[i] < 0 or part[i] == i:
-			emit_def(i, p)
+			if not emit_special(i, p):
+				emit_def(i, p)
 	elif zone[i] > 0:
 		if part[i] >= 0 and part[i] != i:
 			pass
