@@ -154,7 +154,8 @@ void fragment() {
 		vec3 wc = mix(vec3(1.0, 0.76, 0.42), vec3(0.72, 0.86, 1.0), step(0.8, hash(id + 7.3)));
 		emit += wc * lit * night * 1.2 * (1.0 - cust.x);
 	}
-	if (snow > 0.0 && up && !glass) {
+	// nieve también en techos a dos aguas (hasta ~60°); SNOW_NY en buildings.gd
+	if (snow > 0.0 && wnrm.y > 0.5 && !glass) {
 		col = mix(col, vec3(0.94, 0.95, 1.0), snow);
 		rough = 0.8;
 	}

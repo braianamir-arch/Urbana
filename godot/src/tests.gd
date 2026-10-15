@@ -981,6 +981,12 @@ func run_buildings() -> void:
 	zone[ks[2]] = 0
 	building_check("cambios")
 	bt(bool(bcheck_log[ks[0]]["dark"]), "BUILDING_CHECK quemado oscuro " + ("ok" if bcheck_log[ks[0]]["dark"] else "FALLA"))
+	var near_nodes := 0
+	for c in bnodes:
+		for k in c:
+			if k % 3 == LOD_NEAR:
+				near_nodes += 1
+	bt(b_near_on or near_nodes == 0, "BUILDING_CHECK sin versiones cerca lejos del zoom " + ("ok" if (b_near_on or near_nodes == 0) else "FALLA %d nodos" % near_nodes))
 	var nn := [0, 0, 0]
 	for c in bnodes:
 		for k in c:
@@ -1025,6 +1031,13 @@ func catalog_check() -> void:
 						var r: Array = CAT_H[Z_C if z == Z_M else z][l - 1]
 						if ab.end.y < r[0] or ab.end.y > r[1]:
 							why += " altura %.1f fuera de %s (zona %d nivel %d)" % [ab.end.y, str(r), z, l]
+					var ns: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_NORMAL]
+					var u2: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+					for vi in ns.size():
+						var mt := int(u2[vi].x + 0.5)
+						if (mt == BM_TILES or mt == BM_SHEET) and ns[vi].y > 0.45 and ns[vi].y < SNOW_NY:
+							why += " techo sin nieve (normal.y %.2f < %.2f)" % [ns[vi].y, SNOW_NY]
+							break
 					if lod == 2 and nv[0] > 0 and vs.size() >= nv[0]:
 						why += " la versión lejos no es más liviana (%d >= %d)" % [vs.size(), nv[0]]
 					bt(why == "", tag + ("ok" if why == "" else "FALLA" + why))

@@ -18,6 +18,8 @@ const LOD_NEAR := 0
 const LOD_MID := 1
 const LOD_FAR := 2
 const FLOOR_H := 1.3
+# las caras con normal.y mayor que esto se cubren de nieve (mismo valor en building.gdshaderinc)
+const SNOW_NY := 0.5
 # arreglos de la malla que se está armando
 var mb_v := PackedVector3Array()
 var mb_n := PackedVector3Array()
@@ -273,7 +275,8 @@ func flush_buildings(ch: int) -> void:
 	for key in _binst:
 		var buf: PackedFloat32Array = _binst[key]
 		var cnt := buf.size() / 20
-		for lod in ([LOD_FAR] if q == 0 else [LOD_NEAR, LOD_MID, LOD_FAR]):
+		# la versión cerca se arma recién cuando la cámara se acerca (armarla cuesta y no se ve)
+		for lod in ([LOD_FAR] if q == 0 else ([LOD_NEAR, LOD_MID, LOD_FAR] if b_near_on else [LOD_MID, LOD_FAR])):
 			var nk: int = key * 3 + lod
 			var node: MultiMeshInstance3D = nodes.get(nk)
 			if node == null:
@@ -308,6 +311,9 @@ func update_building_lod() -> void:
 		return
 	b_near_on = want
 	var q: int = opts["quality"]
+	if want and q > 0:
+		# los bloques se rehacen de a uno por cuadro y ahí se arman las versiones cerca
+		mark_all_dirty()
 	for nodes in bnodes:
 		for k in nodes:
 			lod_ranges(nodes[k], k % 3, q)
