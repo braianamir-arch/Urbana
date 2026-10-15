@@ -38,10 +38,10 @@ if [ -z "$A" ] || [ "${B[0]:-}" != "$A" ] || [ "${B[1]:-}" != "$A" ] || grep -q 
 else
 	echo "ok    compatibilidad de partidas y códigos"
 fi
-for mode in fresh pause; do
+for mode in fresh pause seam; do
 	export XDG_DATA_HOME="$OUT/home_$mode"; mkdir -p "$XDG_DATA_HOME"
 	run "$ROOT/godot" "$mode" > "$OUT/$mode.log"
-	ok=$(echo "$mode" | tr a-z A-Z)
+	ok=$(echo "$mode" | tr a-z A-Z); [ "$mode" = seam ] && ok="SEAM_CHECK"
 	if grep -q "^$ok OK" "$OUT/$mode.log" && ! grep -q "SCRIPT ERROR" "$OUT/$mode.log"; then echo "ok    $mode"; else echo "FALLA $mode: $(grep -m1 "$ok\|SCRIPT ERROR" "$OUT/$mode.log")"; fail=1; fi
 done
 exit $fail

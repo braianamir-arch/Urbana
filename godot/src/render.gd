@@ -634,6 +634,13 @@ func build_outer(grass: Color) -> void:
 	nz.seed = map_seed + 991
 	nz.frequency = 0.0016
 	nz.fractal_octaves = 4
+	# alturas reales del borde del terreno ya armado (para empalmar sin rendijas)
+	var edge := {}
+	if terrain_node.mesh != null:
+		var tv: PackedVector3Array = terrain_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		for v in tv:
+			if absf(absf(v.x) - half) < 0.01 or absf(absf(v.z) - half) < 0.01:
+				edge[Vector2i(roundi(v.x * 10.0), roundi(v.z * 10.0))] = v.y
 	var hv := PackedFloat32Array()
 	hv.resize(G * G)
 	for j in G:
@@ -653,6 +660,9 @@ func build_outer(grass: Color) -> void:
 			if terr[bi] == T_WATER:
 				hills *= 0.15
 			hv[j * G + i] = lerpf(base, base + hills, t) if terr[bi] != T_WATER else base - 1.0 * t
+			var ek := Vector2i(roundi(wx * 10.0), roundi(wz * 10.0))
+			if edge.has(ek):
+				hv[j * G + i] = edge[ek]
 	var verts := PackedVector3Array()
 	var nrms := PackedVector3Array()
 	var cols := PackedColorArray()
@@ -677,8 +687,76 @@ func build_outer(grass: Color) -> void:
 			var czw := (j - R + 0.5) * stp
 			if absf(cxw) < half and absf(czw) < half:
 				continue
+			if (absf(cxw) < half and absf(czw) < half + stp) or (absf(czw) < half and absf(cxw) < half + stp):
+				continue
 			var a := j * G + i
 			ids.append_array(PackedInt32Array([a, a + 1, a + G + 1, a, a + G + 1, a + G]))
+	# altura del anillo sobre la línea a un paso del mapa (lineal entre sus vértices, igual que sus triángulos)
+	var ring_h := func(x: float, z: float) -> float:
+		var fi := x / stp + R
+		var fj := z / stp + R
+		var i0 := clampi(int(floor(fi)), 0, G - 2)
+		var j0 := clampi(int(floor(fj)), 0, G - 2)
+		var u := clampf(fi - i0, 0.0, 1.0)
+		var w := clampf(fj - j0, 0.0, 1.0)
+		if absf(u) < 0.0001 or absf(u - 1.0) < 0.0001:
+			var ii := i0 + roundi(u)
+			return lerpf(hv[j0 * G + ii], hv[(j0 + 1) * G + ii], w)
+		var jj := j0 + roundi(w)
+		return lerpf(hv[jj * G + i0], hv[jj * G + i0 + 1], u)
+	for side in 4:
+		# puntos del borde de este lado, ordenados
+		var pts := []
+		for k in edge:
+			var x: float = k.x / 10.0
+			var z: float = k.y / 10.0
+			var on := false
+			match side:
+				0:
+					on = absf(x - half) < 0.01
+				1:
+					on = absf(x + half) < 0.01
+				2:
+					on = absf(z - half) < 0.01
+				3:
+					on = absf(z + half) < 0.01
+			if on:
+				pts.append(z if side < 2 else x)
+		pts.sort()
+		for q in range(pts.size() - 1):
+			var a0: float = pts[q]
+			var a1: float = pts[q + 1]
+			# cuatro esquinas con x y z crecientes (mismo orden de triángulos que el anillo)
+			var p := []
+			for c in [[0, 0], [1, 0], [0, 1], [1, 1]]:
+				var along: float = a0 if c[1] == 0 else a1
+				var outside: bool = c[0] == 1
+				var px: float
+				var pz: float
+				match side:
+					0:
+						px = half + (stp if outside else 0.0)
+						pz = along
+					1:
+						px = -half - (stp if not outside else 0.0)
+						pz = along
+					2:
+						px = along
+						pz = half + (stp if outside else 0.0)
+					3:
+						px = along
+						pz = -half - (stp if not outside else 0.0)
+				var inner: bool = (absf(absf(px) - half) < 0.01 and side < 2) or (absf(absf(pz) - half) < 0.01 and side >= 2)
+				var py: float = edge[Vector2i(roundi(px * 10.0), roundi(pz * 10.0))] if inner else ring_h.call(px, pz)
+				p.append(Vector3(px, py, pz))
+			# ordenar como grilla: [x0z0, x1z0, x0z1, x1z1]
+			p.sort_custom(func(A, B): return A.z < B.z - 0.001 or (absf(A.z - B.z) <= 0.001 and A.x < B.x))
+			var base := verts.size()
+			for v in p:
+				verts.append(v)
+				nrms.append(Vector3.UP)
+				cols.append(Color(1, 1, 1, 0))
+			ids.append_array(PackedInt32Array([base, base + 1, base + 3, base, base + 3, base + 2]))
 	var arr := []
 	arr.resize(Mesh.ARRAY_MAX)
 	arr[Mesh.ARRAY_VERTEX] = verts

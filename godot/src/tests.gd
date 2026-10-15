@@ -99,7 +99,7 @@ func run_test() -> void:
 	if test_mode.begins_with("album="):
 		run_album(test_mode.substr(6))
 		return
-	if test_mode in ["compat_save", "compat_load", "fresh", "pause"]:
+	if test_mode in ["compat_save", "compat_load", "fresh", "pause", "seam"]:
 		run_extra()
 		return
 	if test_mode == "sim":
@@ -723,6 +723,21 @@ func run_extra() -> void:
 				var clean := not FileAccess.file_exists("user://opciones.json") and latest_slot() == 0
 				print("FRESH OK" if clean and start_panel.visible and not started else "FRESH FALLA")
 				get_tree().quit()
+		"seam":
+			# mapas con bordes con lomas: el horizonte tiene que empalmar con el terreno en cada vértice del borde
+			if f == 5:
+				var res := []
+				for kind in [1, 4, 0]:
+					seed(20261012 + kind)
+					new_game(kind, 0, true, false, 3)
+					build_terrain()
+					res.append(seam_check())
+					opts["quality"] = 0
+					build_terrain()
+					res.append(seam_check())
+					opts["quality"] = 1
+				print("SEAM_CHECK ok" if res.min() == 0 else "SEAM_CHECK FALLA %s" % [res])
+				get_tree().quit()
 		"pause":
 			if f == 5:
 				new_game(4, 0, false, true, 2)
@@ -896,3 +911,24 @@ func terrain_check() -> void:
 				if absf(terrain_hsub[int(w[1]) * M + int(w[0])] - float(w[2])) > 0.001:
 					bad += 1
 	print("TERRAIN_CHECK ok (%d celdas ocupadas)" % cells if bad == 0 else "TERRAIN_CHECK FALLA %d puntos" % bad)
+# Cuenta los vértices del borde del terreno que no tienen un vértice del horizonte en el mismo lugar y a la
+# misma altura (cada uno es una posible rendija). 0 = empalme perfecto.
+func seam_check() -> int:
+	var half := N * CELL * 0.5
+	var outer := {}
+	for nd in outer_nodes:
+		var m: Mesh = nd.mesh
+		var arr := m.surface_get_arrays(0)
+		var vs: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		for v in vs:
+			if absf(absf(v.x) - half) < 0.01 or absf(absf(v.z) - half) < 0.01:
+				outer[Vector2i(roundi(v.x * 10.0), roundi(v.z * 10.0))] = v.y
+	var tm: Mesh = terrain_node.mesh
+	var tv: PackedVector3Array = tm.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var bad := 0
+	for v in tv:
+		if absf(absf(v.x) - half) < 0.01 or absf(absf(v.z) - half) < 0.01:
+			var k := Vector2i(roundi(v.x * 10.0), roundi(v.z * 10.0))
+			if not outer.has(k) or absf(float(outer[k]) - v.y) > 0.001:
+				bad += 1
+	return bad
