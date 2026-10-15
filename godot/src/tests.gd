@@ -1024,7 +1024,7 @@ func run_buildings() -> void:
 			if k % 3 == LOD_NEAR and c[k].visible:
 				near_nodes += 1
 	bt(b_near_on or near_nodes == 0, "BUILDING_CHECK sin versiones cerca lejos del zoom " + ("ok" if (b_near_on or near_nodes == 0) else "FALLA %d nodos" % near_nodes))
-	special_check([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 66])
+	special_check(DEF.keys())
 	var nn := [0, 0, 0]
 	for c in bnodes:
 		for k in c:

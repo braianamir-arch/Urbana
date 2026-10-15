@@ -25,7 +25,7 @@ func mb_limb(a: Vector3, b: Vector3, r0: float, r1: float, seg: int) -> void:
 		var n1 := side * cos(a1) + fw * sin(a1)
 		mb_quad(a + n1 * r0, a + n0 * r0, b + n0 * r1, b + n1 * r1, BM_BARK, 0)
 # bulto de follaje: esfera deformada con normales suaves (se ve como masa de hojas, no como facetas)
-func mb_blob(c: Vector3, r: Vector3, seg: int, rings: int, seed: int) -> void:
+func mb_blob(c: Vector3, r: Vector3, seg: int, rings: int, seed: int, mat := BM_LEAF, tm := 1, bumpy := true) -> void:
 	var o := mb_v.size()
 	var cw := mb_xf * c
 	for j in rings + 1:
@@ -33,7 +33,7 @@ func mb_blob(c: Vector3, r: Vector3, seg: int, rings: int, seed: int) -> void:
 		for k in seg + 1:
 			var ph := TAU * k / seg
 			var dir := Vector3(sin(th) * cos(ph), cos(th), sin(th) * sin(ph))
-			var bump := 1.0 + (hsh(seed * 131 + j * 17 + (k % seg), 7) - 0.5) * 0.35
+			var bump := 1.0 + ((hsh(seed * 131 + j * 17 + (k % seg), 7) - 0.5) * 0.35 if bumpy else 0.0)
 			var p := mb_xf * (c + dir * r * bump)
 			var n := (mb_xf.basis * (dir / r)).normalized()
 			mb_v.append(p)
@@ -41,7 +41,7 @@ func mb_blob(c: Vector3, r: Vector3, seg: int, rings: int, seed: int) -> void:
 			var t := Vector3(-sin(ph), 0, cos(ph))
 			mb_t.append_array([t.x, t.y, t.z, 1.0])
 			mb_uv.append(Vector2(ph * maxf(r.x, r.z), -(p.y - cw.y) - th * r.y))
-			mb_uv2.append(Vector2(BM_LEAF, 1))
+			mb_uv2.append(Vector2(mat, tm))
 	for j in rings:
 		for k in seg:
 			var a := o + j * (seg + 1) + k

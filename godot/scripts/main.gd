@@ -3911,8 +3911,7 @@ func emit_def(i: int, p: Vector3) -> void:
 	var col: Color = d["col"]
 	if burn[i] > 0.0:
 		col = col.darkened(0.6)
-	var sh: String = d["sh"]
-	var rot := face_rot(i)
+	# los especiales terminados los dibuja emit_special; acá queda solo la maravilla en obra
 	if d["c"] == "wonder":
 		var prog: int = wonder_progress.get(i, 0)
 		if prog < WONDER_STEPS:
@@ -3925,215 +3924,6 @@ func emit_def(i: int, p: Vector3) -> void:
 			em(M_BOX, x + w * 0.3, y, z - w * 0.3, 0.3, h + 8.0, 0.3, 0.0, Color(0.95, 0.75, 0.1))
 			em(M_BOX, x + w * 0.1, y + h + 7.6, z - w * 0.3, w * 0.5, 0.3, 0.3, 0.0, Color(0.95, 0.75, 0.1))
 			return
-	var ground := Color(0.55, 0.55, 0.52)
-	match sh:
-		"cinema":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			bx(x, y, z, rot, 0, -0.05 * w, 0, w * 0.86, 5.2, w * 0.78, col)
-			bx(x, y, z, rot, 0, -0.05 * w, 5.2, w * 0.9, 0.3, w * 0.82, Color(0.12, 0.12, 0.13))
-			bx(x, y, z, rot, 0, 0.42 * w, 2.6, w * 0.92, 0.7, 0.55, Color(0.95, 0.85, 0.45), 0, 0.9)
-			bx(x, y, z, rot, 0, 0.43 * w, 2.45, w * 0.88, 0.12, 0.5, Color(1.0, 0.92, 0.65), 0, 0, 2.2)
-			bx(x, y, z, rot, 0.36 * w, 0.39 * w, 3.3, 0.25, 2.8, 0.55, Color(1.0, 0.25, 0.2), 0, 0, 1.6)
-			bx(x, y, z, rot, -0.27 * w, 0.351 * w, 0.5, 0.65, 1.3, 0.04, Color(0.2, 0.25, 0.55), 0, 0.5)
-			bx(x, y, z, rot, 0.27 * w, 0.351 * w, 0.5, 0.65, 1.3, 0.04, Color(0.65, 0.15, 0.1), 0, 0.5)
-			bx(x, y, z, rot, 0, 0.351 * w, 0.05, 1.0, 2.0, 0.03, COL_GLASS, 0, 0, 0, -8)
-		"civic":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			em(M_BOX, x, y, z, w * 0.8, 3.2, w * 0.7, rot, col, 0.8)
-			em(M_BOX, x, y + 3.2, z, w * 0.84, 0.3, w * 0.74, rot, col.darkened(0.25))
-			em(M_BOX, x + w * 0.38, y, z + w * 0.38, 0.1, 4.5, 0.1, 0.0, Color(0.8, 0.8, 0.8))
-			em(M_BOX, x + w * 0.38 + 0.45, y + 3.9, z + w * 0.38, 0.9, 0.5, 0.05, 0.0, Color(0.45, 0.7, 0.95))
-		"tower":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			em(M_BOX, x, y, z, w * 0.75, 4.0 + sz * 5.0, w * 0.55, rot, col, 1.0)
-			em(M_BOX, x, y, z, w * 0.4, 7.0 + sz * 6.0, w * 0.4, rot, col.darkened(0.08), 1.0)
-		"campus":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.4, 0.62, 0.32))
-			em(M_BOX, x, y, z - w * 0.25, w * 0.7, 6.0, w * 0.25, 0.0, col, 1.0)
-			em(M_BOX, x - w * 0.3, y, z + w * 0.15, w * 0.2, 4.5, w * 0.45, 0.0, col, 1.0)
-			em(M_BOX, x + w * 0.3, y, z + w * 0.15, w * 0.2, 4.5, w * 0.45, 0.0, col, 1.0)
-			em(M_BOX, x, y + 6.0, z - w * 0.25, 2.0, 4.0, 2.0, 0.0, col.lightened(0.1))
-		"cabildo":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.66, 0.6))
-			em(M_BOX, x, y, z, w * 0.8, 5.0, w * 0.45, rot, col, 0.9)
-			em(M_ROOF, x, y + 5.0, z, w * 0.8, 1.2, w * 0.45, rot, Color(0.6, 0.3, 0.2))
-			em(M_BOX, x, y, z, 2.2, 10.0, 2.2, rot, col)
-			em(M_CONE, x, y + 10.0, z, 2.4, 2.5, 2.4, 0.0, Color(0.55, 0.3, 0.2))
-		"park":
-			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, col)
-			em(M_BOX, x, y, z, w * 0.9, 0.17, 0.8, 0.0, Color(0.8, 0.75, 0.6))
-			em(M_BOX, x, y, z, 0.8, 0.17, w * 0.9, 0.0, Color(0.8, 0.75, 0.6))
-			for k in sz * 3:
-				var ax := x + (hsh(i, k) - 0.5) * w * 0.8
-				var az := z + (hsh(i, k + 9) - 0.5) * w * 0.8
-				em(M_BOX, ax, y, az, 0.25, 1.0, 0.25, 0.0, Color(0.35, 0.25, 0.15))
-				em(M_SPH, ax, y + 0.8, az, 2.0, 2.0, 2.0, 0.0, tree_colors(1 + k % 3)[0])
-			if sz >= 2:
-				em(M_CYL, x, y, z, 2.0, 0.6, 2.0, 0.0, Color(0.7, 0.7, 0.72))
-				em(M_CYL, x, y + 0.6, z, 0.5, 1.4, 0.5, 0.0, Color(0.6, 0.75, 0.95), 0, 0, 0.2)
-		"pitch":
-			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, Color(0.25, 0.58, 0.28))
-			em(M_BOX, x, y, z, w * 0.75, 0.16, w * 0.55, rot, Color(0.3, 0.7, 0.32))
-			em(M_BOX, x, y, z, 0.12, 0.17, w * 0.55, rot, Color(0.95, 0.95, 0.95))
-			for sgn in [-1, 1]:
-				em(M_BOX, x + sgn * w * 0.36 * cos(rot), y, z - sgn * w * 0.36 * sin(rot), 0.2, 1.0, 1.8, rot, Color(0.95, 0.95, 0.95))
-		"parrilla":
-			em(M_BOX, x, y, z, w * 0.9, 0.15, w * 0.9, 0.0, Color(0.7, 0.65, 0.55))
-			em(M_BOX, x, y, z, 2.2, 1.3, 1.2, rot, Color(0.65, 0.32, 0.2))
-			em(M_BOX, x, y + 1.3, z, 0.6, 1.6, 0.6, rot, Color(0.55, 0.28, 0.18))
-			em(M_BOX, x + 1.0, y, z + 1.2, 1.6, 0.8, 0.8, 0.0, Color(0.5, 0.35, 0.2))
-		"calesita":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.66, 0.58))
-			em(M_CYL, x, y, z, 3.2, 0.4, 3.2, 0.0, Color(0.95, 0.9, 0.7))
-			em(M_CYL, x, y + 0.4, z, 0.3, 2.2, 0.3, 0.0, Color(0.9, 0.85, 0.3))
-			em(M_CONE, x, y + 2.6, z, 3.6, 1.6, 3.6, 0.0, col, 0, 0.5)
-		"stadium":
-			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, ground)
-			em(M_CYL, x, y, z, w * 0.92, 5.5, w * 0.8, 0.0, col, 0.3)
-			em(M_CYL, x, y + 5.5, z, w * 0.7, 0.2, w * 0.58, 0.0, Color(0.3, 0.65, 0.3))
-			for k in 4:
-				var a := k * PI * 0.5 + 0.785
-				em(M_BOX, x + cos(a) * w * 0.45, y, z + sin(a) * w * 0.4, 0.4, 12.0, 0.4, 0.0, Color(0.7, 0.7, 0.72))
-				em(M_BOX, x + cos(a) * w * 0.45, y + 12.0, z + sin(a) * w * 0.4, 2.0, 1.0, 0.4, a, Color(1, 1, 0.9), 0, 1.5)
-		"wheel":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			em(M_BOX, x - 1.5, y, z, 0.4, 8.0, 0.4, 0.3, Color(0.8, 0.8, 0.82))
-			em(M_BOX, x + 1.5, y, z, 0.4, 8.0, 0.4, -0.3, Color(0.8, 0.8, 0.82))
-			for k in 12:
-				var a := k * TAU / 12.0
-				em(M_BOX, x + cos(a) * 6.0, y + 8.0 + sin(a) * 6.0, z, 0.9, 0.9, 0.9, 0.0, [col, Color(0.95, 0.85, 0.2), Color(0.3, 0.6, 0.95)][k % 3], 0, 0.6)
-		"cathedral":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.68, 0.62))
-			em(M_BOX, x, y, z, w * 0.4, 7.0, w * 0.75, rot, col, 0.5)
-			em(M_ROOF, x, y + 7.0, z, w * 0.4, 2.5, w * 0.75, rot, Color(0.4, 0.4, 0.45))
-			for sgn in [-1, 1]:
-				var tx: float = x + sgn * w * 0.18
-				em(M_BOX, tx, y, z + w * 0.35, 2.0, 11.0, 2.0, 0.0, col)
-				em(M_CONE, tx, y + 11.0, z + w * 0.35, 2.2, 4.0, 2.2, 0.0, Color(0.35, 0.4, 0.45))
-		"lighthouse":
-			em(M_CYL, x, y, z, 2.4, 0.5, 2.4, 0.0, Color(0.5, 0.5, 0.5))
-			for k in 5:
-				em(M_CYL, x, y + 0.5 + k * 2.2, z, 1.6 - k * 0.1, 2.2, 1.6 - k * 0.1, 0.0, Color(0.95, 0.95, 0.95) if k % 2 == 0 else Color(0.8, 0.15, 0.15))
-			em(M_CYL, x, y + 11.5, z, 1.2, 1.2, 1.2, 0.0, Color(1, 0.95, 0.7), 0, 2.0)
-		"clock":
-			em(M_BOX, x, y, z, w * 0.9, 0.15, w * 0.9, 0.0, Color(0.7, 0.68, 0.6))
-			em(M_BOX, x, y, z, 1.6, 9.0, 1.6, rot, col)
-			em(M_BOX, x, y + 7.2, z, 1.75, 1.2, 1.75, rot, Color(0.95, 0.95, 0.9), 0, 0.8)
-			em(M_CONE, x, y + 9.0, z, 2.0, 1.8, 2.0, 0.0, Color(0.3, 0.35, 0.3))
-		"beach":
-			em(M_BOX, x, y, z, w, 0.12, w, 0.0, Color(0.92, 0.85, 0.6))
-			for k in 3:
-				var ax := x + (hsh(i, k) - 0.5) * w * 0.7
-				var az := z + (hsh(i, k + 4) - 0.5) * w * 0.7
-				em(M_BOX, ax, y, az, 0.08, 1.6, 0.08, 0.0, Color(0.9, 0.9, 0.9))
-				em(M_CONE, ax, y + 1.4, az, 1.8, 0.5, 1.8, 0.0, [Color(0.9, 0.3, 0.3), Color(0.2, 0.5, 0.9), Color(0.95, 0.8, 0.2)][k])
-		"plant":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			em(M_BOX, x - w * 0.12, y, z, w * 0.55, 5.0, w * 0.7, rot, col, 0.3)
-			em(M_CYL, x + w * 0.28, y, z - w * 0.25, 1.3, 12.0, 1.3, 0.0, col.darkened(0.2))
-			em(M_CYL, x + w * 0.28, y, z + w * 0.15, 1.3, 10.0, 1.3, 0.0, col.darkened(0.2))
-		"solar":
-			em(M_BOX, x, y, z, w * 0.98, 0.12, w * 0.98, 0.0, Color(0.45, 0.55, 0.35))
-			for k in 4:
-				em(M_BOX, x, y + 0.6, z - w * 0.36 + k * w * 0.24, w * 0.85, 0.12, w * 0.16, 0.0, col, 0, 0, 0.05)
-		"windmill":
-			em(M_CYL, x, y, z, 0.6, 11.0, 0.6, 0.0, col)
-			em(M_BOX, x, y + 11.0, z + 0.4, 0.4, 7.0, 0.15, 0.0, col)
-			em(M_BOX, x, y + 13.5, z + 0.4, 6.0, 0.4, 0.15, 0.7, col)
-		"dam":
-			em(M_BOX, x, y - 2.0, z, w, 6.0, w * 0.35, rot, col)
-			em(M_BOX, x, y, z + w * 0.3, w * 0.5, 3.0, w * 0.3, rot, col.darkened(0.15), 0.4)
-		"pump":
-			em(M_BOX, x, y, z, w * 0.7, 2.2, w * 0.7, 0.0, col, 0.3)
-			em(M_CYL, x + 1.0, y, z + 1.0, 0.7, 3.0, 0.7, 0.0, Color(0.6, 0.6, 0.65))
-		"watertower":
-			for k in 4:
-				var a := k * PI * 0.5 + 0.785
-				em(M_BOX, x + cos(a) * 1.0, y, z + sin(a) * 1.0, 0.2, 6.0, 0.2, 0.0, Color(0.5, 0.5, 0.52))
-			em(M_SPH, x, y + 5.5, z, 3.2, 3.0, 3.2, 0.0, col)
-		"landfill":
-			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, Color(0.45, 0.4, 0.3))
-			for k in 4:
-				em(M_SPH, x + (hsh(i, k) - 0.5) * w * 0.6, y, z + (hsh(i, k + 3) - 0.5) * w * 0.6, 4.0, 1.8, 3.5, 0.0, Color(0.42, 0.36, 0.28))
-		"metro":
-			em(M_BOX, x, y, z, w * 0.9, 0.15, w * 0.9, 0.0, ground)
-			em(M_BOX, x, y, z, 2.4, 1.6, 2.4, rot, Color(0.85, 0.85, 0.85), 0.5)
-			em(M_BOX, x, y + 1.6, z, 1.0, 1.0, 0.2, rot, col, 0, 0, 0.6)
-		"station":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, ground)
-			em(M_BOX, x, y, z, w * 0.8, 4.0, w * 0.4, rot, col, 0.6)
-			em(M_ROOF, x, y + 4.0, z, w * 0.85, 1.6, w * 0.45, rot, Color(0.4, 0.4, 0.42))
-			em(M_BOX, x, y + 5.2, z, 1.0, 1.0, 0.3, rot, Color(0.95, 0.95, 0.9), 0, 0.6)
-		"port":
-			em(M_BOX, x, y, z, w, 0.4, w, 0.0, Color(0.5, 0.48, 0.45))
-			em(M_BOX, x - w * 0.25, y, z, w * 0.35, 3.0, w * 0.6, 0.0, col)
-			for k in 3:
-				em(M_BOX, x + w * 0.2, y + 0.4 + k * 1.0, z - w * 0.2 + k * 0.2, 2.5, 1.0, 1.0, 0.0, [Color(0.8, 0.3, 0.2), Color(0.2, 0.4, 0.8), Color(0.2, 0.6, 0.3)][k])
-			em(M_BOX, x + w * 0.35, y, z + w * 0.3, 0.5, 10.0, 0.5, 0.0, Color(0.95, 0.7, 0.1))
-			em(M_BOX, x + w * 0.35 - 2.0, y + 10.0, z + w * 0.3, 5.0, 0.4, 0.4, 0.0, Color(0.95, 0.7, 0.1))
-		"airport":
-			em(M_BOX, x, y, z, w, 0.12, w, 0.0, Color(0.45, 0.5, 0.4))
-			em(M_BOX, x, y, z + w * 0.15, w * 0.95, 0.16, w * 0.22, 0.0, Color(0.25, 0.25, 0.27))
-			em(M_BOX, x, y, z + w * 0.15, w * 0.9, 0.17, 0.25, 0.0, Color(0.95, 0.95, 0.95))
-			em(M_BOX, x - w * 0.15, y, z - w * 0.28, w * 0.5, 3.5, w * 0.25, 0.0, col, 1.0)
-			em(M_CYL, x + w * 0.3, y, z - w * 0.3, 1.2, 9.0, 1.2, 0.0, Color(0.8, 0.8, 0.82))
-			em(M_CYL, x + w * 0.3, y + 9.0, z - w * 0.3, 2.2, 1.6, 2.2, 0.0, Color(0.4, 0.55, 0.65), 0, 0.6)
-		"pier":
-			em(M_BOX, x, 0.2, z, w * 0.4, 0.3, w * 1.2, rot, col)
-			em(M_BOX, x, 0.5, z, 1.4, 2.0, 1.4, rot, Color(0.8, 0.75, 0.6))
-		"parking":
-			em(M_BOX, x, y, z, w * 0.95, 0.16, w * 0.95, 0.0, col)
-			for k in 4:
-				em(M_BOX, x - 1.0 + (k % 2) * 2.0, y + 0.16, z - 0.8 + (k / 2) * 1.6, 1.5, 0.6, 0.75, 0.0, car_color(i + k))
-		"mall":
-			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, Color(0.3, 0.3, 0.32))
-			em(M_BOX, x, y, z, w * 0.8, 6.0, w * 0.7, rot, col, 0.6)
-			em(M_BOX, x, y + 6.0, z, w * 0.5, 0.8, 0.3, rot, Color(0.95, 0.3, 0.4), 0, 1.2)
-		"gated":
-			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, Color(0.4, 0.62, 0.32))
-			for sgn in [-1, 1]:
-				em(M_BOX, x + sgn * w * 0.48, y, z, 0.25, 1.4, w * 0.96, 0.0, Color(0.85, 0.82, 0.75))
-				em(M_BOX, x, y, z + sgn * w * 0.48, w * 0.96, 1.4, 0.25, 0.0, Color(0.85, 0.82, 0.75))
-			for k in 4:
-				var hx := x + (k % 2 - 0.5) * w * 0.45
-				var hz := z + (k / 2 - 0.5) * w * 0.45
-				em(M_BOX, hx, y, hz, 2.6, 2.0, 2.2, 0.0, col, 0.6)
-				em(M_ROOF, hx, y + 2.0, hz, 2.8, 1.0, 2.3, 0.0, Color(0.6, 0.3, 0.2))
-			em(M_BOX, x + 1.5, y, z + 1.0, 2.0, 0.12, 1.2, 0.0, Color(0.3, 0.65, 0.9), 0, 0, 0.15)
-		"farm":
-			for k in 4:
-				em(M_BOX, x, y, z - w * 0.36 + k * w * 0.24, w * 0.95, 0.2, w * 0.22, 0.0, [Color(0.75, 0.65, 0.3), Color(0.45, 0.6, 0.25)][k % 2])
-			em(M_BOX, x + w * 0.3, y, z + w * 0.3, 2.4, 2.4, 2.0, 0.0, Color(0.7, 0.2, 0.15))
-			em(M_ROOF, x + w * 0.3, y + 2.4, z + w * 0.3, 2.6, 1.2, 2.1, 0.0, Color(0.4, 0.35, 0.3))
-		"w_tower":
-			em(M_BOX, x, y, z, w * 0.95, 0.15, w * 0.95, 0.0, Color(0.7, 0.7, 0.72))
-			em(M_CYL, x, y, z, 3.0, 30.0, 3.0, 0.0, col, 0.8)
-			em(M_CYL, x, y + 30.0, z, 5.0, 3.0, 5.0, 0.0, Color(0.5, 0.6, 0.75), 1.2)
-			em(M_CONE, x, y + 33.0, z, 1.2, 10.0, 1.2, 0.0, Color(0.85, 0.85, 0.9), 0, 0.8)
-		"w_park":
-			em(M_BOX, x, y, z, w * 0.98, 0.14, w * 0.98, 0.0, Color(0.3, 0.6, 0.28))
-			em(M_CYL, x, y, z, w * 0.4, 0.2, w * 0.4, 0.0, Color(0.2, 0.45, 0.65), 0, 0, 0.1)
-			for k in 14:
-				var a := k * TAU / 14.0
-				var ax := x + cos(a) * w * 0.38
-				var az := z + sin(a) * w * 0.38
-				em(M_BOX, ax, y, az, 0.3, 1.2, 0.3, 0.0, Color(0.35, 0.25, 0.15))
-				em(M_SPH, ax, y + 1.0, az, 2.4, 2.4, 2.4, 0.0, tree_colors(3 if k % 3 == 0 else 1)[0])
-			em(M_BOX, x, y, z, 1.0, 6.0, 1.0, 0.0, Color(0.95, 0.95, 0.95))
-		"w_stadium":
-			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, ground)
-			em(M_CYL, x, y, z, w * 0.95, 9.0, w * 0.85, 0.0, col, 0.4)
-			em(M_CYL, x, y + 9.0, z, w * 0.72, 0.2, w * 0.62, 0.0, Color(0.3, 0.65, 0.3))
-			em(M_CYL, x, y + 9.0, z, w * 0.98, 0.6, w * 0.88, 0.0, Color(0.45, 0.65, 0.95))
-		"w_palace":
-			em(M_BOX, x, y, z, w * 0.98, 0.15, w * 0.98, 0.0, Color(0.75, 0.72, 0.65))
-			em(M_BOX, x, y, z, w * 0.85, 8.0, w * 0.5, rot, col, 0.9)
-			em(M_SPH, x, y + 8.0, z, 7.0, 8.0, 7.0, 0.0, Color(0.55, 0.7, 0.65))
-			em(M_CONE, x, y + 15.0, z, 1.0, 4.0, 1.0, 0.0, Color(0.9, 0.8, 0.3))
-			for sgn in [-1, 1]:
-				em(M_BOX, x + sgn * w * 0.38, y, z, 3.0, 11.0, 3.0, 0.0, col)
-		_:
-			em(M_BOX, x, y, z, w * 0.8, 3.0, w * 0.8, 0.0, col)
 func build_overlay() -> void:
 	var mm := overlay_node.multimesh
 	if view_mode == "":
@@ -4333,13 +4123,6 @@ func make_hip_mesh() -> ArrayMesh:
 		f.append([Vector3(0, 0.6, s), [Vector3(-0.5, 0, s * 0.5), Vector3(0.5, 0, s * 0.5), Vector3(0, 1, s * r)]])
 	f.append([Vector3(0, -1, 0), [Vector3(-0.5, 0, -0.5), Vector3(0.5, 0, -0.5), Vector3(0.5, 0, 0.5), Vector3(-0.5, 0, 0.5)]])
 	return make_faces_mesh(f)
-func lp(x: float, z: float, rot: float, a: float, b: float) -> Vector2:
-	var c := cos(rot)
-	var s := sin(rot)
-	return Vector2(x + a * c + b * s, z - a * s + b * c)
-func bx(x: float, y: float, z: float, rot: float, a: float, b: float, yb: float, sx: float, sy: float, sz: float, col: Color, c0: float = 0.0, c1: float = 0.0, c2: float = 0.0, c3: float = 0.0) -> void:
-	var q := lp(x, z, rot, a, b)
-	em(M_BOX, q.x, y + yb, q.y, sx, sy, sz, rot, col, c0, c1, c2, c3)
 func clear_preview() -> void:
 	preview_node.multimesh.instance_count = 0
 	set_cost_hint("")
@@ -5369,7 +5152,7 @@ func mb_limb(a: Vector3, b: Vector3, r0: float, r1: float, seg: int) -> void:
 		var n1 := side * cos(a1) + fw * sin(a1)
 		mb_quad(a + n1 * r0, a + n0 * r0, b + n0 * r1, b + n1 * r1, BM_BARK, 0)
 # bulto de follaje: esfera deformada con normales suaves (se ve como masa de hojas, no como facetas)
-func mb_blob(c: Vector3, r: Vector3, seg: int, rings: int, seed: int) -> void:
+func mb_blob(c: Vector3, r: Vector3, seg: int, rings: int, seed: int, mat := BM_LEAF, tm := 1, bumpy := true) -> void:
 	var o := mb_v.size()
 	var cw := mb_xf * c
 	for j in rings + 1:
@@ -5377,7 +5160,7 @@ func mb_blob(c: Vector3, r: Vector3, seg: int, rings: int, seed: int) -> void:
 		for k in seg + 1:
 			var ph := TAU * k / seg
 			var dir := Vector3(sin(th) * cos(ph), cos(th), sin(th) * sin(ph))
-			var bump := 1.0 + (hsh(seed * 131 + j * 17 + (k % seg), 7) - 0.5) * 0.35
+			var bump := 1.0 + ((hsh(seed * 131 + j * 17 + (k % seg), 7) - 0.5) * 0.35 if bumpy else 0.0)
 			var p := mb_xf * (c + dir * r * bump)
 			var n := (mb_xf.basis * (dir / r)).normalized()
 			mb_v.append(p)
@@ -5385,7 +5168,7 @@ func mb_blob(c: Vector3, r: Vector3, seg: int, rings: int, seed: int) -> void:
 			var t := Vector3(-sin(ph), 0, cos(ph))
 			mb_t.append_array([t.x, t.y, t.z, 1.0])
 			mb_uv.append(Vector2(ph * maxf(r.x, r.z), -(p.y - cw.y) - th * r.y))
-			mb_uv2.append(Vector2(BM_LEAF, 1))
+			mb_uv2.append(Vector2(mat, tm))
 	for j in rings:
 		for k in seg:
 			var a := o + j * (seg + 1) + k
@@ -5712,7 +5495,7 @@ var scheck_log: Dictionary = {}
 # árboles de cada especial: [x, z, tipo, escala] en el marco del lote (frente +Z, centro en 0)
 var special_trees: Dictionary = {}
 # segundo color de cada especial (índice de la paleta del shader)
-const SPECIAL_ACCENT := {20: 3, 21: 2, 22: 2, 23: 2, 24: 7, 25: 7, 30: 0, 33: 1, 34: 2, 40: 6, 41: 0, 66: 2}
+const SPECIAL_ACCENT := {20: 3, 21: 2, 22: 2, 23: 2, 24: 7, 25: 7, 30: 0, 33: 1, 34: 2, 40: 6, 41: 0, 66: 2, 51: 6, 53: 3, 55: 2, 56: 3, 59: 6, 60: 6, 61: 2, 62: 0, 63: 2, 64: 3, 65: 0, 70: 3, 72: 3}
 func special_register() -> void:
 	special_model.clear()
 	special_trees.clear()
@@ -5729,6 +5512,9 @@ func special_register() -> void:
 	special_trees[33] = [[1.4, -1.3, 7, 0.6]]
 	special_trees[41] = [[-1.5, 1.5, 1, 0.55]]
 	special_trees[24] = [[1.5, 1.4, 3, 0.55]]
+	special_trees[62] = [[-3.0, 3.0, 1, 0.6], [3.0, 3.0, 3, 0.6], [-3.0, -3.0, 2, 0.6], [3.0, -3.0, 4, 0.6]]
+	special_trees[63] = [[3.2, 3.0, 7, 0.8], [2.6, -3.0, 4, 0.7]]
+	special_trees[71] = [[-5.0, -4.6, 2, 0.9], [-2.6, -5.0, 1, 0.9], [4.8, -4.8, 3, 0.9], [-5.0, -1.0, 4, 0.9], [5.0, 1.4, 2, 0.9], [-4.4, 4.6, 3, 0.9], [-1.6, 5.0, 1, 0.8], [1.6, 5.0, 5, 0.8], [4.6, 4.8, 3, 0.9], [-2.0, 1.6, 7, 1.0], [2.2, -1.8, 1, 0.8]]
 # una instancia del especial en su lote (centrada como antes), con sus árboles
 func emit_special(i: int, p: Vector3) -> bool:
 	var id: int = bld[i]
@@ -5854,7 +5640,7 @@ func rc_sp_26(lod: int, _f: int, w: float) -> void:
 	sp_columns(-1.6, 1.6, -1.7, top - 0.08, 6, 0.14)
 	mb_box(Vector3(0, top, -1.85), Vector3(3.6, 0.3, 0.5), BM_CONCRETE, 0)
 	mb_cyl(Vector3(0, top, -3.8), 1.2, 0.8, 16, BM_CONCRETE, 0)
-	mb_blob(Vector3(0, top + 0.8, -3.8), Vector3(1.2, 1.0, 1.2), 12, 6, 26) if lod != LOD_FAR else mb_cone(Vector3(0, top + 0.8, -3.8), 1.2, 1.0, 8, BM_SHEET, 0)
+	mb_blob(Vector3(0, top + 0.8, -3.8), Vector3(1.2, 1.0, 1.2), [12, 8, 6][lod], [6, 4, 3][lod], 26, BM_SHEET, 0, false)
 	sp_block(-5.8, -4.0, -3.6, 3.5, 0.08, 2, lod, BM_PLASTER, 1, {"gf": 1.6}, 1.0)
 	sp_block(3.6, -4.0, 5.8, 3.5, 0.08, 2, lod, BM_PLASTER, 1, {"gf": 1.6}, 1.0)
 func rc_sp_27(lod: int, _f: int, w: float) -> void:
@@ -5992,7 +5778,7 @@ func rc_sp_37(lod: int, _f: int, w: float) -> void:
 	mb_gable(Vector3(0, 4.68, 2.5), 3.4, 0.3, 1.3, BM_PLASTER, 1, true)
 	mb_cyl(Vector3(0, 3.4, 2.66), 0.6, 0.02, 12, BM_GLASS, 0)
 	mb_cyl(Vector3(0, top, -2.5), 1.1, 1.0, 12, BM_PLASTER, 1)
-	mb_blob(Vector3(0, top + 1.0, -2.5), Vector3(1.1, 1.0, 1.1), 10, 5, 37)
+	mb_blob(Vector3(0, top + 1.0, -2.5), Vector3(1.1, 1.0, 1.1), [10, 8, 6][lod], [5, 4, 3][lod], 37, BM_SHEET, 0, false)
 func rc_sp_38(lod: int, _f: int, w: float) -> void:
 	# faro: torre que se afina con franjas, galería y linterna que brilla
 	sp_ground(w, BM_CONCRETE)
@@ -6045,6 +5831,355 @@ func rc_sp_66(lod: int, _f: int, w: float) -> void:
 	for x in [-1.2, 1.2]:
 		mb_box(Vector3(x, 0.5, 1.04), Vector3(0.6, 1.1, 0.04), BM_PAINTED, 2)
 	mb_box(Vector3(1.4, 3.0, 1.1), Vector3(0.25, 2.2, 0.5), BM_EMIT, 0)
+
+# --- energía y servicios públicos
+func rc_sp_42(lod: int, _f: int, w: float) -> void:
+	# usina a carbón: sala de turbinas, caldera alta, dos chimeneas, montaña de carbón y cinta
+	sp_ground(w, BM_CONCRETE)
+	sp_block(-3.5, -1.0, 1.0, 3.2, 0.08, 1, lod, BM_BRICK, 0, {"gf": 4.0, "sill": 2.0, "wh": 1.4, "ww": 0.6}, 1.0, 0.3)
+	sp_block(-3.5, -3.6, -0.5, -1.0, 0.08, 1, lod, BM_SHEET, 1, {"gf": 7.0, "sill": 5.0, "wh": 1.0}, 1.0, 0.2)
+	mb_chimney(Vector3(0.4, 0.08, -2.6), 15.0, 0.5)
+	mb_chimney(Vector3(1.8, 0.08, -2.6), 15.0, 0.5)
+	mb_blob(Vector3(2.4, 0.9, 1.8), Vector3(1.3, 0.9, 1.3), [10, 6, 5][lod], [4, 3, 2][lod], 42, BM_DARK, 0, true)
+	if lod != LOD_FAR:
+		mb_limb(Vector3(2.0, 0.5, 1.0), Vector3(-0.5, 3.6, -1.6), 0.18, 0.18, 4)
+func rc_sp_43(lod: int, _f: int, w: float) -> void:
+	# central de gas: tres tanques esféricos sobre patas, cañerías, sala de control y antorcha
+	sp_ground(w, BM_CONCRETE)
+	var seg: int = [12, 8, 6][lod]
+	for c in [Vector3(-2.0, 0, -1.8), Vector3(1.4, 0, -1.8), Vector3(-0.3, 0, 1.6)]:
+		mb_blob(c + Vector3(0, 2.6, 0), Vector3(1.4, 1.4, 1.4), seg, seg / 2, 43, BM_PAINTED, 0, false)
+		if lod != LOD_FAR:
+			for k in 4:
+				var a := TAU * k / 4.0 + 0.4
+				mb_cyl(c + Vector3(cos(a) * 1.0, 0.08, sin(a) * 1.0), 0.08, 2.0, 6, BM_PAINTED, 0)
+	sp_block(1.8, 1.2, 3.6, 3.4, 0.08, 1, lod, BM_PLASTER, 1, {"gf": 2.0, "door": 0}, 1.0)
+	mb_cyl(Vector3(3.3, 0.08, -3.3), 0.15, 8.0, 6, BM_PAINTED, 2)
+	if lod != LOD_FAR:
+		mb_limb(Vector3(-2.0, 1.0, -1.8), Vector3(1.4, 1.0, -1.8), 0.12, 0.12, 6)
+		mb_limb(Vector3(-0.3, 1.0, -1.8), Vector3(-0.3, 1.0, 1.6), 0.12, 0.12, 6)
+func rc_sp_44(lod: int, _f: int, w: float) -> void:
+	# parque solar: filas de paneles inclinados sobre postes y una casilla
+	sp_ground(w, BM_TURF)
+	var rows := 6
+	for r in rows:
+		var z := -3.2 + r * 1.2
+		mb_quad(Vector3(-3.4, 0.5, z + 0.4), Vector3(3.0, 0.5, z + 0.4), Vector3(3.0, 1.1, z - 0.3), Vector3(-3.4, 1.1, z - 0.3), BM_GLASS, 0, Vector2(r, 70), Vector2(r + 1, 71))
+		if lod != LOD_FAR:
+			mb_quad(Vector3(3.0, 0.5, z + 0.4), Vector3(-3.4, 0.5, z + 0.4), Vector3(-3.4, 1.1, z - 0.3), Vector3(3.0, 1.1, z - 0.3), BM_PAINTED, 0)
+		if lod == LOD_NEAR:
+			for x in [-3.0, -1.0, 1.0, 2.8]:
+				mb_box(Vector3(x, 0.08, z), Vector3(0.05, 0.75, 0.05), BM_PAINTED, 0, 63 - 8)
+	sp_block(3.3, 2.4, 3.8, 3.8, 0.08, 1, lod, BM_PAINTED, 1, {"gf": 1.4}, 1.0, 0.0)
+func rc_sp_45(lod: int, _f: int, w: float) -> void:
+	# molino eólico: torre que se afina, góndola y tres aspas
+	sp_ground(w * 0.5, BM_CONCRETE)
+	var h := 10.0
+	mb_limb(Vector3(0, 0.08, 0), Vector3(0, h, 0), 0.24, 0.12, [10, 8, 6][lod])
+	mb_box(Vector3(0, h - 0.2, -0.3), Vector3(0.5, 0.55, 1.4), BM_PAINTED, 0)
+	var hub := Vector3(0, h + 0.05, 0.45)
+	mb_blob(hub, Vector3(0.22, 0.22, 0.3), 8, 4, 45, BM_PAINTED, 0, false)
+	for k in 3:
+		var a := TAU * k / 3.0 + 0.3
+		var tip := hub + Vector3(cos(a) * 2.1, sin(a) * 2.1, 0)
+		var side := Vector3(-sin(a), cos(a), 0) * 0.14
+		mb_quad(hub - side + Vector3(0, 0, 0.02), hub + side + Vector3(0, 0, 0.02), tip + side * 0.3, tip - side * 0.3, BM_PAINTED, 0)
+		mb_quad(hub + side, hub - side, tip - side * 0.3, tip + side * 0.3, BM_PAINTED, 0)
+func rc_sp_46(lod: int, _f: int, w: float) -> void:
+	# represa: muro de hormigón con escalones del vertedero, lago detrás y casa de máquinas abajo
+	sp_ground(w, BM_CONCRETE)
+	mb_box(Vector3(0, 0.08, -1.8), Vector3(7.6, 0.05, 4.0), BM_MIRROR, 0, 4)
+	mb_box(Vector3(0, -0.2, -2.0), Vector3(7.6, 3.0, 3.6), BM_DARK, 0, 4)
+	mb_box(Vector3(0, 0.08, 0.6), Vector3(7.6, 3.2, 1.0), BM_CONCRETE, 0, 63 - 8)
+	for k in 4:
+		mb_box(Vector3(0, 0.08, 1.1 + k * 0.45), Vector3(2.4, 2.6 - k * 0.6, 0.45), BM_CONCRETE, 0, 63 - 8)
+	sp_block(1.8, 1.4, 3.6, 3.4, 0.08, 1, lod, BM_CONCRETE, 1, {"gf": 2.4, "door": 0}, 1.0)
+	if lod != LOD_FAR:
+		mb_box(Vector3(0, 3.28, 0.6), Vector3(7.6, 0.4, 0.05), BM_PAINTED, 0)
+func rc_sp_47(lod: int, _f: int, w: float) -> void:
+	# bomba de agua: casilla de ladrillo, caños y tanque chico
+	sp_ground(w, BM_CONCRETE)
+	sp_block(-1.6, -1.6, 0.6, 0.6, 0.08, 1, lod, BM_BRICK, 0, {"gf": 2.4, "door": 0}, 1.0)
+	mb_cyl(Vector3(1.0, 0.08, -0.8), 0.7, 1.8, [12, 8, 6][lod], BM_PAINTED, 1)
+	if lod != LOD_FAR:
+		mb_limb(Vector3(0.6, 0.5, 0.2), Vector3(1.7, 0.5, 1.6), 0.12, 0.12, 6)
+		mb_limb(Vector3(-1.6, 0.5, -0.3), Vector3(-1.9, 0.5, 1.8), 0.12, 0.12, 6)
+func rc_sp_48(lod: int, _f: int, w: float) -> void:
+	# torre de agua: tanque cilíndrico con techo cónico sobre cuatro patas arriostradas
+	sp_ground(w * 0.6, BM_CONCRETE)
+	var h := 7.0
+	for k in 4:
+		var a := TAU * k / 4.0 + PI * 0.25
+		mb_limb(Vector3(cos(a) * 1.3, 0.08, sin(a) * 1.3), Vector3(cos(a) * 0.9, h, sin(a) * 0.9), 0.1, 0.08, 6)
+	if lod != LOD_FAR:
+		for k in 4:
+			var a0: float = TAU * k / 4.0 + PI * 0.25
+			var a1: float = a0 + PI * 0.5
+			mb_limb(Vector3(cos(a0) * 1.15, 2.5, sin(a0) * 1.15), Vector3(cos(a1) * 1.0, 5.0, sin(a1) * 1.0), 0.03, 0.03, 4)
+	mb_cyl(Vector3(0, h, 0), 1.5, 2.2, [16, 10, 8][lod], BM_PAINTED, 1)
+	mb_cone(Vector3(0, h + 2.2, 0), 1.6, 0.8, [16, 10, 8][lod], BM_PAINTED, 0)
+func rc_sp_49(lod: int, _f: int, w: float) -> void:
+	# potabilizadora: piletas redondas con agua, filtros rectangulares y edificio
+	sp_ground(w, BM_CONCRETE)
+	var seg: int = [16, 10, 8][lod]
+	for c in [Vector3(-2.2, 0, -2.2), Vector3(0.8, 0, -2.2)]:
+		mb_cyl(c + Vector3(0, 0.08, 0), 1.3, 0.5, seg, BM_CONCRETE, 0)
+		mb_cyl(c + Vector3(0, 0.56, 0), 1.2, 0.01, seg, BM_MIRROR, 0)
+	for k in 3:
+		mb_box(Vector3(-2.6 + k * 1.3, 0.08, 1.2), Vector3(1.1, 0.4, 1.8), BM_CONCRETE, 0, 63 - 8 - 4)
+		mb_box(Vector3(-2.6 + k * 1.3, 0.4, 1.2), Vector3(1.0, 0.02, 1.7), BM_MIRROR, 0, 4)
+	sp_block(1.6, 0.0, 3.6, 3.4, 0.08, 2, lod, BM_PLASTER, 1, {"gf": 1.6, "door": 0}, 1.0)
+func rc_sp_50(lod: int, _f: int, w: float) -> void:
+	# relleno sanitario: lomas de tierra, montones de basura, topadora y cerco
+	sp_ground(w, BM_PLAIN)
+	mb_blob(Vector3(-0.8, 1.4, -0.8), Vector3(2.6, 1.4, 2.4), [12, 8, 6][lod], [5, 4, 3][lod], 50, BM_PLAIN, 1, true)
+	if lod != LOD_FAR:
+		for k in 5:
+			var p := Vector3(-2.5 + k * 1.3, 0.08, 2.4 + hsh(k, 50) * 0.6)
+			mb_blob(p, Vector3(0.5, 0.35, 0.5), 6, 3, 51 + k, BM_PAINTED, 2, true)
+		mb_box(Vector3(2.6, 0.08, -2.4), Vector3(1.0, 0.6, 0.6), BM_PAINTED, 2)
+		mb_box(Vector3(2.6, 0.68, -2.5), Vector3(0.5, 0.4, 0.4), BM_GLASS, 0)
+		mb_box(Vector3(0, 0.08, 3.85), Vector3(7.6, 1.0, 0.04), BM_PAINTED, 0)
+func rc_sp_51(lod: int, _f: int, w: float) -> void:
+	# planta de reciclaje: galpón de chapa, fardos de colores y cinta transportadora
+	sp_ground(w, BM_CONCRETE)
+	var top := sp_block(-3.4, -3.4, 1.6, 1.0, 0.08, 1, lod, BM_SHEET, 1, {"gf": 3.4, "sill": 2.4, "wh": 0.6}, 1.0, 0.0)
+	mb_gable(Vector3(-0.9, top, -1.2), 5.0, 4.4, 1.0, BM_SHEET, 0, true, BM_SHEET, 1)
+	mb_gate(-0.9, 1.0, 2.0, 2.6)
+	for k in 6:
+		var x := -3.0 + (k % 3) * 1.0
+		var z := 2.0 + (k / 3) * 0.9
+		mb_box(Vector3(x, 0.08, z), Vector3(0.8, 0.7, 0.7), BM_PAINTED if k % 2 == 0 else BM_PLAIN, 2 if k % 2 == 0 else 1)
+	if lod != LOD_FAR:
+		mb_limb(Vector3(1.6, 2.4, -1.0), Vector3(3.4, 0.6, -1.0), 0.25, 0.25, 4)
+func rc_sp_52(lod: int, _f: int, w: float) -> void:
+	# incinerador: edificio, horno cilíndrico y chimenea muy alta
+	sp_ground(w, BM_CONCRETE)
+	sp_block(-3.4, -1.0, 1.4, 3.2, 0.08, 2, lod, BM_CONCRETE, 1, {"gf": 2.4, "door": 1, "ww": 0.5}, 1.0)
+	mb_cyl(Vector3(2.4, 0.08, 1.0), 1.3, 5.0, [14, 10, 8][lod], BM_PAINTED, 1)
+	mb_chimney(Vector3(-1.4, 0.08, -2.6), 18.0, 0.55)
+func rc_sp_65(lod: int, _f: int, w: float) -> void:
+	# basurero: playón con contenedores, galpón chico y camiones recolectores
+	sp_ground(w, BM_CONCRETE)
+	sp_block(-1.8, -1.8, 0.4, -0.2, 0.08, 1, lod, BM_SHEET, 1, {"gf": 2.4, "door": 1}, 1.0)
+	for k in 3:
+		mb_box(Vector3(1.2, 0.08, -1.4 + k * 0.9), Vector3(1.0, 0.6, 0.7), BM_PAINTED, 2)
+	if lod != LOD_FAR:
+		sp_embed(rc_utilitario, lod, Vector3(-0.8, 0.08, 1.0))
+		sp_embed(rc_utilitario, lod, Vector3(0.8, 0.08, 1.4))
+# --- transporte
+func rc_sp_53(lod: int, _f: int, w: float) -> void:
+	# estación de subte: plaza seca, boca con escalera que baja, baranda y poste con la S
+	sp_ground(w, BM_SIDEWALK)
+	mb_box(Vector3(0, 0.08, 0), Vector3(1.4, 0.02, 2.2), BM_DARK, 0, 4)
+	if lod != LOD_FAR:
+		for k in 6:
+			mb_box(Vector3(0, 0.08 - k * 0.0, -0.9 + k * 0.35), Vector3(1.2, 0.03, 0.3), BM_CONCRETE, 0, 4)
+		for sx in [-0.72, 0.72]:
+			mb_box(Vector3(sx, 0.08, 0), Vector3(0.05, 0.9, 2.2), BM_PAINTED, 1)
+	mb_box(Vector3(-1.4, 0.08, 1.4), Vector3(0.08, 2.6, 0.08), BM_PAINTED, 0, 63 - 8)
+	mb_box(Vector3(-1.4, 2.4, 1.4), Vector3(0.5, 0.5, 0.1), BM_EMIT, 0)
+	mb_box(Vector3(-1.4, 2.4, 1.46), Vector3(0.42, 0.42, 0.02), BM_PAINTED, 2)
+func rc_sp_54(lod: int, _f: int, w: float) -> void:
+	# estación de tren: edificio con reloj, dos andenes con techo sobre columnas y vías
+	sp_ground(w, BM_CONCRETE)
+	var top := sp_block(-3.4, 1.4, 3.4, 3.6, 0.08, 2, lod, BM_BRICK, 0, {"gf": 2.2, "door": 3, "shutters": true, "cornice": true}, 1.0, 0.4)
+	mb_cyl(Vector3(0, top - 0.5, 3.62), 0.35, 0.02, 12, BM_PLAIN, 0) if lod == LOD_FAR else null
+	for z in [-2.6, -0.2]:
+		mb_box(Vector3(0, 0.08, z), Vector3(7.4, 0.35, 1.0), BM_CONCRETE, 0, 63 - 8)
+		mb_box(Vector3(0, 2.4, z), Vector3(7.4, 0.08, 1.4), BM_SHEET, 0)
+		if lod != LOD_FAR:
+			for k in 5:
+				mb_box(Vector3(-3.2 + k * 1.6, 0.43, z), Vector3(0.08, 2.0, 0.08), BM_PAINTED, 1, 63 - 8)
+	for z in [-3.4, -1.4, 0.8]:
+		mb_box(Vector3(0, 0.08, z), Vector3(7.6, 0.03, 0.5), BM_DARK, 0, 4)
+func rc_sp_55(lod: int, _f: int, w: float) -> void:
+	# puerto: muelle, dos grúas pórtico, pilas de contenedores y depósito
+	sp_ground(w, BM_CONCRETE)
+	for k in 2:
+		var x := -2.0 + k * 3.0
+		for sx in [-0.7, 0.7]:
+			mb_box(Vector3(x + sx, 0.08, 2.4), Vector3(0.18, 6.0, 0.18), BM_PAINTED, 2, 63 - 8)
+			mb_box(Vector3(x + sx, 0.08, 0.8), Vector3(0.18, 6.0, 0.18), BM_PAINTED, 2, 63 - 8)
+		mb_box(Vector3(x, 6.0, 1.6), Vector3(1.6, 0.4, 4.4), BM_PAINTED, 2)
+	for k in 9:
+		var x := -3.0 + (k % 3) * 1.3
+		var z := -3.0 + (k / 3) * 0.8
+		var hgt := 1 + int(hsh(k, 55) * 3.0)
+		for h in hgt:
+			mb_box(Vector3(x, 0.08 + h * 0.6, z), Vector3(1.2, 0.6, 0.6), BM_PAINTED if (k + h) % 2 == 0 else BM_SHEET, 2 if (k + h) % 3 == 0 else 1)
+	sp_block(1.2, -3.6, 3.6, -0.8, 0.08, 1, lod, BM_SHEET, 1, {"gf": 3.0, "door": 0}, 1.0, 0.0)
+func rc_sp_56(lod: int, _f: int, w: float) -> void:
+	# aeropuerto: terminal vidriada, torre de control, pista con marcas y un avión
+	sp_ground(w, BM_TURF)
+	mb_box(Vector3(0, 0.08, -3.4), Vector3(11.6, 0.02, 2.2), BM_ASPHALT, 0, 4)
+	if lod != LOD_FAR:
+		for k in 8:
+			mb_box(Vector3(-5.0 + k * 1.4, 0.1, -3.4), Vector3(0.7, 0.01, 0.12), BM_PLAIN, 0, 4)
+	mb_box(Vector3(0, 0.08, 0.6), Vector3(8.0, 0.02, 3.6), BM_ASPHALT, 0, 4)
+	var top := sp_block(-4.6, 2.6, 4.6, 5.6, 0.08, 2, lod, BM_PAINTED, 1, {"gf": 2.0, "curtain": true, "glass": BM_MIRROR}, 0.8, 0.2)
+	mb_box(Vector3(0, top, 4.1), Vector3(9.4, 0.15, 3.2), BM_PAINTED, 0)
+	mb_limb(Vector3(5.0, 0.08, 4.6), Vector3(5.0, 9.0, 4.6), 0.4, 0.35, [10, 8, 6][lod])
+	mb_cyl(Vector3(5.0, 9.0, 4.6), 0.9, 1.0, [12, 8, 6][lod], BM_GLASS, 0)
+	mb_cyl(Vector3(5.0, 10.0, 4.6), 1.0, 0.2, [12, 8, 6][lod], BM_PAINTED, 0)
+	# avión: fuselaje, alas y cola
+	var keep := mb_xf
+	mb_xf = keep * Transform3D(Basis(Vector3.FORWARD, PI * 0.5), Vector3(-0.5, 0.75, 0.6))
+	mb_cyl(Vector3(0, -2.4, 0), 0.38, 4.8, [10, 8, 6][lod], BM_PAINTED, 0)
+	mb_xf = keep
+	mb_box(Vector3(-0.3, 0.6, 0.6), Vector3(1.2, 0.08, 5.4), BM_PAINTED, 0)
+	mb_box(Vector3(-2.6, 0.75, 0.6), Vector3(0.7, 1.2, 0.08), BM_PAINTED, 2)
+	mb_box(Vector3(-2.6, 0.9, 0.6), Vector3(0.5, 0.06, 1.8), BM_PAINTED, 0)
+func rc_sp_57(lod: int, _f: int, w: float) -> void:
+	# muelle de ferry: plataforma sobre pilotes, rampa, bolardos y casilla
+	sp_ground(w * 0.5, BM_CONCRETE)
+	mb_box(Vector3(0, 0.3, 0.5), Vector3(2.4, 0.15, 2.9), BM_WOOD, 0)
+	if lod != LOD_FAR:
+		for x in [-1.0, 1.0]:
+			for z in [-0.6, 0.6, 1.7]:
+				mb_cyl(Vector3(x, -0.45, z), 0.1, 0.75, 6, BM_WOOD, 0)
+		for x in [-1.0, 1.0]:
+			mb_cyl(Vector3(x, 0.45, 1.8), 0.08, 0.25, 6, BM_DARK, 0)
+	sp_block(-0.6, -1.6, 0.6, -0.4, 0.08, 1, lod, BM_PAINTED, 1, {"gf": 1.6, "door": 0}, 1.0, 0.0)
+func rc_sp_58(lod: int, _f: int, w: float) -> void:
+	# estacionamiento: asfalto con líneas, autos en dos filas y cabina
+	sp_ground(w, BM_ASPHALT)
+	if lod != LOD_FAR:
+		for k in 5:
+			for z in [-1.0, 1.0]:
+				mb_box(Vector3(-1.6 + k * 0.85, 0.09, z), Vector3(0.04, 0.01, 1.2), BM_PLAIN, 0, 4)
+	var rc := [rc_sedan, rc_hatch, rc_camioneta, rc_sedan]
+	for k in 4:
+		for z in [-1.0, 1.0]:
+			if hsh(k + int(z * 3.0), 58) < 0.75:
+				sp_embed(rc[k], lod, Vector3(-1.2 + k * 0.85, 0.08, z), PI * 0.5)
+	sp_block(1.5, 1.2, 1.9, 1.8, 0.08, 1, lod, BM_PAINTED, 2, {"gf": 1.4}, 1.0, 0.0)
+# --- turismo y otros
+func rc_sp_59(lod: int, _f: int, w: float) -> void:
+	# hotel: torre de ocho pisos con balcones, marquesina y cartel arriba
+	sp_ground(w, BM_SIDEWALK)
+	var top := sp_block(-1.5, -1.6, 1.5, 1.0, 0.08, 8, lod, BM_PLASTER, 1, {"gf": 1.8, "door": 1, "shop": true, "balc": "vidrio"}, 1.0)
+	mb_box(Vector3(0, 1.6, 1.4), Vector3(1.8, 0.1, 0.9), BM_PAINTED, 2)
+	sp_sign(0, top + 0.3, -0.3, 2.2, 0.8)
+func rc_sp_60(lod: int, _f: int, w: float) -> void:
+	# gran hotel: basamento con pileta en la terraza y torre de lujo
+	sp_ground(w, BM_SIDEWALK)
+	var t0 := sp_block(-3.6, -3.6, 3.6, 3.0, 0.08, 2, lod, BM_CONCRETE, 1, {"gf": 2.2, "door": 3, "shop": true}, 1.2)
+	mb_box(Vector3(1.8, t0, 1.2), Vector3(2.8, 0.05, 1.6), BM_MIRROR, 0, 4)
+	var top := sp_block(-3.2, -3.2, 0.4, 0.4, t0, 14, lod, BM_PAINTED, 1, {"curtain": true, "glass": BM_MIRROR}, 0.7, 0.3)
+	sp_sign(-1.4, top + 0.3, 0.3, 2.8, 0.7)
+	mb_box(Vector3(0, 1.8, 3.4), Vector3(3.0, 0.1, 0.9), BM_PAINTED, 2)
+func rc_sp_61(lod: int, _f: int, w: float) -> void:
+	# shopping: caja grande de dos plantas, atrio vidriado, carteles y estacionamiento
+	sp_ground(w, BM_ASPHALT)
+	var top := sp_block(-3.6, -3.6, 3.6, 0.8, 0.08, 2, lod, BM_PLASTER, 1, {"gf": 2.6, "sill": 1.6, "wh": 0.6, "ww": 0.3}, 1.6, 0.3)
+	sp_block(-1.0, 0.8, 1.0, 1.8, 0.08, 1, lod, BM_PAINTED, 1, {"gf": 4.4, "curtain": true, "glass": BM_GLASS}, 0.7, 0.0)
+	sp_sign(0, top - 1.2, 0.84, 3.6, 0.8)
+	if lod != LOD_FAR:
+		for k in 5:
+			sp_embed(rc_sedan if k % 2 == 0 else rc_hatch, lod, Vector3(-3.2 + k * 1.6, 0.08, 3.0), PI * 0.5)
+func rc_sp_62(lod: int, _f: int, w: float) -> void:
+	# barrio cerrado: muro, portón con garita, cuatro casas con pileta y pasto
+	sp_ground(w, BM_TURF)
+	mb_box(Vector3(0, 0.08, 0), Vector3(1.0, 0.02, w * 0.95), BM_ASPHALT, 0, 4)
+	for c in [Vector3(-2.0, 0, -2.0), Vector3(2.0, 0, -2.0), Vector3(-2.0, 0, 2.0), Vector3(2.0, 0, 2.0)]:
+		sp_embed(rc_chalet, lod, c + Vector3(0, 0.08, 0), (PI * 0.5 if c.x < 0 else -PI * 0.5), 0.55)
+		mb_box(Vector3(c.x * 1.55, 0.09, c.z), Vector3(0.6, 0.02, 0.9), BM_MIRROR, 0, 4)
+	if lod != LOD_FAR:
+		for side in [[0, -3.85, 7.6, 0.1], [3.85, 0, 0.1, 7.6], [-3.85, 0, 0.1, 7.6], [-2.3, 3.85, 3.0, 0.1], [2.3, 3.85, 3.0, 0.1]]:
+			mb_box(Vector3(side[0], 0.08, side[1]), Vector3(side[2], 1.0, side[3]), BM_PLASTER, 1)
+	mb_box(Vector3(1.2, 0.08, 3.6), Vector3(0.6, 1.2, 0.5), BM_PLASTER, 1)
+func rc_sp_63(lod: int, _f: int, w: float) -> void:
+	# chacra: granero rojo, silo, casa, surcos y molino de la pampa
+	sp_ground(w, BM_TURF)
+	if lod != LOD_FAR:
+		for k in 7:
+			mb_box(Vector3(-1.0, 0.09, -3.4 + k * 0.5), Vector3(5.0, 0.04, 0.22), BM_PLAIN, 1, 4)
+	var top := sp_block(1.2, 0.6, 3.6, 3.4, 0.08, 1, lod, BM_PAINTED, 2, {"gf": 2.0, "door": 0, "ww": 0.4}, 1.0, 0.0)
+	mb_gable(Vector3(2.4, top, 2.0), 2.4, 2.8, 1.2, BM_SHEET, 0, false, BM_PAINTED, 2)
+	mb_cyl(Vector3(0.3, 0.08, 2.6), 0.6, 4.0, [12, 8, 6][lod], BM_SHEET, 0)
+	mb_cone(Vector3(0.3, 4.08, 2.6), 0.65, 0.6, [12, 8, 6][lod], BM_SHEET, 0)
+	sp_embed(rc_chalet, lod, Vector3(-2.4, 0.08, 2.2), 0.0, 0.6)
+	mb_limb(Vector3(-3.4, 0.08, -0.4), Vector3(-3.4, 4.0, -0.4), 0.12, 0.06, 4)
+	if lod != LOD_FAR:
+		for k in 8:
+			var a := TAU * k / 8.0
+			mb_box(Vector3(-3.4 + cos(a) * 0.4, 4.0 + sin(a) * 0.4, -0.3), Vector3(0.35, 0.1, 0.02), BM_PAINTED, 0)
+func rc_sp_64(lod: int, _f: int, w: float) -> void:
+	# frigorífico: cámaras frías, andenes de carga con camiones y chimenea
+	sp_ground(w, BM_CONCRETE)
+	sp_block(-3.6, -3.6, 3.0, 0.6, 0.08, 2, lod, BM_PAINTED, 1, {"gf": 2.6, "sill": 2.0, "wh": 0.5}, 1.2, 0.3)
+	for k in 4:
+		mb_quad(Vector3(-3.0 + k * 1.6, 0.4, 0.62), Vector3(-2.0 + k * 1.6, 0.4, 0.62), Vector3(-2.0 + k * 1.6, 1.9, 0.62), Vector3(-3.0 + k * 1.6, 1.9, 0.62), BM_SHEET, 2)
+	mb_box(Vector3(-0.3, 0.08, 1.0), Vector3(6.6, 0.4, 0.8), BM_CONCRETE, 0, 63 - 8)
+	mb_chimney(Vector3(3.4, 0.08, -3.2), 10.0, 0.3)
+	if lod != LOD_FAR:
+		for k in 2:
+			sp_embed(rc_utilitario, lod, Vector3(-2.2 + k * 3.2, 0.08, 2.4), PI * 0.5)
+# --- maravillas (terminadas; en obra las dibuja emit_def)
+func rc_sp_70(lod: int, _f: int, w: float) -> void:
+	# torre mirador: fuste alto y fino, mirador vidriado arriba y antena
+	sp_ground(w, BM_SIDEWALK)
+	sp_block(-2.4, -2.4, 2.4, 2.4, 0.08, 1, lod, BM_PAINTED, 1, {"gf": 2.4, "shop": true, "door": 2}, 1.2, 0.0)
+	mb_limb(Vector3(0, 2.4, 0), Vector3(0, 32.0, 0), 1.3, 0.9, [12, 10, 8][lod])
+	mb_cyl(Vector3(0, 32.0, 0), 2.4, 2.4, [16, 12, 8][lod], BM_MIRROR, 0)
+	mb_cyl(Vector3(0, 34.4, 0), 2.6, 0.3, [16, 12, 8][lod], BM_PAINTED, 1)
+	mb_limb(Vector3(0, 34.7, 0), Vector3(0, 42.0, 0), 0.2, 0.05, 6)
+func rc_sp_71(lod: int, _f: int, w: float) -> void:
+	# gran parque: pasto, lago grande, senderos y obelisco (los árboles van aparte)
+	sp_ground(w, BM_TURF)
+	mb_box(Vector3(0, 0.08, 0), Vector3(w * 0.95, 0.02, 0.8), BM_SIDEWALK, 0, 4)
+	mb_box(Vector3(0, 0.08, 0), Vector3(0.8, 0.02, w * 0.95), BM_SIDEWALK, 0, 4)
+	mb_cyl(Vector3(3.0, 0.07, 2.8), 2.4, 0.03, [20, 14, 10][lod], BM_MIRROR, 0)
+	mb_box(Vector3(0, 0.08, 0), Vector3(1.6, 0.4, 1.6), BM_CONCRETE, 0, 63 - 8)
+	mb_limb(Vector3(0, 0.48, 0), Vector3(0, 9.0, 0), 0.5, 0.35, 4)
+	mb_cone(Vector3(0, 9.0, 0), 0.5, 0.8, 4, BM_CONCRETE, 0)
+	if lod == LOD_NEAR:
+		for k in 6:
+			var a := TAU * k / 6.0
+			sp_embed(rc_banco, lod, Vector3(cos(a) * 2.2, 0.08, sin(a) * 2.2), -a - PI * 0.5)
+func rc_sp_72(lod: int, _f: int, w: float) -> void:
+	# estadio monumental: cancha, tribunas ovaladas en anillos, techo perimetral y torres de luz
+	sp_ground(w, BM_CONCRETE)
+	mb_box(Vector3(0, 0.08, 0), Vector3(6.0, 0.02, 4.0), BM_TURF, 0, 4)
+	var n: int = [32, 20, 12][lod]
+	var rings: int = [6, 4, 2][lod]
+	for r in rings:
+		var rx: float = 3.8 + r * 0.32
+		var rz: float = 2.8 + r * 0.32
+		var y: float = 0.08 + r * 0.6
+		for k in n:
+			var a0: float = TAU * k / n
+			var a1: float = TAU * (k + 1) / n
+			var p0 := Vector3(cos(a0) * rx, y, sin(a0) * rz)
+			var p1 := Vector3(cos(a1) * rx, y, sin(a1) * rz)
+			var q0 := Vector3(cos(a0) * (rx + 0.32), y + 0.6, sin(a0) * (rz + 0.32))
+			var q1 := Vector3(cos(a1) * (rx + 0.32), y + 0.6, sin(a1) * (rz + 0.32))
+			mb_quad(p1, p0, q0, q1, BM_CONCRETE, 1)
+	var ry: float = 0.08 + rings * 0.6
+	var ro: float = 3.8 + rings * 0.32
+	for k in n:
+		var a0: float = TAU * k / n
+		var a1: float = TAU * (k + 1) / n
+		var p0 := Vector3(cos(a0) * ro, ry, sin(a0) * (ro - 1.0))
+		var p1 := Vector3(cos(a1) * ro, ry, sin(a1) * (ro - 1.0))
+		mb_quad(p0, p1, Vector3(p1.x, 0.08, p1.z), Vector3(p0.x, 0.08, p0.z), BM_CONCRETE, 1)
+		mb_quad(Vector3(p1.x * 0.8, ry + 0.8, p1.z * 0.8), Vector3(p0.x * 0.8, ry + 0.8, p0.z * 0.8), p0 + Vector3(0, 0.5, 0), p1 + Vector3(0, 0.5, 0), BM_PAINTED, 2)
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			mb_box(Vector3(sx * 5.4, 0.08, sz * 4.4), Vector3(0.2, 9.0, 0.2), BM_PAINTED, 0, 63 - 8)
+			mb_box(Vector3(sx * 5.4, 9.0, sz * 4.4), Vector3(1.0, 0.6, 0.2), BM_EMIT, 0)
+func rc_sp_73(lod: int, _f: int, w: float) -> void:
+	# palacio: frente neoclásico con columnas, alas, cúpula central sobre tambor y jardín
+	sp_ground(w, BM_TURF)
+	mb_box(Vector3(0, 0.08, 4.0), Vector3(1.6, 0.02, 3.6), BM_SIDEWALK, 0, 4)
+	var top := sp_block(-5.4, -4.8, 5.4, 1.2, 0.08, 3, lod, BM_PLASTER, 1, {"gf": 2.2, "door": 5, "cornice": true, "balc": "frances", "balc_all": true}, 1.0, 0.5)
+	sp_columns(-2.0, 2.0, 1.6, top - 0.08, 8, 0.18)
+	mb_box(Vector3(0, top, 1.3), Vector3(4.6, 0.4, 0.8), BM_CONCRETE, 0)
+	mb_gable(Vector3(0, top + 0.4, 1.3), 4.6, 0.8, 1.0, BM_CONCRETE, 0, true)
+	mb_cyl(Vector3(0, top, -1.8), 2.0, 2.0, [16, 12, 8][lod], BM_PLASTER, 1)
+	mb_blob(Vector3(0, top + 2.0, -1.8), Vector3(2.0, 2.2, 2.0), [14, 10, 6][lod], [7, 5, 3][lod], 73, BM_SHEET, 0, false)
+	mb_limb(Vector3(0, top + 4.0, -1.8), Vector3(0, top + 6.0, -1.8), 0.25, 0.1, 6)
 # ================================================================ src/camera.gd
 # Cámara, intro y gestos táctiles, mouse y teclado.
 var intro_full: bool = false
@@ -11728,7 +11863,7 @@ func run_buildings() -> void:
 			if k % 3 == LOD_NEAR and c[k].visible:
 				near_nodes += 1
 	bt(b_near_on or near_nodes == 0, "BUILDING_CHECK sin versiones cerca lejos del zoom " + ("ok" if (b_near_on or near_nodes == 0) else "FALLA %d nodos" % near_nodes))
-	special_check([20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 66])
+	special_check(DEF.keys())
 	var nn := [0, 0, 0]
 	for c in bnodes:
 		for k in c:
