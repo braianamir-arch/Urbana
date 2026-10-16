@@ -29,7 +29,7 @@ instancias nuevas: todo se pinta en el shader del asfalto con datos que viajan e
 - Línea central discontinua en las calles comunes, doble línea amarilla en avenidas, líneas de borde.
 - Sendas peatonales (cebra) y línea de pare en cada llegada a un cruce.
 - Desgaste del asfalto: parches, manchas de aceite en el centro del carril y tapas de alcantarilla.
-- Esquinas: el radio de giro ya era curvo; ahora la vereda de la esquina lleva cordón.
+- Las esquinas ya tenían el giro curvo; las calles de tierra no llevan marcas.
 - Prueba: ROAD_CHECK (cada calle recta lleva sus datos; cada cruce lleva cebras hacia sus llegadas).
 
 ## C. Etapa 4: gente con rutina y vida detrás de las ventanas

@@ -948,7 +948,7 @@ func emit_road(i: int, p: Vector3) -> void:
 		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 1.02, 0.17, CELL * 1.02, rot, sidewalk, 0, 0, 0, -21)
 		em(M_CORNER, p.x + cxo * CELL * 0.5, y, p.z + czo * CELL * 0.5, CELL * 0.86, 0.2, CELL * 0.86, rot, col, 0, 0, 0, am)
 		return
-	em(M_BOX, p.x, y, p.z, CELL, 0.2, CELL, 0.0, col, 0, 0, 0, am)
+	em(M_BOX, p.x, y, p.z, CELL, 0.2, CELL, 0.0, col, 0, -1.0 - road_marks(i) if t >= 2 else 0.0, -float(t) if t >= 2 else 0.0, am)
 	# semáforos en los cruces donde llega una avenida
 	if cnt >= 3 and not bridge:
 		var av: bool = t >= 3
@@ -977,9 +977,6 @@ func emit_road(i: int, p: Vector3) -> void:
 	var rot := 0.0 if horiz else PI * 0.5
 	if horiz or vert:
 		match t:
-			2:
-				if (cx(i) + cz(i)) % 2 == 0:
-					em(M_BOX, p.x, y, p.z, CELL * 0.45, 0.22, 0.12, rot, Color(0.9, 0.85, 0.6))
 			3:
 				em(M_BOX, p.x, y, p.z, CELL, 0.32, 0.5, rot, Color(0.35, 0.55, 0.3))
 				if hsh(i, 3) < 0.4:
@@ -1007,6 +1004,19 @@ func emit_road(i: int, p: Vector3) -> void:
 				if j >= 0 and j < N * N and zone[j] > 0 and lvl[j] >= 1 and hsh(i, side + 7) < (0.7 if zone[j] == Z_C else 0.45):
 					var po := Vector2(0, side * CELL * 0.3) if horiz else Vector2(side * CELL * 0.3, 0)
 					emit_car(i * 3 + side, p.x + po.x, y + 0.2, p.z + po.y, rot)
+# marcas del asfalto (etapa 3): bits 0-3 calles vecinas E O S N, bits 4-7 las que son cruces
+func road_marks(i: int) -> int:
+	var nb := road_n(i)
+	var code := 0
+	for d in 4:
+		if nb[d]:
+			code |= 1 << d
+			var j: int = i + [1, -1, N, -N][d]
+			if road[j] >= 2 and not (wire[j] & W_ROUND):
+				var nj := road_n(j)
+				if int(nj[0]) + int(nj[1]) + int(nj[2]) + int(nj[3]) >= 3:
+					code |= 16 << d
+	return code
 func car_color(k: int) -> Color:
 	var pal := [Color(0.85, 0.85, 0.87), Color(0.15, 0.15, 0.17), Color(0.7, 0.12, 0.1), Color(0.2, 0.3, 0.6), Color(0.55, 0.57, 0.6), Color(0.9, 0.75, 0.2), Color(0.25, 0.45, 0.3)]
 	return pal[absi(k) % pal.size()]

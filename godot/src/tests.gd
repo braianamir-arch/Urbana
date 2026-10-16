@@ -1521,8 +1521,45 @@ func run_vida(dir: String) -> void:
 	elif f == 210:
 		shot_to(dir, "sala_computacion")
 		close_sheet()
+		road_check()
+		# de cerca sobre un cruce, de día
+		rebuild_road_list()
+		var c: int = tl_cells[tl_cells.size() / 2]
+		cam_target = cell_pos(c)
+		cam_goal = cam_target
+		cam_dist = 22.0
+		cam_dist_goal = 22.0
+		cam_pitch = 0.9
+		day_timer = DAY_SECONDS * 0.25
+		weather = "Soleado"
+	elif f == 258:
+		card_queue.clear()
+		card_panel.visible = false
+	elif f == 260:
+		shot_to(dir, "calle_marcas")
 		print("VIDA OK" if bt_fail == 0 else "VIDA FALLA")
 		get_tree().quit()
+# cada calle lleva sus vecinas y los cruces a los que llega; las rectas que llegan a un cruce tienen senda
+func road_check() -> void:
+	var straight := 0
+	var with_x := 0
+	var bad := 0
+	for i in N * N:
+		if road[i] < 2:
+			continue
+		var code := road_marks(i)
+		var nb := road_n(i)
+		for d in 4:
+			if bool(code & (1 << d)) != bool(nb[d]):
+				bad += 1
+			if code & (16 << d) and not nb[d]:
+				bad += 1
+		var cnt := int(nb[0]) + int(nb[1]) + int(nb[2]) + int(nb[3])
+		if cnt == 2 and ((nb[0] and nb[1]) or (nb[2] and nb[3])):
+			straight += 1
+			if code >= 16:
+				with_x += 1
+	bt(bad == 0 and straight > 20 and with_x > 4, "ROAD_CHECK marcas de calles " + ("ok (%d rectas, %d llegan a un cruce)" % [straight, with_x] if bad == 0 and with_x > 4 else "FALLA bad=%d rectas=%d cruce=%d" % [bad, straight, with_x]))
 func lab_check(dir: String) -> void:
 	bt(lab_n() >= 150, "LAB_CHECK mide los cuadros " + ("ok (%d)" % lab_n() if lab_n() >= 150 else "FALLA %d" % lab_n()))
 	var r := lab_report()

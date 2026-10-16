@@ -17,6 +17,8 @@ uniform sampler2DArray nrm_arr : hint_normal, filter_linear_mipmap, repeat_enabl
 varying vec3 wpos;
 varying vec3 wnrm;
 varying vec4 cust;
+// posición dentro de la celda (las calles van sin rotar): para pintar las marcas del asfalto
+varying vec2 rloc;
 void vertex() {
 	if (INSTANCE_CUSTOM.w >= 2.0 && wind > 0.0) {
 		vec3 org = MODEL_MATRIX[3].xyz;
@@ -30,8 +32,61 @@ void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	cust = INSTANCE_CUSTOM;
+	rloc = wpos.xz - MODEL_MATRIX[3].xz;
 }
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+// banda suave de medio ancho hw alrededor de c
+float band(float x, float c, float hw) {
+	float aa = fwidth(x) + 0.002;
+	return 1.0 - smoothstep(hw - aa, hw + aa, abs(x - c));
+}
+// etapa 3: marcas del asfalto. code = calles vecinas (bits 0-3: E O S N) + cruces vecinos (bits 4-7);
+// rt = tipo de calle (2 común, 3 avenida, 4 autopista). La celda mide 4 m; la calzada va de -1,52 a 1,52.
+vec3 road_marks(vec3 col, vec2 p, vec3 org, int code, int rt) {
+	int m = code & 15;
+	int xm = (code >> 4) & 15;
+	bool horiz = (m & 3) != 0 && (m & 12) == 0;
+	bool vert = (m & 12) != 0 && (m & 3) == 0;
+	// parches y una tapa de alcantarilla en algunas celdas
+	float hp = hash(floor((org.xz + p) / 1.7) + org.xz * 0.013);
+	col *= hp > 0.86 ? 0.88 : 1.0;
+	if (hash(org.xz * 0.37 + 1.3) < 0.22) {
+		vec2 mc = vec2(hash(org.xz + 4.1) - 0.5, hash(org.xz + 7.7) - 0.5) * 1.6;
+		float r = length(p - mc);
+		col = mix(col, vec3(0.13, 0.13, 0.14), band(r, 0.0, 0.3));
+		col *= 1.0 - 0.35 * band(r, 0.3, 0.025);
+	}
+	if (!horiz && !vert) {
+		return col;
+	}
+	float a = horiz ? p.x : p.y;
+	float b = horiz ? p.y : p.x;
+	// manchas de aceite y huella de las ruedas en el medio de cada carril
+	col *= 1.0 - 0.07 * band(abs(b), 0.78, 0.2);
+	float paint = 0.0;
+	vec3 pc = vec3(0.88, 0.88, 0.84);
+	float near_x = 0.0;
+	for (int d = 0; d < 4; d++) {
+		if ((xm & (1 << d)) == 0) {
+			continue;
+		}
+		vec2 dv = d == 0 ? vec2(1.0, 0.0) : d == 1 ? vec2(-1.0, 0.0) : d == 2 ? vec2(0.0, 1.0) : vec2(0.0, -1.0);
+		float s = dot(p, dv);
+		float bb = dot(p, vec2(-dv.y, dv.x));
+		near_x = max(near_x, step(0.55, s));
+		// senda peatonal (barras paralelas al tránsito) y línea de pare del lado derecho
+		float zeb = step(0.9, s) * step(s, 1.85) * step(abs(bb), 1.42) * step(fract(bb / 0.5 + 0.25), 0.5);
+		float stop = band(s, 0.68, 0.08) * step(0.0, bb) * step(bb, 1.42);
+		paint = max(paint, max(zeb, stop));
+	}
+	if (rt == 2) {
+		paint = max(paint, band(b, 0.0, 0.055) * step(fract(a / 2.0 + 0.25), 0.5) * (1.0 - near_x));
+	} else if (rt >= 3) {
+		paint = max(paint, band(abs(b), 1.4, 0.045) * (1.0 - near_x));
+	}
+	paint *= 0.78 + 0.22 * hash(floor((org.xz + p) * 7.0));
+	return mix(col, pc, paint * 0.85);
+}
 vec3 mirror(vec3 wp, vec3 n, vec3 cp, float nt) {
 	vec3 r = reflect(normalize(wp - cp), n);
 	vec3 sky = mix(vec3(0.82, 0.88, 0.95), vec3(0.32, 0.52, 0.85), clamp(r.y * 1.6, 0.0, 1.0));
@@ -113,6 +168,9 @@ void fragment() {
 				rough = t.a;
 				// mojado: más oscuro (el brillo lo pone la rugosidad más abajo)
 				col *= 1.0 - (asph ? 0.3 : 0.38) * wet;
+			}
+			if (mi == 20 && cust.y < -0.5 && wnrm.y > 0.7) {
+				col = road_marks(col, rloc, vec3(wpos.x - rloc.x, 0.0, wpos.z - rloc.y), int(-cust.y + 0.5) - 1, int(-cust.z + 0.5));
 			}
 		} else if (mi == 7) {
 			vec2 sc = vec2(mu.x / 1.1 + mod(floor(mu.y / 0.55), 2.0) * 0.5, mu.y / 0.55);
