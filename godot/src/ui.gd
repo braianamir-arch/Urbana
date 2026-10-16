@@ -2396,6 +2396,7 @@ func menu_items() -> Array:
 		["🤝 Comercio con vecinos", func(): open_trade()], ["🚌 Transporte", func(): open_transport()],
 		["🗺 Distritos", func(): open_districts()], ["🏆 Logros y retos", func(): open_goals()],
 		["📰 Diario", func(): open_news()], ["💡 Asesores", func(): open_advisors()],
+		["🖥 Sala de computación", func(): open_lab()],
 		["🎉 Hacer un festival", func(): hold_festival()], ["🚗 Manejar por la ciudad", func():
 			close_sheet()
 			start_drive()],

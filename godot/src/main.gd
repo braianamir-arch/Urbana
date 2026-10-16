@@ -60,26 +60,37 @@ func _process(delta: float) -> void:
 	if terrain_dirty:
 		build_terrain()
 	crumb("chunks")
+	var lt := Time.get_ticks_usec()
 	update_chunks(4 if first_chunks or not started else 1)
 	if first_chunks and not chunk_dirty.has(1):
 		first_chunks = false
 	# versiones cerca de los edificios: una cada 3 cuadros, cuando la ciudad ya está dibujada
 	if not first_chunks and int(opts["quality"]) >= 1 and Engine.get_process_frames() % 3 == 0:
 		cat_warm_step()
+	lab_add(2, lt)
 	if started:
 		crumb("simulación etapa %d" % sim_stage)
+		lt = Time.get_ticks_usec()
 		sim_process(delta)
+		lab_add(0, lt)
 		crumb("agentes (intro %s, zoom %d)" % [str(intro_t >= 0.0), int(cam_dist)])
+		lt = Time.get_ticks_usec()
 		agents_process(delta)
+		lab_add(1, lt)
 	else:
 		cam_yaw += delta * 0.05
 	crumb("luz")
+	lt = Time.get_ticks_usec()
 	update_light()
 	crumb("cámara (intro %s, zoom %d)" % [str(intro_t >= 0.0), int(cam_dist)])
 	update_camera(delta)
 	update_fx()
+	lab_add(3, lt)
 	crumb("interfaz")
+	lt = Time.get_ticks_usec()
 	ui_process(delta)
+	lab_add(4, lt)
+	lab_frame(delta)
 	crumb("dibujando el cuadro")
 	if opts["idle30"] and not OS.has_feature("android"):
 		idle_t += delta

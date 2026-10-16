@@ -123,6 +123,9 @@ func run_test() -> void:
 	if test_mode.begins_with("fx="):
 		run_fx(test_mode.substr(3))
 		return
+	if test_mode.begins_with("vida="):
+		run_vida(test_mode.substr(5))
+		return
 	if test_mode == "scroll":
 		run_scroll()
 		return
@@ -1501,3 +1504,46 @@ func special_check(ids: Array) -> void:
 		if not anchors.has(c):
 			why += " instancia de más en %d" % c
 	bt(why == "", "SPECIAL_CHECK (%d) " % ids.size() + ("ok" if why == "" else "FALLA" + why.substr(0, 500)))
+# sala de computación y etapas 3 a 5 (--test=vida=<carpeta>)
+func run_vida(dir: String) -> void:
+	test_frame += 1
+	var f := test_frame
+	if f == 5:
+		new_test_city()
+		enter_game(false)
+		skip_intro()
+		card_queue.clear()
+		card_panel.visible = false
+		set_speed(1)
+		cam_dist_goal = 120.0
+	elif f == 200:
+		lab_check(dir)
+	elif f == 210:
+		shot_to(dir, "sala_computacion")
+		close_sheet()
+		print("VIDA OK" if bt_fail == 0 else "VIDA FALLA")
+		get_tree().quit()
+func lab_check(dir: String) -> void:
+	bt(lab_n() >= 150, "LAB_CHECK mide los cuadros " + ("ok (%d)" % lab_n() if lab_n() >= 150 else "FALLA %d" % lab_n()))
+	var r := lab_report()
+	var parts_ok: bool = r["parts"].size() == LAB_PARTS.size() and r["frame"] > 0.0 and r["parts"]["simulación"][0] > 0.0
+	bt(parts_ok, "LAB_CHECK tiempos por parte " + ("ok" if parts_ok else "FALLA %s" % str(r["parts"])))
+	var sg := lab_suggestions()
+	var all_ok: bool = sg.size() >= 1 and sg[sg.size() - 1][0] == "Informe completo"
+	for s in sg:
+		if not (s[2].contains("URBANA") and s[2].contains(" ms")):
+			all_ok = false
+			print("  sin contexto o números: ", s[0])
+	bt(all_ok, "LAB_CHECK pedidos con contexto y números " + ("ok (%d)" % sg.size() if all_ok else "FALLA"))
+	# un trabón a mano: un cuadro de 60 ms después de que los bloques tardaron 40 ms
+	var n0 := lab_stutters.size()
+	lab_cur.fill(0.0)
+	lab_cur[2] = 40.0
+	lab_frame(0.016)
+	lab_frame(0.06)
+	var st_ok: bool = lab_stutters.size() == n0 + 1 and lab_stutters[n0]["part"] == 2
+	bt(st_ok, "LAB_CHECK anota el trabón y la parte culpable " + ("ok" if st_ok else "FALLA"))
+	var txt := lab_all_text()
+	bt(txt.length() > 300 and txt.contains("bloques de la ciudad"), "LAB_CHECK copiar todo " + ("ok (%d letras)" % txt.length() if txt.length() > 300 else "FALLA"))
+	open_lab()
+	bt(sheet.visible and sheet_name == "lab", "LAB_CHECK panel abierto " + ("ok" if sheet.visible else "FALLA"))
