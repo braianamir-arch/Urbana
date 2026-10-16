@@ -1,0 +1,5 @@
+# Mediciones "todo junto" (sala de computación, etapas 3, 4 y 5, HUD nuevo). Vulkan por software (lavapipe), Godot 4.7.
+# Cada versión se midió sola, sin otras pruebas corriendo al mismo tiempo.
+frame_ms Alta (mediodía): antes 819,47 / sala 822,17 / calles 815,80 / gente 822,76 / efectos 828,47 / ahora 827,45 → +1,0 %  (límite +5 %)
+frame_ms Baja: antes 346,74 / ahora 351,17 → +1,3 %  (dentro del ruido de la medición)
+Pruebas: VIDA (LAB_CHECK, ROAD_CHECK, LIFE_CHECK, FX2_CHECK) y BUILDINGS ok.
