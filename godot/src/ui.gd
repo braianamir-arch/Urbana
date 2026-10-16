@@ -480,10 +480,17 @@ func clear_box(b: Node) -> void:
 		ch.queue_free()
 var crumb_last: String = ""
 var crumb_f: FileAccess = null
+# anota el último paso para saber dónde se cerró el juego. Se escribe como mucho cada 0,1 s (antes eran
+# varias escrituras por cuadro y en el celular eso pesaba); "cierre limpio" se escribe siempre.
+var crumb_t: int = -1000
 func crumb(t: String) -> void:
 	if t == crumb_last:
 		return
 	crumb_last = t
+	var now := Time.get_ticks_msec()
+	if now - crumb_t < 100 and not t.contains("cierre limpio"):
+		return
+	crumb_t = now
 	if crumb_f == null:
 		crumb_f = FileAccess.open("user://ultimo_paso.txt", FileAccess.WRITE)
 		if crumb_f == null:

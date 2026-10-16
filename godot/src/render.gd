@@ -838,7 +838,20 @@ func mark_dirty(i: int) -> void:
 		chunk_dirty[(zz / CH) * NCH + xx / CH] = 1
 func mark_all_dirty() -> void:
 	chunk_dirty.fill(1)
+# durante el juego (de a un bloque) el bloque se arma en 4 cuadros, de a 8 filas: armarlo entero de una
+# vez trababa (hasta 40 ms en el celular). Usa sus propios arreglos porque los autos y la gente usan los
+# comunes en el mismo cuadro.
+var cb_chunk: int = -1
+var cb_row: int = 0
+var cb_bufs: Array = []
+var cb_counts := PackedInt32Array()
+var cb_binst: Dictionary = {}
+var cb_smoke: Array = []
+const CB_ROWS := 8
 func update_chunks(max_n: int) -> void:
+	if max_n == 1 and started:
+		chunk_step()
+		return
 	var done := 0
 	for c in NCH * NCH:
 		if chunk_dirty[c] == 1:
@@ -847,6 +860,54 @@ func update_chunks(max_n: int) -> void:
 			done += 1
 			if done >= max_n:
 				return
+func chunk_step() -> void:
+	if cb_chunk < 0:
+		for c in NCH * NCH:
+			if chunk_dirty[c] == 1:
+				chunk_dirty[c] = 0
+				cb_chunk = c
+				cb_row = 0
+				break
+		if cb_chunk < 0:
+			return
+		begin_buf()
+		_binst.clear()
+		cb_smoke = []
+	else:
+		# vuelven los arreglos de este bloque a medio armar
+		var tb: Array = _bufs
+		_bufs = cb_bufs
+		cb_bufs = tb
+		var tc := _counts
+		_counts = cb_counts
+		cb_counts = tc
+		_binst = cb_binst
+	var c := cb_chunk
+	cur_chunk = c
+	smoke_pts[c] = cb_smoke
+	var x0 := (c % NCH) * CH
+	var z0 := (c / NCH) * CH
+	for z in range(z0 + cb_row, z0 + mini(cb_row + CB_ROWS, CH)):
+		for x in range(x0, x0 + CH):
+			emit_cell(idx(x, z))
+	cb_row += CB_ROWS
+	cur_chunk = -1
+	cb_smoke = smoke_pts[c]
+	if cb_row < CH:
+		# se guardan para el próximo cuadro y quedan arreglos libres para los autos
+		var tb2: Array = cb_bufs
+		cb_bufs = _bufs
+		_bufs = tb2
+		var tc2 := cb_counts
+		cb_counts = _counts
+		_counts = tc2
+		cb_binst = _binst
+		_binst = {}
+		begin_buf()
+		return
+	chunk_upload(c)
+	cb_chunk = -1
+	cb_binst = {}
 func build_chunk(c: int) -> void:
 	begin_buf()
 	_binst.clear()
@@ -857,6 +918,9 @@ func build_chunk(c: int) -> void:
 	for z in range(z0, z0 + CH):
 		for x in range(x0, x0 + CH):
 			emit_cell(idx(x, z))
+	cur_chunk = -1
+	chunk_upload(c)
+func chunk_upload(c: int) -> void:
 	var nodes: Array = chunk_nodes[c]
 	for m in NMESH:
 		var node: MultiMeshInstance3D = nodes[m]
@@ -864,7 +928,6 @@ func build_chunk(c: int) -> void:
 		mm.instance_count = _counts[m]
 		if _counts[m] > 0:
 			mm.buffer = _bufs[m].slice(0, _counts[m] * 20)
-	cur_chunk = -1
 	flush_buildings(c)
 func begin_buf() -> void:
 	_counts.resize(NMESH)
@@ -1365,14 +1428,13 @@ func show_preview() -> void:
 	if _counts[M_BOX] > 0:
 		mm.buffer = _bufs[M_BOX].slice(0, _counts[M_BOX] * 20)
 	set_cost_hint(("Costo: " + fmt_money(cost)) if cost > 0 else "")
+# sube a la placa las instancias de cosas que se mueven. El arreglo se manda entero (sin copiarlo a uno
+# nuevo en cada cuadro): la capacidad del nodo sigue al tamaño del arreglo.
 func flush_mm(mm: MultiMesh, count: int, buf: PackedFloat32Array) -> void:
-	if count > mm.instance_count:
-		var cap := 256
-		while cap < count * 3 / 2:
-			cap *= 2
-		mm.instance_count = cap
 	if count > 0:
-		var pb := buf.slice(0, count * 20)
-		pb.resize(mm.instance_count * 20)
-		mm.buffer = pb
+		if buf.size() % 20 != 0:
+			buf.resize((buf.size() / 20 + 1) * 20)
+		if mm.instance_count != buf.size() / 20:
+			mm.instance_count = buf.size() / 20
+		mm.buffer = buf
 	mm.visible_instance_count = count

@@ -789,14 +789,53 @@ func sim_process(delta: float) -> void:
 		sim_acc = 0.0
 		sim_stage = 0
 	if sim_stage >= 0:
-		run_sim_stage(sim_stage)
+		run_sim_step(sim_stage)
 		sim_stage += 1
-		if sim_stage > 7:
+		if sim_stage > 11:
 			sim_stage = -1
 			sim_cycle += 1
 	if day_timer >= DAY_SECONDS:
 		day_timer -= DAY_SECONDS
 		new_day()
+# en el juego las etapas pesadas se reparten en más cuadros (mismo trabajo, en el mismo orden que
+# run_sim_stage, que es lo que usan las pruebas y la carga de partidas)
+var net_on: bool = false
+var tr_on: bool = false
+func run_sim_step(k: int) -> void:
+	match k:
+		0:
+			collect_lists()
+			net_on = sim_dirty or sim_cycle % 5 == 0
+		1:
+			if net_on:
+				net_pass(0)
+		2:
+			if net_on:
+				net_pass(1)
+				net_finish()
+		3:
+			compute_coverage()
+		4:
+			env_a()
+		5:
+			env_b()
+		6:
+			tr_on = sim_dirty or sim_cycle % 3 == 0
+			if tr_on:
+				traffic_a()
+		7:
+			if tr_on:
+				traffic_b()
+		8:
+			compute_happiness()
+		9:
+			grow_zones()
+		10:
+			compute_stats()
+			fire_tick()
+		11:
+			sim_dirty = false
+			check_progress()
 func run_sim_stage(s: int) -> void:
 	match s:
 		0:
@@ -841,111 +880,116 @@ func conducts(i: int, water: bool) -> bool:
 	return (wire[i] & (W_PIPE if water else W_POWER)) != 0
 func compute_networks() -> void:
 	for pass_i in 2:
-		var water := pass_i == 1
-		comp.resize(N * N)
-		comp.fill(-1)
-		var sup: Array = []
-		var use: Array = []
-		var ncomp := 0
-		var q := PackedInt32Array()
-		for i in N * N:
-			if comp[i] >= 0 or not conducts(i, water):
-				continue
-			var cid := ncomp
-			ncomp += 1
-			sup.append(0.0)
-			use.append(0.0)
-			q.clear()
-			q.append(i)
-			comp[i] = cid
-			var head := 0
-			while head < q.size():
-				var j := q[head]
-				head += 1
-				var x := cx(j)
-				var z := cz(j)
-				if x > 0 and comp[j - 1] < 0 and conducts(j - 1, water):
-					comp[j - 1] = cid
-					q.append(j - 1)
-				if x < N - 1 and comp[j + 1] < 0 and conducts(j + 1, water):
-					comp[j + 1] = cid
-					q.append(j + 1)
-				if z > 0 and comp[j - N] < 0 and conducts(j - N, water):
-					comp[j - N] = cid
-					q.append(j - N)
-				if z < N - 1 and comp[j + N] < 0 and conducts(j + N, water):
-					comp[j + N] = cid
-					q.append(j + N)
-		var bcid := {}
-		for i in N * N:
-			if bld[i] > 0 and (part[i] < 0 or part[i] == i):
-				var rc := near_road_cell(i, DEF[bld[i]]["sz"])
-				if rc >= 0 and comp[rc] >= 0:
-					bcid[i] = comp[rc]
-		for i in N * N:
-			var cid := comp[i]
-			if bld[i] > 0:
-				cid = bcid.get(anchor_of(i), cid)
-			if cid < 0:
-				continue
-			if zone[i] > 0:
-				var l := float(lvl[i])
-				var u := 0.0
-				match zone[i]:
-					Z_R:
-						u = l * (1.0 if not water else 1.2)
-					Z_C:
-						u = l * (1.5 if not water else 1.0)
-					Z_I:
-						u = l * (2.5 if not water else 1.8)
-					Z_M:
-						u = l * 1.2
-				use[cid] += u
-			elif bld[i] > 0 and (part[i] < 0 or part[i] == i):
-				var d: Dictionary = DEF[bld[i]]
-				var key := "wt" if water else "pw"
-				if d.has(key) and def_active(i):
-					var eff := 1.0
-					if not water and bld[i] == 44 and night > 0.5:
-						eff = 0.3
-					sup[cid] += float(d[key]) * eff
-				else:
-					use[cid] += 3.0 + float(d["upk"]) * 0.05
-		var tot_sup := 0.0
-		var tot_use := 0.0
-		var frac: Array = []
-		for k in ncomp:
-			tot_sup += sup[k]
-			tot_use += use[k]
-			var f: float = 1.0 if use[k] <= sup[k] else (sup[k] / maxf(use[k], 0.01))
-			if f < 1.0 and trade_ok and sup[k] > 0.0:
-				f = minf(1.0, f + 0.25)
-			frac.append(f)
-		var arr := watered if water else powered
-		var got := 0
-		var need := 0
-		for i in N * N:
-			var cid := comp[i]
-			if bld[i] > 0:
-				cid = bcid.get(anchor_of(i), cid)
-			var v := 0
-			if cid >= 0 and sup[cid] > 0.0:
-				var f: float = frac[cid]
-				v = 1 if f >= 1.0 or hsh(i, day + pass_i) < f else 0
-			arr[i] = v
-			if zone[i] > 0 and lvl[i] > 0:
-				need += 1
-				got += v
-		if water:
-			watered = arr
-			water_sup = tot_sup
-			water_use = tot_use
-			water_frac = float(got) / maxf(need, 1)
-		else:
-			powered = arr
-			power_sup = tot_sup
-			power_use = tot_use
-			power_frac = float(got) / maxf(need, 1)
+		net_pass(pass_i)
+	net_finish()
+# una red (0 luz, 1 agua): en el juego cada una va en su propio cuadro para no trabar
+func net_pass(pass_i: int) -> void:
+	var water := pass_i == 1
+	comp.resize(N * N)
+	comp.fill(-1)
+	var sup: Array = []
+	var use: Array = []
+	var ncomp := 0
+	var q := PackedInt32Array()
+	for i in N * N:
+		if comp[i] >= 0 or not conducts(i, water):
+			continue
+		var cid := ncomp
+		ncomp += 1
+		sup.append(0.0)
+		use.append(0.0)
+		q.clear()
+		q.append(i)
+		comp[i] = cid
+		var head := 0
+		while head < q.size():
+			var j := q[head]
+			head += 1
+			var x := cx(j)
+			var z := cz(j)
+			if x > 0 and comp[j - 1] < 0 and conducts(j - 1, water):
+				comp[j - 1] = cid
+				q.append(j - 1)
+			if x < N - 1 and comp[j + 1] < 0 and conducts(j + 1, water):
+				comp[j + 1] = cid
+				q.append(j + 1)
+			if z > 0 and comp[j - N] < 0 and conducts(j - N, water):
+				comp[j - N] = cid
+				q.append(j - N)
+			if z < N - 1 and comp[j + N] < 0 and conducts(j + N, water):
+				comp[j + N] = cid
+				q.append(j + N)
+	var bcid := {}
+	for i in N * N:
+		if bld[i] > 0 and (part[i] < 0 or part[i] == i):
+			var rc := near_road_cell(i, DEF[bld[i]]["sz"])
+			if rc >= 0 and comp[rc] >= 0:
+				bcid[i] = comp[rc]
+	for i in N * N:
+		var cid := comp[i]
+		if bld[i] > 0:
+			cid = bcid.get(anchor_of(i), cid)
+		if cid < 0:
+			continue
+		if zone[i] > 0:
+			var l := float(lvl[i])
+			var u := 0.0
+			match zone[i]:
+				Z_R:
+					u = l * (1.0 if not water else 1.2)
+				Z_C:
+					u = l * (1.5 if not water else 1.0)
+				Z_I:
+					u = l * (2.5 if not water else 1.8)
+				Z_M:
+					u = l * 1.2
+			use[cid] += u
+		elif bld[i] > 0 and (part[i] < 0 or part[i] == i):
+			var d: Dictionary = DEF[bld[i]]
+			var key := "wt" if water else "pw"
+			if d.has(key) and def_active(i):
+				var eff := 1.0
+				if not water and bld[i] == 44 and night > 0.5:
+					eff = 0.3
+				sup[cid] += float(d[key]) * eff
+			else:
+				use[cid] += 3.0 + float(d["upk"]) * 0.05
+	var tot_sup := 0.0
+	var tot_use := 0.0
+	var frac: Array = []
+	for k in ncomp:
+		tot_sup += sup[k]
+		tot_use += use[k]
+		var f: float = 1.0 if use[k] <= sup[k] else (sup[k] / maxf(use[k], 0.01))
+		if f < 1.0 and trade_ok and sup[k] > 0.0:
+			f = minf(1.0, f + 0.25)
+		frac.append(f)
+	var arr := watered if water else powered
+	var got := 0
+	var need := 0
+	for i in N * N:
+		var cid := comp[i]
+		if bld[i] > 0:
+			cid = bcid.get(anchor_of(i), cid)
+		var v := 0
+		if cid >= 0 and sup[cid] > 0.0:
+			var f: float = frac[cid]
+			v = 1 if f >= 1.0 or hsh(i, day + pass_i) < f else 0
+		arr[i] = v
+		if zone[i] > 0 and lvl[i] > 0:
+			need += 1
+			got += v
+	if water:
+		watered = arr
+		water_sup = tot_sup
+		water_use = tot_use
+		water_frac = float(got) / maxf(need, 1)
+	else:
+		powered = arr
+		power_sup = tot_sup
+		power_use = tot_use
+		power_frac = float(got) / maxf(need, 1)
+func net_finish() -> void:
 	var clean := 0.0
 	var all := 0.0
 	for a in anchors:
@@ -1044,6 +1088,9 @@ func compute_coverage() -> void:
 	hp_bonus = minf(0.1, hp_bonus / (1.0 + pop / 3000.0))
 var env_half: int = 0
 func compute_env() -> void:
+	env_a()
+	env_b()
+func env_a() -> void:
 	pollution.fill(0.0)
 	var green := 0.6 if has_decree("verde") else 1.0
 	for i in zone_list:
@@ -1060,6 +1107,7 @@ func compute_env() -> void:
 			pollution[i] += 0.15
 		if tree[i] > 0:
 			pollution[i] -= 0.06
+func env_b() -> void:
 	var pc: PackedFloat32Array = cov[CV_POL]
 	var pk: PackedFloat32Array = cov[CV_PARK]
 	var hc: PackedFloat32Array = cov[CV_HEALTH]
@@ -1091,7 +1139,13 @@ func compute_env() -> void:
 			crime[i] = clampf(c, 0.0, 1.0)
 		else:
 			crime[i] = 0.0
+var tr_dist := PackedInt32Array()
+var tr_nxt := PackedInt32Array()
 func compute_traffic() -> void:
+	traffic_a()
+	traffic_b()
+# caminos de las casas a los trabajos: primero la búsqueda (un cuadro) y después los viajes (otro)
+func traffic_a() -> void:
 	var nn := N * N
 	var dist := PackedInt32Array()
 	dist.resize(nn)
@@ -1131,6 +1185,12 @@ func compute_traffic() -> void:
 			dist[k] = dj
 			nxt[k] = j
 			q.append(k)
+	tr_dist = dist
+	tr_nxt = nxt
+func traffic_b() -> void:
+	var nn := N * N
+	var dist := tr_dist
+	var nxt := tr_nxt
 	var newload := PackedFloat32Array()
 	newload.resize(nn)
 	newload.fill(0.0)
@@ -3653,7 +3713,20 @@ func mark_dirty(i: int) -> void:
 		chunk_dirty[(zz / CH) * NCH + xx / CH] = 1
 func mark_all_dirty() -> void:
 	chunk_dirty.fill(1)
+# durante el juego (de a un bloque) el bloque se arma en 4 cuadros, de a 8 filas: armarlo entero de una
+# vez trababa (hasta 40 ms en el celular). Usa sus propios arreglos porque los autos y la gente usan los
+# comunes en el mismo cuadro.
+var cb_chunk: int = -1
+var cb_row: int = 0
+var cb_bufs: Array = []
+var cb_counts := PackedInt32Array()
+var cb_binst: Dictionary = {}
+var cb_smoke: Array = []
+const CB_ROWS := 8
 func update_chunks(max_n: int) -> void:
+	if max_n == 1 and started:
+		chunk_step()
+		return
 	var done := 0
 	for c in NCH * NCH:
 		if chunk_dirty[c] == 1:
@@ -3662,6 +3735,54 @@ func update_chunks(max_n: int) -> void:
 			done += 1
 			if done >= max_n:
 				return
+func chunk_step() -> void:
+	if cb_chunk < 0:
+		for c in NCH * NCH:
+			if chunk_dirty[c] == 1:
+				chunk_dirty[c] = 0
+				cb_chunk = c
+				cb_row = 0
+				break
+		if cb_chunk < 0:
+			return
+		begin_buf()
+		_binst.clear()
+		cb_smoke = []
+	else:
+		# vuelven los arreglos de este bloque a medio armar
+		var tb: Array = _bufs
+		_bufs = cb_bufs
+		cb_bufs = tb
+		var tc := _counts
+		_counts = cb_counts
+		cb_counts = tc
+		_binst = cb_binst
+	var c := cb_chunk
+	cur_chunk = c
+	smoke_pts[c] = cb_smoke
+	var x0 := (c % NCH) * CH
+	var z0 := (c / NCH) * CH
+	for z in range(z0 + cb_row, z0 + mini(cb_row + CB_ROWS, CH)):
+		for x in range(x0, x0 + CH):
+			emit_cell(idx(x, z))
+	cb_row += CB_ROWS
+	cur_chunk = -1
+	cb_smoke = smoke_pts[c]
+	if cb_row < CH:
+		# se guardan para el próximo cuadro y quedan arreglos libres para los autos
+		var tb2: Array = cb_bufs
+		cb_bufs = _bufs
+		_bufs = tb2
+		var tc2 := cb_counts
+		cb_counts = _counts
+		_counts = tc2
+		cb_binst = _binst
+		_binst = {}
+		begin_buf()
+		return
+	chunk_upload(c)
+	cb_chunk = -1
+	cb_binst = {}
 func build_chunk(c: int) -> void:
 	begin_buf()
 	_binst.clear()
@@ -3672,6 +3793,9 @@ func build_chunk(c: int) -> void:
 	for z in range(z0, z0 + CH):
 		for x in range(x0, x0 + CH):
 			emit_cell(idx(x, z))
+	cur_chunk = -1
+	chunk_upload(c)
+func chunk_upload(c: int) -> void:
 	var nodes: Array = chunk_nodes[c]
 	for m in NMESH:
 		var node: MultiMeshInstance3D = nodes[m]
@@ -3679,7 +3803,6 @@ func build_chunk(c: int) -> void:
 		mm.instance_count = _counts[m]
 		if _counts[m] > 0:
 			mm.buffer = _bufs[m].slice(0, _counts[m] * 20)
-	cur_chunk = -1
 	flush_buildings(c)
 func begin_buf() -> void:
 	_counts.resize(NMESH)
@@ -4180,16 +4303,15 @@ func show_preview() -> void:
 	if _counts[M_BOX] > 0:
 		mm.buffer = _bufs[M_BOX].slice(0, _counts[M_BOX] * 20)
 	set_cost_hint(("Costo: " + fmt_money(cost)) if cost > 0 else "")
+# sube a la placa las instancias de cosas que se mueven. El arreglo se manda entero (sin copiarlo a uno
+# nuevo en cada cuadro): la capacidad del nodo sigue al tamaño del arreglo.
 func flush_mm(mm: MultiMesh, count: int, buf: PackedFloat32Array) -> void:
-	if count > mm.instance_count:
-		var cap := 256
-		while cap < count * 3 / 2:
-			cap *= 2
-		mm.instance_count = cap
 	if count > 0:
-		var pb := buf.slice(0, count * 20)
-		pb.resize(mm.instance_count * 20)
-		mm.buffer = pb
+		if buf.size() % 20 != 0:
+			buf.resize((buf.size() / 20 + 1) * 20)
+		if mm.instance_count != buf.size() / 20:
+			mm.instance_count = buf.size() / 20
+		mm.buffer = buf
 	mm.visible_instance_count = count
 # ================================================================ src/buildings.gd
 # Edificios de la etapa 2: constructor de mallas, recetas y catálogo.
@@ -6554,13 +6676,41 @@ var ship_t: float = 0.0
 var garbage_t: float = 0.0
 var flag_days: int = 0
 # etapa 5: humo de chimeneas, agua de las fuentes y rayos con tormenta
+var burn_cells := PackedInt32Array()
+var burn_dirty: bool = true
 var smoke_t: float = 0.0
 var smoke_n: int = 0
 var flash_t: float = 0.0
 var bolt_p := Vector3.ZERO
 var bolt_seed: int = 0
-var thunder_job: int = -1
-var thunder_wav: AudioStreamWAV = null
+# el trueno se arma de a pedazos en el hilo principal (antes iba en otro hilo y compartía datos con los
+# demás sonidos: podía cerrar la app)
+var thunder_pcm := PackedByteArray()
+var thunder_i: int = 0
+var thunder_lp: float = 0.0
+func thunder_step() -> bool:
+	if sounds.get("thunder") is AudioStreamWAV:
+		return true
+	var n := int(1.8 * SR)
+	if thunder_pcm.size() != n * 2:
+		thunder_pcm.resize(n * 2)
+		thunder_i = 0
+	var end := mini(thunder_i + 2500, n)
+	for i in range(thunder_i, end):
+		var t := float(i) / SR
+		thunder_lp += (randf_range(-1.0, 1.0) - thunder_lp) * 0.03
+		var e := minf(t * 30.0, 1.0) * exp(-t * 1.6) * (0.7 + 0.3 * sin(TAU * 3.0 * t))
+		thunder_pcm.encode_s16(i * 2, int(clampf(thunder_lp * e * 2.2, -1.0, 1.0) * 30000.0))
+	thunder_i = end
+	if end < n:
+		return false
+	var s := AudioStreamWAV.new()
+	s.format = AudioStreamWAV.FORMAT_16_BITS
+	s.mix_rate = SR
+	s.stereo = false
+	s.data = thunder_pcm
+	sounds["thunder"] = s
+	return true
 var dyn_skip: int = 0
 func setup_agents() -> void:
 	dyn_nodes.clear()
@@ -7080,14 +7230,8 @@ func storm_fx(delta: float) -> float:
 		flash_t = 0.0
 		return 0.0
 	# el trueno se arma en otro hilo antes del primer rayo (armarlo tarda y trabaría el juego)
-	if sounds.get("thunder") is Dictionary:
-		if thunder_job < 0:
-			var sd: Dictionary = sounds["thunder"]
-			thunder_job = WorkerThreadPool.add_task(func(): thunder_wav = build_sound(sd["d"], sd["f"]))
-		if not WorkerThreadPool.is_task_completed(thunder_job):
-			return 0.0
-		WorkerThreadPool.wait_for_task_completion(thunder_job)
-		sounds["thunder"] = thunder_wav
+	if opts["g_audio"] and not thunder_step():
+		return 0.0
 	if flash_t <= 0.0 and randf() < delta * 0.1:
 		flash_t = 0.4
 		bolt_seed = randi()
@@ -7228,7 +7372,17 @@ func draw_dynamic() -> void:
 	var wet_now := weather == "Lluvia" or weather == "Tormenta"
 	var lit: bool = nf > 0.25 and near and opts["quality"] >= 1
 	glow_n = 0
+	# solo lo que está cerca de la cámara (lo de más lejos ni se ve y costaba mucho armarlo)
+	var vr := clampf(cam_dist * 1.8 + 30.0, 70.0, 420.0)
+	var vr2 := vr * vr
+	var cx0 := cam_target.x
+	var cz0 := cam_target.z
+	var ped_lod := cam_dist > 130.0
 	for c in cars:
+		var cpath: Array = c["p"]
+		var cc0 := cell_pos(cpath[clampi(int(c["k"]), 0, cpath.size() - 1)])
+		if (cc0.x - cx0) * (cc0.x - cx0) + (cc0.z - cz0) * (cc0.z - cz0) > vr2:
+			continue
 		var pr := path_pos_s(c["p"], c["k"], CELL * 0.18)
 		var p: Vector3 = pr[0]
 		var r: float = pr[1]
@@ -7282,6 +7436,9 @@ func draw_dynamic() -> void:
 	if cam_dist < 260.0:
 		var pclose := cam_dist < 70.0
 		for pd in peds:
+			var pc0 := cell_pos(pd["c"])
+			if (pc0.x - cx0) * (pc0.x - cx0) + (pc0.z - cz0) * (pc0.z - cz0) > vr2:
+				continue
 			var pr4 := path_pos([pd["c"], pd["n"]], pd["t"], CELL * 0.42 * pd["side"])
 			var p4: Vector3 = pr4[0]
 			var rp: float = pr4[1]
@@ -7292,6 +7449,12 @@ func draw_dynamic() -> void:
 					em(M_SPH, p4.x + sin(rp) * 0.35, p4.y + 0.55, p4.z + cos(rp) * 0.35, 0.22, 0.22, 0.28, rp, Color(0.55, 0.35, 0.2))
 				3:
 					draw_bike(p4, rp, pd, pclose)
+				_ when ped_lod:
+					# de lejos: una sola pieza por persona
+					em(M_BOX, p4.x, p4.y, p4.z, 0.34, 1.7 * (0.72 if pd["kind"] == 1 else 1.0), 0.26, rp, pd["col"])
+					for f in pd["comp"]:
+						var offl: float = f["off"]
+						em(M_BOX, p4.x + cos(rp) * offl * pd["side"], p4.y, p4.z - sin(rp) * offl * pd["side"], 0.34 * f["s"], 1.7 * f["s"], 0.26, rp, f["col"])
 				_:
 					var s := 0.72 if pd["kind"] == 1 else 1.0
 					var ex := 1 if pd["bag"] else 0
@@ -7407,28 +7570,7 @@ func draw_dynamic() -> void:
 		em(M_BOX, p7.x, p7.y, p7.z, 1.2, 1.2, 8.0, r7, Color(0.95, 0.95, 0.97))
 		em(M_BOX, p7.x, p7.y + 0.3, p7.z, 9.0, 0.2, 1.8, r7, Color(0.85, 0.85, 0.9))
 		em(M_BOX, p7.x - sin(r7) * 3.5, p7.y + 0.6, p7.z - cos(r7) * 3.5, 0.2, 1.8, 1.2, r7, Color(0.2, 0.4, 0.8))
-	if cam_dist < 200.0:
-		var ph := fmod(anim_time, 9.0)
-		for c6 in tl_cells:
-			var p8 := cell_pos(c6)
-			var ns := ph < 4.0
-			var yel := (ph > 4.0 and ph < 4.5) or ph > 8.5
-			var lc2 := Color(1.0, 0.8, 0.1) if yel else (Color(0.2, 1.0, 0.3) if ns else Color(1.0, 0.15, 0.1))
-			em(M_BOX, p8.x + CELL * 0.45, p8.y, p8.z + CELL * 0.45, 0.12, 2.8, 0.12, 0.0, Color(0.2, 0.2, 0.2))
-			em(M_BOX, p8.x + CELL * 0.45, p8.y + 2.6, p8.z + CELL * 0.45, 0.3, 0.3, 0.3, 0.0, lc2, 0, 0, 2.0)
-	for a in anchors:
-		if bld[a] == 0:
-			continue
-		if bld[a] == 34:
-			var pc := cell_pos(a)
-			for k in 6:
-				var ang := anim_time * 0.8 + k * TAU / 6.0
-				em(M_BOX, pc.x + cos(ang) * 1.2, pc.y + 0.6 + sin(anim_time * 3.0 + k) * 0.15, pc.z + sin(ang) * 1.2, 0.3, 0.6, 0.7, -ang, Color.from_hsv(k / 6.0, 0.6, 0.95))
-		elif bld[a] == 45:
-			var pw := cell_pos(a)
-			for k in 3:
-				var ang2 := anim_time * 1.5 + k * TAU / 3.0
-				em(M_BOX, pw.x + cos(ang2) * 2.2, pw.y + 11.0 + sin(ang2) * 2.2, pw.z + 0.7, 4.4, 0.35, 0.1, 0.0, Color(0.95, 0.95, 0.95))
+	# (los semáforos y las partes que giran ya los dibujan los modelos de la etapa 2 y el shader)
 	for c7 in anim_cells:
 		var p9 := cell_pos(c7)
 		var big: bool = part[c7] == c7
@@ -7447,7 +7589,14 @@ func draw_dynamic() -> void:
 			em(M_BOX, bx + w * 0.6 - 2.0, p9.y + target + 3.8, bz, 6.0, 0.25, 0.25, 0.0, Color(0.95, 0.75, 0.1))
 		if randf() < 0.05:
 			parts.append({"p": Vector3(bx, p9.y + 0.5, bz), "v": Vector3(randf_range(-1, 1), 1.0, randf_range(-1, 1)), "t": 1.2, "g": 0.0, "col": Color(0.8, 0.75, 0.65), "s": 0.9})
-	for i in N * N:
+	# incendios: la lista de celdas se rehace cada medio segundo, no se recorre todo el mapa en cada cuadro
+	if Engine.get_process_frames() % 30 == 0 or burn_dirty:
+		burn_dirty = false
+		burn_cells.clear()
+		for i in N * N:
+			if burn[i] > 0.0:
+				burn_cells.append(i)
+	for i in burn_cells:
 		if burn[i] > 0.0:
 			emit_flames(cell_pos(i), i)
 	if flag_days > 0 and cam_dist < 250.0:
@@ -8769,10 +8918,17 @@ func clear_box(b: Node) -> void:
 		ch.queue_free()
 var crumb_last: String = ""
 var crumb_f: FileAccess = null
+# anota el último paso para saber dónde se cerró el juego. Se escribe como mucho cada 0,1 s (antes eran
+# varias escrituras por cuadro y en el celular eso pesaba); "cierre limpio" se escribe siempre.
+var crumb_t: int = -1000
 func crumb(t: String) -> void:
 	if t == crumb_last:
 		return
 	crumb_last = t
+	var now := Time.get_ticks_msec()
+	if now - crumb_t < 100 and not t.contains("cierre limpio"):
+		return
+	crumb_t = now
 	if crumb_f == null:
 		crumb_f = FileAccess.open("user://ultimo_paso.txt", FileAccess.WRITE)
 		if crumb_f == null:
@@ -10804,10 +10960,6 @@ func setup_audio() -> void:
 				var e := minf(lt * 25.0, 1.0) * minf((0.28 - lt) * 25.0, 1.0)
 				v += (sin(TAU * (330.0 + k * 50.0) * t) + sin(TAU * (415.0 + k * 50.0) * t)) * 0.07 * e
 		return v)
-	# trueno: ruido grave que retumba y se apaga
-	sounds["thunder"] = make_sound(1.8, func(t: float) -> float:
-		var e := minf(t * 30.0, 1.0) * exp(-t * 1.6) * (0.7 + 0.3 * sin(TAU * 3.0 * t))
-		return soft.call(0.03) * e * 2.2)
 	sounds["cheer"] = make_sound(1.5, func(t: float) -> float:
 		var env2 := sin(PI * t / 1.5)
 		return soft.call(0.22) * env2 * 0.5 * (0.75 + 0.25 * sin(TAU * 5.0 * t)))
@@ -12051,6 +12203,39 @@ func run_sim() -> void:
 	for k in 300:
 		agents_process(1.0 / 60.0)
 	print("BENCH agents_ms=%d cars=%d peds=%d" % [(Time.get_ticks_usec() - t0) / 1000, cars.size(), peds.size()])
+	# como en un celular con ciudad grande: hora pico, ~5000 vecinos, cámara a media altura
+	var pop0 := pop
+	pop = 5000
+	day_timer = DAY_SECONDS * (17.5 - 6.0) / 24.0
+	cam_target = Vector3.ZERO
+	cam_dist = 110.0
+	for k in 900:
+		agents_process(1.0 / 60.0)
+	t0 = Time.get_ticks_usec()
+	for k in 300:
+		agents_process(1.0 / 60.0)
+	print("BENCH agents_full_ms=%d cars=%d peds=%d" % [(Time.get_ticks_usec() - t0) / 1000, cars.size(), peds.size()])
+	if OS.get_environment("URB_PROF") != "":
+		var fns := {"spawn": func(): spawn_agents(1.0 / 60.0), "cars": func(): move_cars(1.0 / 60.0), "peds": func(): move_peds(1.0 / 60.0), "svc": func(): move_svc(1.0 / 60.0), "lines": func(): move_lines(1.0 / 60.0), "boats": func(): move_boats(1.0 / 60.0), "stars": func(): move_stars(1.0 / 60.0), "parts": func(): move_parts(1.0 / 60.0), "draw": func(): draw_dynamic()}
+		for nm in fns:
+			var t1 := Time.get_ticks_usec()
+			for k in 300:
+				fns[nm].call()
+			print("PROF %s %d" % [nm, (Time.get_ticks_usec() - t1) / 1000])
+		for st in 8:
+			var t2 := Time.get_ticks_usec()
+			for k in 5:
+				sim_dirty = true
+				sim_cycle = 0
+				run_sim_stage(st)
+			print("PROFSIM %d %.1f ms" % [st, (Time.get_ticks_usec() - t2) / 5000.0])
+		var t3 := Time.get_ticks_usec()
+		new_day()
+		print("PROFSIM new_day %.1f ms" % ((Time.get_ticks_usec() - t3) / 1000.0))
+		t3 = Time.get_ticks_usec()
+		build_chunk(5)
+		print("PROFCHUNK %.1f ms" % ((Time.get_ticks_usec() - t3) / 1000.0))
+	pop = pop0
 	t0 = Time.get_ticks_usec()
 	for k in 3:
 		build_terrain()
@@ -13012,9 +13197,8 @@ func fx2_check() -> void:
 	bt(rot_ok, "FX2_CHECK partes que giran " + ("ok" if rot_ok else "FALLA %s" % str(kinds)))
 	weather = "Tormenta"
 	var t0 := Time.get_ticks_msec()
-	while sounds.get("thunder") is Dictionary and Time.get_ticks_msec() - t0 < 10000:
+	while opts["g_audio"] and not (sounds.get("thunder") is AudioStreamWAV) and Time.get_ticks_msec() - t0 < 10000:
 		storm_fx(0.0)
-		OS.delay_msec(20)
 	flash_t = 0.4
 	var fl := storm_fx(0.01)
 	bt(fl > 0.0, "FX2_CHECK rayo ilumina " + ("ok" if fl > 0.0 else "FALLA"))

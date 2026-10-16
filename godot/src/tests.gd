@@ -675,6 +675,39 @@ func run_sim() -> void:
 	for k in 300:
 		agents_process(1.0 / 60.0)
 	print("BENCH agents_ms=%d cars=%d peds=%d" % [(Time.get_ticks_usec() - t0) / 1000, cars.size(), peds.size()])
+	# como en un celular con ciudad grande: hora pico, ~5000 vecinos, cámara a media altura
+	var pop0 := pop
+	pop = 5000
+	day_timer = DAY_SECONDS * (17.5 - 6.0) / 24.0
+	cam_target = Vector3.ZERO
+	cam_dist = 110.0
+	for k in 900:
+		agents_process(1.0 / 60.0)
+	t0 = Time.get_ticks_usec()
+	for k in 300:
+		agents_process(1.0 / 60.0)
+	print("BENCH agents_full_ms=%d cars=%d peds=%d" % [(Time.get_ticks_usec() - t0) / 1000, cars.size(), peds.size()])
+	if OS.get_environment("URB_PROF") != "":
+		var fns := {"spawn": func(): spawn_agents(1.0 / 60.0), "cars": func(): move_cars(1.0 / 60.0), "peds": func(): move_peds(1.0 / 60.0), "svc": func(): move_svc(1.0 / 60.0), "lines": func(): move_lines(1.0 / 60.0), "boats": func(): move_boats(1.0 / 60.0), "stars": func(): move_stars(1.0 / 60.0), "parts": func(): move_parts(1.0 / 60.0), "draw": func(): draw_dynamic()}
+		for nm in fns:
+			var t1 := Time.get_ticks_usec()
+			for k in 300:
+				fns[nm].call()
+			print("PROF %s %d" % [nm, (Time.get_ticks_usec() - t1) / 1000])
+		for st in 8:
+			var t2 := Time.get_ticks_usec()
+			for k in 5:
+				sim_dirty = true
+				sim_cycle = 0
+				run_sim_stage(st)
+			print("PROFSIM %d %.1f ms" % [st, (Time.get_ticks_usec() - t2) / 5000.0])
+		var t3 := Time.get_ticks_usec()
+		new_day()
+		print("PROFSIM new_day %.1f ms" % ((Time.get_ticks_usec() - t3) / 1000.0))
+		t3 = Time.get_ticks_usec()
+		build_chunk(5)
+		print("PROFCHUNK %.1f ms" % ((Time.get_ticks_usec() - t3) / 1000.0))
+	pop = pop0
 	t0 = Time.get_ticks_usec()
 	for k in 3:
 		build_terrain()
@@ -1636,9 +1669,8 @@ func fx2_check() -> void:
 	bt(rot_ok, "FX2_CHECK partes que giran " + ("ok" if rot_ok else "FALLA %s" % str(kinds)))
 	weather = "Tormenta"
 	var t0 := Time.get_ticks_msec()
-	while sounds.get("thunder") is Dictionary and Time.get_ticks_msec() - t0 < 10000:
+	while opts["g_audio"] and not (sounds.get("thunder") is AudioStreamWAV) and Time.get_ticks_msec() - t0 < 10000:
 		storm_fx(0.0)
-		OS.delay_msec(20)
 	flash_t = 0.4
 	var fl := storm_fx(0.01)
 	bt(fl > 0.0, "FX2_CHECK rayo ilumina " + ("ok" if fl > 0.0 else "FALLA"))

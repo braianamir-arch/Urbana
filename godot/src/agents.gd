@@ -12,13 +12,41 @@ var ship_t: float = 0.0
 var garbage_t: float = 0.0
 var flag_days: int = 0
 # etapa 5: humo de chimeneas, agua de las fuentes y rayos con tormenta
+var burn_cells := PackedInt32Array()
+var burn_dirty: bool = true
 var smoke_t: float = 0.0
 var smoke_n: int = 0
 var flash_t: float = 0.0
 var bolt_p := Vector3.ZERO
 var bolt_seed: int = 0
-var thunder_job: int = -1
-var thunder_wav: AudioStreamWAV = null
+# el trueno se arma de a pedazos en el hilo principal (antes iba en otro hilo y compartía datos con los
+# demás sonidos: podía cerrar la app)
+var thunder_pcm := PackedByteArray()
+var thunder_i: int = 0
+var thunder_lp: float = 0.0
+func thunder_step() -> bool:
+	if sounds.get("thunder") is AudioStreamWAV:
+		return true
+	var n := int(1.8 * SR)
+	if thunder_pcm.size() != n * 2:
+		thunder_pcm.resize(n * 2)
+		thunder_i = 0
+	var end := mini(thunder_i + 2500, n)
+	for i in range(thunder_i, end):
+		var t := float(i) / SR
+		thunder_lp += (randf_range(-1.0, 1.0) - thunder_lp) * 0.03
+		var e := minf(t * 30.0, 1.0) * exp(-t * 1.6) * (0.7 + 0.3 * sin(TAU * 3.0 * t))
+		thunder_pcm.encode_s16(i * 2, int(clampf(thunder_lp * e * 2.2, -1.0, 1.0) * 30000.0))
+	thunder_i = end
+	if end < n:
+		return false
+	var s := AudioStreamWAV.new()
+	s.format = AudioStreamWAV.FORMAT_16_BITS
+	s.mix_rate = SR
+	s.stereo = false
+	s.data = thunder_pcm
+	sounds["thunder"] = s
+	return true
 var dyn_skip: int = 0
 func setup_agents() -> void:
 	dyn_nodes.clear()
@@ -538,14 +566,8 @@ func storm_fx(delta: float) -> float:
 		flash_t = 0.0
 		return 0.0
 	# el trueno se arma en otro hilo antes del primer rayo (armarlo tarda y trabaría el juego)
-	if sounds.get("thunder") is Dictionary:
-		if thunder_job < 0:
-			var sd: Dictionary = sounds["thunder"]
-			thunder_job = WorkerThreadPool.add_task(func(): thunder_wav = build_sound(sd["d"], sd["f"]))
-		if not WorkerThreadPool.is_task_completed(thunder_job):
-			return 0.0
-		WorkerThreadPool.wait_for_task_completion(thunder_job)
-		sounds["thunder"] = thunder_wav
+	if opts["g_audio"] and not thunder_step():
+		return 0.0
 	if flash_t <= 0.0 and randf() < delta * 0.1:
 		flash_t = 0.4
 		bolt_seed = randi()
@@ -686,7 +708,17 @@ func draw_dynamic() -> void:
 	var wet_now := weather == "Lluvia" or weather == "Tormenta"
 	var lit: bool = nf > 0.25 and near and opts["quality"] >= 1
 	glow_n = 0
+	# solo lo que está cerca de la cámara (lo de más lejos ni se ve y costaba mucho armarlo)
+	var vr := clampf(cam_dist * 1.8 + 30.0, 70.0, 420.0)
+	var vr2 := vr * vr
+	var cx0 := cam_target.x
+	var cz0 := cam_target.z
+	var ped_lod := cam_dist > 130.0
 	for c in cars:
+		var cpath: Array = c["p"]
+		var cc0 := cell_pos(cpath[clampi(int(c["k"]), 0, cpath.size() - 1)])
+		if (cc0.x - cx0) * (cc0.x - cx0) + (cc0.z - cz0) * (cc0.z - cz0) > vr2:
+			continue
 		var pr := path_pos_s(c["p"], c["k"], CELL * 0.18)
 		var p: Vector3 = pr[0]
 		var r: float = pr[1]
@@ -740,6 +772,9 @@ func draw_dynamic() -> void:
 	if cam_dist < 260.0:
 		var pclose := cam_dist < 70.0
 		for pd in peds:
+			var pc0 := cell_pos(pd["c"])
+			if (pc0.x - cx0) * (pc0.x - cx0) + (pc0.z - cz0) * (pc0.z - cz0) > vr2:
+				continue
 			var pr4 := path_pos([pd["c"], pd["n"]], pd["t"], CELL * 0.42 * pd["side"])
 			var p4: Vector3 = pr4[0]
 			var rp: float = pr4[1]
@@ -750,6 +785,12 @@ func draw_dynamic() -> void:
 					em(M_SPH, p4.x + sin(rp) * 0.35, p4.y + 0.55, p4.z + cos(rp) * 0.35, 0.22, 0.22, 0.28, rp, Color(0.55, 0.35, 0.2))
 				3:
 					draw_bike(p4, rp, pd, pclose)
+				_ when ped_lod:
+					# de lejos: una sola pieza por persona
+					em(M_BOX, p4.x, p4.y, p4.z, 0.34, 1.7 * (0.72 if pd["kind"] == 1 else 1.0), 0.26, rp, pd["col"])
+					for f in pd["comp"]:
+						var offl: float = f["off"]
+						em(M_BOX, p4.x + cos(rp) * offl * pd["side"], p4.y, p4.z - sin(rp) * offl * pd["side"], 0.34 * f["s"], 1.7 * f["s"], 0.26, rp, f["col"])
 				_:
 					var s := 0.72 if pd["kind"] == 1 else 1.0
 					var ex := 1 if pd["bag"] else 0
@@ -865,28 +906,7 @@ func draw_dynamic() -> void:
 		em(M_BOX, p7.x, p7.y, p7.z, 1.2, 1.2, 8.0, r7, Color(0.95, 0.95, 0.97))
 		em(M_BOX, p7.x, p7.y + 0.3, p7.z, 9.0, 0.2, 1.8, r7, Color(0.85, 0.85, 0.9))
 		em(M_BOX, p7.x - sin(r7) * 3.5, p7.y + 0.6, p7.z - cos(r7) * 3.5, 0.2, 1.8, 1.2, r7, Color(0.2, 0.4, 0.8))
-	if cam_dist < 200.0:
-		var ph := fmod(anim_time, 9.0)
-		for c6 in tl_cells:
-			var p8 := cell_pos(c6)
-			var ns := ph < 4.0
-			var yel := (ph > 4.0 and ph < 4.5) or ph > 8.5
-			var lc2 := Color(1.0, 0.8, 0.1) if yel else (Color(0.2, 1.0, 0.3) if ns else Color(1.0, 0.15, 0.1))
-			em(M_BOX, p8.x + CELL * 0.45, p8.y, p8.z + CELL * 0.45, 0.12, 2.8, 0.12, 0.0, Color(0.2, 0.2, 0.2))
-			em(M_BOX, p8.x + CELL * 0.45, p8.y + 2.6, p8.z + CELL * 0.45, 0.3, 0.3, 0.3, 0.0, lc2, 0, 0, 2.0)
-	for a in anchors:
-		if bld[a] == 0:
-			continue
-		if bld[a] == 34:
-			var pc := cell_pos(a)
-			for k in 6:
-				var ang := anim_time * 0.8 + k * TAU / 6.0
-				em(M_BOX, pc.x + cos(ang) * 1.2, pc.y + 0.6 + sin(anim_time * 3.0 + k) * 0.15, pc.z + sin(ang) * 1.2, 0.3, 0.6, 0.7, -ang, Color.from_hsv(k / 6.0, 0.6, 0.95))
-		elif bld[a] == 45:
-			var pw := cell_pos(a)
-			for k in 3:
-				var ang2 := anim_time * 1.5 + k * TAU / 3.0
-				em(M_BOX, pw.x + cos(ang2) * 2.2, pw.y + 11.0 + sin(ang2) * 2.2, pw.z + 0.7, 4.4, 0.35, 0.1, 0.0, Color(0.95, 0.95, 0.95))
+	# (los semáforos y las partes que giran ya los dibujan los modelos de la etapa 2 y el shader)
 	for c7 in anim_cells:
 		var p9 := cell_pos(c7)
 		var big: bool = part[c7] == c7
@@ -905,7 +925,14 @@ func draw_dynamic() -> void:
 			em(M_BOX, bx + w * 0.6 - 2.0, p9.y + target + 3.8, bz, 6.0, 0.25, 0.25, 0.0, Color(0.95, 0.75, 0.1))
 		if randf() < 0.05:
 			parts.append({"p": Vector3(bx, p9.y + 0.5, bz), "v": Vector3(randf_range(-1, 1), 1.0, randf_range(-1, 1)), "t": 1.2, "g": 0.0, "col": Color(0.8, 0.75, 0.65), "s": 0.9})
-	for i in N * N:
+	# incendios: la lista de celdas se rehace cada medio segundo, no se recorre todo el mapa en cada cuadro
+	if Engine.get_process_frames() % 30 == 0 or burn_dirty:
+		burn_dirty = false
+		burn_cells.clear()
+		for i in N * N:
+			if burn[i] > 0.0:
+				burn_cells.append(i)
+	for i in burn_cells:
 		if burn[i] > 0.0:
 			emit_flames(cell_pos(i), i)
 	if flag_days > 0 and cam_dist < 250.0:

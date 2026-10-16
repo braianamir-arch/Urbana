@@ -26,14 +26,53 @@ func sim_process(delta: float) -> void:
 		sim_acc = 0.0
 		sim_stage = 0
 	if sim_stage >= 0:
-		run_sim_stage(sim_stage)
+		run_sim_step(sim_stage)
 		sim_stage += 1
-		if sim_stage > 7:
+		if sim_stage > 11:
 			sim_stage = -1
 			sim_cycle += 1
 	if day_timer >= DAY_SECONDS:
 		day_timer -= DAY_SECONDS
 		new_day()
+# en el juego las etapas pesadas se reparten en más cuadros (mismo trabajo, en el mismo orden que
+# run_sim_stage, que es lo que usan las pruebas y la carga de partidas)
+var net_on: bool = false
+var tr_on: bool = false
+func run_sim_step(k: int) -> void:
+	match k:
+		0:
+			collect_lists()
+			net_on = sim_dirty or sim_cycle % 5 == 0
+		1:
+			if net_on:
+				net_pass(0)
+		2:
+			if net_on:
+				net_pass(1)
+				net_finish()
+		3:
+			compute_coverage()
+		4:
+			env_a()
+		5:
+			env_b()
+		6:
+			tr_on = sim_dirty or sim_cycle % 3 == 0
+			if tr_on:
+				traffic_a()
+		7:
+			if tr_on:
+				traffic_b()
+		8:
+			compute_happiness()
+		9:
+			grow_zones()
+		10:
+			compute_stats()
+			fire_tick()
+		11:
+			sim_dirty = false
+			check_progress()
 func run_sim_stage(s: int) -> void:
 	match s:
 		0:
@@ -78,111 +117,116 @@ func conducts(i: int, water: bool) -> bool:
 	return (wire[i] & (W_PIPE if water else W_POWER)) != 0
 func compute_networks() -> void:
 	for pass_i in 2:
-		var water := pass_i == 1
-		comp.resize(N * N)
-		comp.fill(-1)
-		var sup: Array = []
-		var use: Array = []
-		var ncomp := 0
-		var q := PackedInt32Array()
-		for i in N * N:
-			if comp[i] >= 0 or not conducts(i, water):
-				continue
-			var cid := ncomp
-			ncomp += 1
-			sup.append(0.0)
-			use.append(0.0)
-			q.clear()
-			q.append(i)
-			comp[i] = cid
-			var head := 0
-			while head < q.size():
-				var j := q[head]
-				head += 1
-				var x := cx(j)
-				var z := cz(j)
-				if x > 0 and comp[j - 1] < 0 and conducts(j - 1, water):
-					comp[j - 1] = cid
-					q.append(j - 1)
-				if x < N - 1 and comp[j + 1] < 0 and conducts(j + 1, water):
-					comp[j + 1] = cid
-					q.append(j + 1)
-				if z > 0 and comp[j - N] < 0 and conducts(j - N, water):
-					comp[j - N] = cid
-					q.append(j - N)
-				if z < N - 1 and comp[j + N] < 0 and conducts(j + N, water):
-					comp[j + N] = cid
-					q.append(j + N)
-		var bcid := {}
-		for i in N * N:
-			if bld[i] > 0 and (part[i] < 0 or part[i] == i):
-				var rc := near_road_cell(i, DEF[bld[i]]["sz"])
-				if rc >= 0 and comp[rc] >= 0:
-					bcid[i] = comp[rc]
-		for i in N * N:
-			var cid := comp[i]
-			if bld[i] > 0:
-				cid = bcid.get(anchor_of(i), cid)
-			if cid < 0:
-				continue
-			if zone[i] > 0:
-				var l := float(lvl[i])
-				var u := 0.0
-				match zone[i]:
-					Z_R:
-						u = l * (1.0 if not water else 1.2)
-					Z_C:
-						u = l * (1.5 if not water else 1.0)
-					Z_I:
-						u = l * (2.5 if not water else 1.8)
-					Z_M:
-						u = l * 1.2
-				use[cid] += u
-			elif bld[i] > 0 and (part[i] < 0 or part[i] == i):
-				var d: Dictionary = DEF[bld[i]]
-				var key := "wt" if water else "pw"
-				if d.has(key) and def_active(i):
-					var eff := 1.0
-					if not water and bld[i] == 44 and night > 0.5:
-						eff = 0.3
-					sup[cid] += float(d[key]) * eff
-				else:
-					use[cid] += 3.0 + float(d["upk"]) * 0.05
-		var tot_sup := 0.0
-		var tot_use := 0.0
-		var frac: Array = []
-		for k in ncomp:
-			tot_sup += sup[k]
-			tot_use += use[k]
-			var f: float = 1.0 if use[k] <= sup[k] else (sup[k] / maxf(use[k], 0.01))
-			if f < 1.0 and trade_ok and sup[k] > 0.0:
-				f = minf(1.0, f + 0.25)
-			frac.append(f)
-		var arr := watered if water else powered
-		var got := 0
-		var need := 0
-		for i in N * N:
-			var cid := comp[i]
-			if bld[i] > 0:
-				cid = bcid.get(anchor_of(i), cid)
-			var v := 0
-			if cid >= 0 and sup[cid] > 0.0:
-				var f: float = frac[cid]
-				v = 1 if f >= 1.0 or hsh(i, day + pass_i) < f else 0
-			arr[i] = v
-			if zone[i] > 0 and lvl[i] > 0:
-				need += 1
-				got += v
-		if water:
-			watered = arr
-			water_sup = tot_sup
-			water_use = tot_use
-			water_frac = float(got) / maxf(need, 1)
-		else:
-			powered = arr
-			power_sup = tot_sup
-			power_use = tot_use
-			power_frac = float(got) / maxf(need, 1)
+		net_pass(pass_i)
+	net_finish()
+# una red (0 luz, 1 agua): en el juego cada una va en su propio cuadro para no trabar
+func net_pass(pass_i: int) -> void:
+	var water := pass_i == 1
+	comp.resize(N * N)
+	comp.fill(-1)
+	var sup: Array = []
+	var use: Array = []
+	var ncomp := 0
+	var q := PackedInt32Array()
+	for i in N * N:
+		if comp[i] >= 0 or not conducts(i, water):
+			continue
+		var cid := ncomp
+		ncomp += 1
+		sup.append(0.0)
+		use.append(0.0)
+		q.clear()
+		q.append(i)
+		comp[i] = cid
+		var head := 0
+		while head < q.size():
+			var j := q[head]
+			head += 1
+			var x := cx(j)
+			var z := cz(j)
+			if x > 0 and comp[j - 1] < 0 and conducts(j - 1, water):
+				comp[j - 1] = cid
+				q.append(j - 1)
+			if x < N - 1 and comp[j + 1] < 0 and conducts(j + 1, water):
+				comp[j + 1] = cid
+				q.append(j + 1)
+			if z > 0 and comp[j - N] < 0 and conducts(j - N, water):
+				comp[j - N] = cid
+				q.append(j - N)
+			if z < N - 1 and comp[j + N] < 0 and conducts(j + N, water):
+				comp[j + N] = cid
+				q.append(j + N)
+	var bcid := {}
+	for i in N * N:
+		if bld[i] > 0 and (part[i] < 0 or part[i] == i):
+			var rc := near_road_cell(i, DEF[bld[i]]["sz"])
+			if rc >= 0 and comp[rc] >= 0:
+				bcid[i] = comp[rc]
+	for i in N * N:
+		var cid := comp[i]
+		if bld[i] > 0:
+			cid = bcid.get(anchor_of(i), cid)
+		if cid < 0:
+			continue
+		if zone[i] > 0:
+			var l := float(lvl[i])
+			var u := 0.0
+			match zone[i]:
+				Z_R:
+					u = l * (1.0 if not water else 1.2)
+				Z_C:
+					u = l * (1.5 if not water else 1.0)
+				Z_I:
+					u = l * (2.5 if not water else 1.8)
+				Z_M:
+					u = l * 1.2
+			use[cid] += u
+		elif bld[i] > 0 and (part[i] < 0 or part[i] == i):
+			var d: Dictionary = DEF[bld[i]]
+			var key := "wt" if water else "pw"
+			if d.has(key) and def_active(i):
+				var eff := 1.0
+				if not water and bld[i] == 44 and night > 0.5:
+					eff = 0.3
+				sup[cid] += float(d[key]) * eff
+			else:
+				use[cid] += 3.0 + float(d["upk"]) * 0.05
+	var tot_sup := 0.0
+	var tot_use := 0.0
+	var frac: Array = []
+	for k in ncomp:
+		tot_sup += sup[k]
+		tot_use += use[k]
+		var f: float = 1.0 if use[k] <= sup[k] else (sup[k] / maxf(use[k], 0.01))
+		if f < 1.0 and trade_ok and sup[k] > 0.0:
+			f = minf(1.0, f + 0.25)
+		frac.append(f)
+	var arr := watered if water else powered
+	var got := 0
+	var need := 0
+	for i in N * N:
+		var cid := comp[i]
+		if bld[i] > 0:
+			cid = bcid.get(anchor_of(i), cid)
+		var v := 0
+		if cid >= 0 and sup[cid] > 0.0:
+			var f: float = frac[cid]
+			v = 1 if f >= 1.0 or hsh(i, day + pass_i) < f else 0
+		arr[i] = v
+		if zone[i] > 0 and lvl[i] > 0:
+			need += 1
+			got += v
+	if water:
+		watered = arr
+		water_sup = tot_sup
+		water_use = tot_use
+		water_frac = float(got) / maxf(need, 1)
+	else:
+		powered = arr
+		power_sup = tot_sup
+		power_use = tot_use
+		power_frac = float(got) / maxf(need, 1)
+func net_finish() -> void:
 	var clean := 0.0
 	var all := 0.0
 	for a in anchors:
@@ -281,6 +325,9 @@ func compute_coverage() -> void:
 	hp_bonus = minf(0.1, hp_bonus / (1.0 + pop / 3000.0))
 var env_half: int = 0
 func compute_env() -> void:
+	env_a()
+	env_b()
+func env_a() -> void:
 	pollution.fill(0.0)
 	var green := 0.6 if has_decree("verde") else 1.0
 	for i in zone_list:
@@ -297,6 +344,7 @@ func compute_env() -> void:
 			pollution[i] += 0.15
 		if tree[i] > 0:
 			pollution[i] -= 0.06
+func env_b() -> void:
 	var pc: PackedFloat32Array = cov[CV_POL]
 	var pk: PackedFloat32Array = cov[CV_PARK]
 	var hc: PackedFloat32Array = cov[CV_HEALTH]
@@ -328,7 +376,13 @@ func compute_env() -> void:
 			crime[i] = clampf(c, 0.0, 1.0)
 		else:
 			crime[i] = 0.0
+var tr_dist := PackedInt32Array()
+var tr_nxt := PackedInt32Array()
 func compute_traffic() -> void:
+	traffic_a()
+	traffic_b()
+# caminos de las casas a los trabajos: primero la búsqueda (un cuadro) y después los viajes (otro)
+func traffic_a() -> void:
 	var nn := N * N
 	var dist := PackedInt32Array()
 	dist.resize(nn)
@@ -368,6 +422,12 @@ func compute_traffic() -> void:
 			dist[k] = dj
 			nxt[k] = j
 			q.append(k)
+	tr_dist = dist
+	tr_nxt = nxt
+func traffic_b() -> void:
+	var nn := N * N
+	var dist := tr_dist
+	var nxt := tr_nxt
 	var newload := PackedFloat32Array()
 	newload.resize(nn)
 	newload.fill(0.0)

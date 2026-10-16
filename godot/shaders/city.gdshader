@@ -46,11 +46,22 @@ float band(float x, float c, float hw) {
 }
 // etapa 3: marcas del asfalto. code = calles vecinas (bits 0-3: E O S N) + cruces vecinos (bits 4-7);
 // rt = tipo de calle (2 común, 3 avenida, 4 autopista). La celda mide 4 m; la calzada va de -1,52 a 1,52.
-vec3 road_marks(vec3 col, vec2 p, vec3 org, int code, int rt) {
-	int m = code & 15;
-	int xm = (code >> 4) & 15;
-	bool horiz = (m & 3) != 0 && (m & 12) == 0;
-	bool vert = (m & 12) != 0 && (m & 3) == 0;
+// bit k de un número entero guardado en float (sin operaciones de bits: algunas placas Adreno se cuelgan)
+float bitf(float v, float k) { return mod(floor(v / exp2(k) + 0.001), 2.0); }
+// senda peatonal y línea de pare hacia la dirección dv; x = pintura, y = cerca del cruce
+vec2 crossing(vec2 p, vec2 dv) {
+	float s = dot(p, dv);
+	float bb = dot(p, vec2(-dv.y, dv.x));
+	// senda peatonal (barras paralelas al tránsito) y línea de pare del lado derecho
+	float zeb = step(0.9, s) * step(s, 1.85) * step(abs(bb), 1.42) * step(fract(bb / 0.5 + 0.25), 0.5);
+	float stp = band(s, 0.68, 0.08) * step(0.0, bb) * step(bb, 1.42);
+	return vec2(max(zeb, stp), step(0.55, s));
+}
+vec3 road_marks(vec3 col, vec2 p, vec3 org, float code, float rt) {
+	float ew = max(bitf(code, 0.0), bitf(code, 1.0));
+	float sn = max(bitf(code, 2.0), bitf(code, 3.0));
+	bool horiz = ew > 0.5 && sn < 0.5;
+	bool vert = sn > 0.5 && ew < 0.5;
 	// parches y una tapa de alcantarilla en algunas celdas
 	float hp = hash(floor((org.xz + p) / 1.7));
 	col *= hp > 0.86 ? 0.88 : 1.0;
@@ -60,39 +71,27 @@ vec3 road_marks(vec3 col, vec2 p, vec3 org, int code, int rt) {
 		col = mix(col, vec3(0.13, 0.13, 0.14), band(r, 0.0, 0.3));
 		col *= 1.0 - 0.35 * band(r, 0.3, 0.025);
 	}
-	if (!horiz && !vert) {
+	if ((!horiz && !vert) || marks_on < 0.5) {
 		return col;
 	}
 	float a = horiz ? p.x : p.y;
 	float b = horiz ? p.y : p.x;
 	// manchas de aceite y huella de las ruedas en el medio de cada carril
 	col *= 1.0 - 0.07 * band(abs(b), 0.78, 0.2);
-	float paint = 0.0;
-	vec3 pc = vec3(0.88, 0.88, 0.84);
-	float near_x = 0.0;
-	for (int d = 0; d < 4; d++) {
-		if ((xm & (1 << d)) == 0) {
-			continue;
-		}
-		vec2 dv = d == 0 ? vec2(1.0, 0.0) : (d == 1 ? vec2(-1.0, 0.0) : (d == 2 ? vec2(0.0, 1.0) : vec2(0.0, -1.0)));
-		float s = dot(p, dv);
-		float bb = dot(p, vec2(-dv.y, dv.x));
-		near_x = max(near_x, step(0.55, s));
-		// senda peatonal (barras paralelas al tránsito) y línea de pare del lado derecho
-		float zeb = step(0.9, s) * step(s, 1.85) * step(abs(bb), 1.42) * step(fract(bb / 0.5 + 0.25), 0.5);
-		float stop = band(s, 0.68, 0.08) * step(0.0, bb) * step(bb, 1.42);
-		paint = max(paint, max(zeb, stop));
-	}
-	if (marks_on < 0.5) {
-		return col;
-	}
-	if (rt == 2) {
+	vec2 c0 = crossing(p, vec2(1.0, 0.0)) * bitf(code, 4.0);
+	vec2 c1 = crossing(p, vec2(-1.0, 0.0)) * bitf(code, 5.0);
+	vec2 c2 = crossing(p, vec2(0.0, 1.0)) * bitf(code, 6.0);
+	vec2 c3 = crossing(p, vec2(0.0, -1.0)) * bitf(code, 7.0);
+	vec2 cx = max(max(c0, c1), max(c2, c3));
+	float paint = cx.x;
+	float near_x = cx.y;
+	if (rt < 2.5) {
 		paint = max(paint, band(b, 0.0, 0.055) * step(fract(a / 2.0 + 0.25), 0.5) * (1.0 - near_x));
-	} else if (rt >= 3) {
+	} else {
 		paint = max(paint, band(abs(b), 1.4, 0.045) * (1.0 - near_x));
 	}
 	paint *= 0.78 + 0.22 * hash(floor((org.xz + p) * 7.0));
-	return mix(col, pc, paint * 0.85);
+	return mix(col, vec3(0.88, 0.88, 0.84), paint * 0.85);
 }
 vec3 mirror(vec3 wp, vec3 n, vec3 cp, float nt) {
 	vec3 r = reflect(normalize(wp - cp), n);
@@ -177,7 +176,7 @@ void fragment() {
 				col *= 1.0 - (asph ? 0.3 : 0.38) * wet;
 			}
 			if (mi == 20 && cust.y < -0.5 && wnrm.y > 0.7) {
-				col = road_marks(col, rloc, vec3(rorg.x, 0.0, rorg.y), int(-cust.y + 0.5) - 1, int(-cust.z + 0.5));
+				col = road_marks(col, rloc, vec3(rorg.x, 0.0, rorg.y), floor(-cust.y + 0.5) - 1.0, floor(-cust.z + 0.5));
 			}
 		} else if (mi == 7) {
 			vec2 sc = vec2(mu.x / 1.1 + mod(floor(mu.y / 0.55), 2.0) * 0.5, mu.y / 0.55);

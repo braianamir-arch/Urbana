@@ -50,12 +50,12 @@ void vertex() {
 		VERTEX.z += cos(TIME * 1.3 + ph) * 0.035 * a;
 	}
 	// etapa 5: partes que giran (UV2.y / 16): 1 aspas, 2 rueda (eje Z a la altura UV.x), 3 calesita (eje Y)
-	int rk = int(UV2.y + 0.5) / 16;
-	if (rk > 0) {
+	float rk = floor((UV2.y + 0.5) / 16.0);
+	if (rk > 0.5) {
 		float ph = MODEL_MATRIX[3].x * 0.13 + MODEL_MATRIX[3].z * 0.07;
-		float ang = TIME * (rk == 1 ? 1.4 : (rk == 2 ? 0.14 : 0.7)) + ph;
+		float ang = TIME * (rk < 1.5 ? 1.4 : (rk < 2.5 ? 0.14 : 0.7)) + ph;
 		mat2 rm = mat2(vec2(cos(ang), sin(ang)), vec2(-sin(ang), cos(ang)));
-		if (rk == 3) {
+		if (rk > 2.5) {
 			VERTEX.xz = rm * VERTEX.xz;
 			NORMAL.xz = rm * NORMAL.xz;
 		} else {
@@ -104,7 +104,7 @@ void fragment() {
 	bool up = wnrm.y > 0.7;
 	vec2 wid = vec2(0.0);
 	vec2 wf = vec2(0.5);
-	int tmi = int(vtm + 0.5) & 15;
+	int tmi = int(mod(floor(vtm + 0.5), 16.0));
 	bool shutpx = false;
 	if (m >= 30) {
 		// fachada media/lejana: ventanas dibujadas sobre una grilla (columna, piso)
@@ -226,7 +226,8 @@ void fragment() {
 		}
 		float hw = hash(id + 1.3);
 		// máscara 3: vidrio que no es ventana (autos, refugios) o agua: refleja pero no se prende de noche
-		float lit = (int(vtm + 0.5) & 15) == 3 ? 0.0 : step(hw, litp);
+		bool noglow = int(mod(floor(vtm + 0.5), 16.0)) == 3;
+		float lit = noglow ? 0.0 : step(hw, litp);
 		vec3 wc = mix(vec3(1.0, 0.76, 0.42), vec3(0.72, 0.86, 1.0), step(0.8, hash(id + 7.3)));
 		bool work_pl = u == 2 || u == 3 || u == 5 || u == 6 || u == 7 || (u == 4 && ground);
 		if (work_pl && u != 3) {
@@ -239,7 +240,7 @@ void fragment() {
 		}
 #ifndef LITE
 		// lo que hace la gente adentro: tele, cocina, oficina, clase, negocio, hospital
-		if (u > 0 && (int(vtm + 0.5) & 15) != 3 && hw < occp && cust.x < 0.5) {
+		if (u > 0 && !noglow && hw < occp && cust.x < 0.5) {
 			float act = hash(id + 2.2);
 			float sil = 0.0;
 			float furn = 0.0;
@@ -278,10 +279,8 @@ void fragment() {
 					sil = person(wf, 0.72 + 0.12 * sin(tt * 4.0), 0.0, 1.1);
 				} else {
 					// chicos en sus bancos
-					for (int kk = 0; kk < 3; kk++) {
-						float fk = float(kk);
-						sil = max(sil, person(wf, 0.2 + 0.3 * fk, 0.12 + 0.02 * sin(TIME * 1.3 + fk + act * 9.0), 0.6));
-					}
+					sil = max(person(wf, 0.2, 0.12 + 0.02 * sin(TIME * 1.3 + act * 9.0), 0.6), person(wf, 0.5, 0.12 + 0.02 * sin(TIME * 1.3 + 1.0 + act * 9.0), 0.6));
+					sil = max(sil, person(wf, 0.8, 0.12 + 0.02 * sin(TIME * 1.3 + 2.0 + act * 9.0), 0.6));
 					furn = rectm(wf, vec4(0.0, 0.0, 1.0, 0.16));
 				}
 			} else if (u == 7) {
