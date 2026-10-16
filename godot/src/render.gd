@@ -342,6 +342,10 @@ func config_wfx(kind: String) -> void:
 	wfx.preprocess = wfx.lifetime
 	wfx_r = 0.0
 func update_fx() -> void:
+	var fl := storm_fx(get_process_delta_time())
+	if fl > 0.0:
+		env.ambient_light_energy += 4.0 * fl
+		env.ambient_light_color = env.ambient_light_color.lerp(Color(0.75, 0.8, 1.0), fl)
 	if opts["g_clouds"] and int(opts["quality"]) >= 1:
 		cloud_drift += wind * get_process_delta_time() * 0.0035
 		sky_mat.set_shader_parameter("cloud_off", cloud_drift)
@@ -837,6 +841,8 @@ func update_chunks(max_n: int) -> void:
 func build_chunk(c: int) -> void:
 	begin_buf()
 	_binst.clear()
+	cur_chunk = c
+	smoke_pts[c] = []
 	var x0 := (c % NCH) * CH
 	var z0 := (c / NCH) * CH
 	for z in range(z0, z0 + CH):
@@ -849,6 +855,7 @@ func build_chunk(c: int) -> void:
 		mm.instance_count = _counts[m]
 		if _counts[m] > 0:
 			mm.buffer = _bufs[m].slice(0, _counts[m] * 20)
+	cur_chunk = -1
 	flush_buildings(c)
 func begin_buf() -> void:
 	_counts.resize(NMESH)

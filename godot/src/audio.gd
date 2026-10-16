@@ -44,6 +44,10 @@ func setup_audio() -> void:
 				var e := minf(lt * 25.0, 1.0) * minf((0.28 - lt) * 25.0, 1.0)
 				v += (sin(TAU * (330.0 + k * 50.0) * t) + sin(TAU * (415.0 + k * 50.0) * t)) * 0.07 * e
 		return v)
+	# trueno: ruido grave que retumba y se apaga
+	sounds["thunder"] = make_sound(2.6, func(t: float) -> float:
+		var e := minf(t * 30.0, 1.0) * exp(-t * 1.6) * (0.7 + 0.3 * sin(TAU * 3.0 * t))
+		return soft.call(0.03) * e * 2.2)
 	sounds["cheer"] = make_sound(1.5, func(t: float) -> float:
 		var env2 := sin(PI * t / 1.5)
 		return soft.call(0.22) * env2 * 0.5 * (0.75 + 0.25 * sin(TAU * 5.0 * t)))

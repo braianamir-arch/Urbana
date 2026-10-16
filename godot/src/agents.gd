@@ -11,6 +11,12 @@ var plane_t: float = 0.0
 var ship_t: float = 0.0
 var garbage_t: float = 0.0
 var flag_days: int = 0
+# etapa 5: humo de chimeneas, agua de las fuentes y rayos con tormenta
+var smoke_t: float = 0.0
+var smoke_n: int = 0
+var flash_t: float = 0.0
+var bolt_p := Vector3.ZERO
+var bolt_seed: int = 0
 var dyn_skip: int = 0
 func setup_agents() -> void:
 	dyn_nodes.clear()
@@ -473,13 +479,18 @@ func move_parts(dt: float) -> void:
 	for p in parts:
 		p["t"] = p["t"] - dt
 		if p["t"] <= 0.0:
+			if p.has("smoke"):
+				smoke_n -= 1
 			continue
+		if p.has("grow"):
+			p["s"] = p["s"] + p["grow"] * dt
 		p["v"] = p["v"] + Vector3(0, p.get("g", -6.0), 0) * dt
 		if p.has("fade"):
 			p["s"] = maxf(p["s"] * (1.0 - dt * 1.2), 0.02)
 		p["p"] = p["p"] + p["v"] * dt
 		keep.append(p)
 	parts = keep
+	smoke_fx(dt)
 	if randf() < 0.6:
 		for k in 3:
 			var i := randi() % (N * N)
@@ -492,6 +503,48 @@ func move_parts(dt: float) -> void:
 				continue
 			if bld[a] == 33 and randf() < 0.3:
 				parts.append({"p": cell_pos(a) + Vector3(0, 3, 0), "v": Vector3(wind.x * 0.5, 1.5, wind.y * 0.5), "t": 3.0, "g": 0.1, "col": Color(0.75, 0.75, 0.75), "s": 1.0})
+func smoke_fx(dt: float) -> void:
+	smoke_t += dt
+	if smoke_t < 0.2 or int(opts["quality"]) < 1 or cam_dist > 260.0 or not opts["g_dyn"]:
+		return
+	smoke_t = 0.0
+	for c in smoke_pts:
+		var cc := cell_pos(idx((c % NCH) * CH + CH / 2, (c / NCH) * CH + CH / 2))
+		if Vector2(cc.x - cam_target.x, cc.z - cam_target.z).length() > 260.0:
+			continue
+		for q in smoke_pts[c]:
+			if smoke_n >= 90 or randf() > 0.35:
+				continue
+			var top: Vector3 = q
+			var gray := randf_range(0.5, 0.68)
+			parts.append({"p": top + Vector3(randf_range(-0.1, 0.1), 0.1, randf_range(-0.1, 0.1)), "v": Vector3(wind.x * 0.5 + randf_range(-0.2, 0.2), 1.3, wind.y * 0.5 + randf_range(-0.2, 0.2)), "t": 5.0, "g": 0.04, "col": Color(gray, gray, gray * 0.98), "s": 0.45, "grow": 0.32, "smoke": true})
+			smoke_n += 1
+	# fuentes de las plazas: chorritos de agua
+	if weather != "Nieve":
+		for a in anchors:
+			if bld[a] != 30:
+				continue
+			var fp := cell_pos(a) + Vector3(CELL * 0.5, 0.0, CELL * 0.5) * (DEF[30]["sz"] - 1)
+			if Vector2(fp.x - cam_target.x, fp.z - cam_target.z).length() > 150.0:
+				continue
+			for k in 3:
+				var an := randf() * TAU
+				parts.append({"p": fp + Vector3(0, 0.95, 0), "v": Vector3(cos(an) * 0.5, 2.6, sin(an) * 0.5), "t": 0.6, "g": -9.0, "col": Color(0.72, 0.86, 1.0), "s": 0.09})
+# tormenta: de vez en cuando un rayo que ilumina todo y un trueno
+func storm_fx(delta: float) -> float:
+	if weather != "Tormenta" or not started:
+		flash_t = 0.0
+		return 0.0
+	if flash_t <= 0.0 and randf() < delta * 0.1:
+		flash_t = 0.4
+		bolt_seed = randi()
+		bolt_p = cam_target + Vector3(randf_range(-90, 90), 0, randf_range(-90, 90))
+		sfx("thunder")
+	if flash_t <= 0.0:
+		return 0.0
+	flash_t -= delta
+	# dos destellos seguidos
+	return maxf(flash_t, 0.0) / 0.4 * (1.0 if fmod(flash_t, 0.16) > 0.06 else 0.25)
 func confetti(cols: Array) -> void:
 	for k in 140:
 		var p := cam_target + Vector3(randf_range(-60, 60), randf_range(20, 45), randf_range(-60, 60))
@@ -860,6 +913,19 @@ func draw_dynamic() -> void:
 				if nflag > 60:
 					break
 	draw_stars(nf)
+	if flash_t > 0.0:
+		# el rayo: tramos en zigzag del cielo al suelo
+		var a := bolt_p + Vector3(0, 70, 0)
+		var bc := Color(0.85, 0.9, 1.0)
+		for k in 9:
+			var b := a + Vector3((hsh(bolt_seed % 9973, k) - 0.5) * 6.0, -70.0 / 9.0, (hsh(bolt_seed % 9973, k + 20) - 0.5) * 6.0)
+			if k == 8:
+				b.y = bolt_p.y
+			# tramo que baja y quiebre hacia el costado
+			em(M_BOX, a.x, b.y, a.z, 0.55, a.y - b.y, 0.55, 0.0, bc, 0, 0, 8.0)
+			var hz := Vector2(b.x - a.x, b.z - a.z)
+			em(M_BOX, (a.x + b.x) * 0.5, b.y, (a.z + b.z) * 0.5, 0.55, 0.55, hz.length() + 0.55, atan2(hz.x, hz.y), bc, 0, 0, 8.0)
+			a = b
 	for p in parts:
 		var pp: Vector3 = p["p"]
 		var s2: float = p["s"]

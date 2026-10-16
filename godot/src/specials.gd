@@ -235,8 +235,10 @@ func rc_sp_34(lod: int, _f: int, w: float) -> void:
 	# calesita: plataforma redonda, poste central, techo cónico a rayas y caballitos
 	sp_ground(w, BM_SIDEWALK)
 	var seg := 16 if lod == LOD_NEAR else 10
-	mb_cyl(Vector3(0, 0.08, 0), 1.6, 0.25, seg, BM_WOOD, 0)
 	mb_cyl(Vector3(0, 0.33, 0), 0.12, 2.0, 8, BM_PAINTED, 2)
+	# plataforma, techo y caballitos giran alrededor del poste (etapa 5)
+	mb_rot = 3
+	mb_cyl(Vector3(0, 0.08, 0), 1.6, 0.25, seg, BM_WOOD, 0)
 	mb_cone(Vector3(0, 2.3, 0), 1.75, 0.9, seg, BM_PAINTED, 2)
 	mb_cyl(Vector3(0, 2.1, 0), 1.75, 0.2, seg, BM_PLAIN, 0)
 	if lod != LOD_FAR:
@@ -245,6 +247,7 @@ func rc_sp_34(lod: int, _f: int, w: float) -> void:
 			var p := Vector3(cos(a) * 1.2, 0.33, sin(a) * 1.2)
 			mb_cyl(p, 0.025, 1.8, 4, BM_PAINTED, 0)
 			mb_box(p + Vector3(0, 0.45, 0), Vector3(0.5, 0.25, 0.14), BM_PLAIN, 0)
+	mb_rot = 0
 func rc_sp_35(lod: int, _f: int, w: float) -> void:
 	# estadio: cancha, tribunas en escalones alrededor y cuatro torres de luz
 	sp_ground(w, BM_CONCRETE)
@@ -269,6 +272,9 @@ func rc_sp_36(lod: int, _f: int, w: float) -> void:
 		mb_limb(Vector3(-1.6, 0.08, sz), Vector3(0, cy, sz), 0.08, 0.06, 6)
 		mb_limb(Vector3(1.6, 0.08, sz), Vector3(0, cy, sz), 0.08, 0.06, 6)
 	var n: int = [16, 12, 8][lod]
+	# la rueda gira despacio (etapa 5)
+	mb_rot = 2
+	mb_piv = Vector2(cy, 0.0)
 	for k in n:
 		var a0: float = TAU * k / n
 		var a1: float = TAU * (k + 1) / n
@@ -277,6 +283,7 @@ func rc_sp_36(lod: int, _f: int, w: float) -> void:
 		if lod != LOD_FAR:
 			mb_limb(Vector3(0, cy, 0), Vector3(cos(a0) * r, cy + sin(a0) * r, 0), 0.025, 0.025, 4)
 			mb_box(Vector3(cos(a0) * r, cy + sin(a0) * r - 0.45, 0), Vector3(0.4, 0.35, 0.4), BM_PAINTED, 1)
+	mb_rot = 0
 func rc_sp_37(lod: int, _f: int, w: float) -> void:
 	# catedral: nave con techo a dos aguas, fachada con dos torres, rosetón y cúpula atrás
 	sp_ground(w, BM_SIDEWALK)
@@ -389,6 +396,9 @@ func rc_sp_45(lod: int, _f: int, w: float) -> void:
 	mb_limb(Vector3(0, 0.08, 0), Vector3(0, h, 0), 0.24, 0.12, [10, 8, 6][lod])
 	mb_box(Vector3(0, h - 0.2, -0.3), Vector3(0.5, 0.55, 1.4), BM_PAINTED, 0)
 	var hub := Vector3(0, h + 0.05, 0.45)
+	# aspas y cubo giran (etapa 5)
+	mb_rot = 1
+	mb_piv = Vector2(hub.y, 0.0)
 	mb_blob(hub, Vector3(0.22, 0.22, 0.3), 8, 4, 45, BM_PAINTED, 0, false)
 	for k in 3:
 		var a := TAU * k / 3.0 + 0.3
@@ -396,6 +406,7 @@ func rc_sp_45(lod: int, _f: int, w: float) -> void:
 		var side := Vector3(-sin(a), cos(a), 0) * 0.14
 		mb_quad(hub - side + Vector3(0, 0, 0.02), hub + side + Vector3(0, 0, 0.02), tip + side * 0.3, tip - side * 0.3, BM_PAINTED, 0)
 		mb_quad(hub + side, hub - side, tip - side * 0.3, tip + side * 0.3, BM_PAINTED, 0)
+	mb_rot = 0
 func rc_sp_46(lod: int, _f: int, w: float) -> void:
 	# represa: muro de hormigón con escalones del vertedero, lago detrás y casa de máquinas abajo
 	sp_ground(w, BM_CONCRETE)

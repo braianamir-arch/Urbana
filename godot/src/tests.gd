@@ -1560,6 +1560,28 @@ func run_vida(dir: String) -> void:
 		vida_cam(sc_last, 16.0, 3.0)
 	elif f == 440:
 		shot_to(dir, "madrugada")
+		fx2_check()
+		var ind := -1
+		for c in smoke_pts:
+			if not smoke_pts[c].is_empty():
+				var wc: Vector2i = world_to_cell(smoke_pts[c][0])
+				ind = idx(wc.x, wc.y)
+		vida_cam(ind if ind >= 0 else sc_last, 40.0, 11.0)
+		weather = "Soleado"
+	elif f == 560:
+		shot_to(dir, "humo")
+		var wh := sc_last
+		for a in anchors:
+			if bld[a] == 36:
+				wh = a
+		vida_cam(wh, 30.0, 16.0)
+		weather = "Tormenta"
+	elif f == 600:
+		flash_t = 0.4
+		bolt_seed = 12345
+		bolt_p = cam_target + Vector3(14, 0, -10)
+	elif f == 602:
+		shot_to(dir, "tormenta_rayo")
 		print("VIDA OK" if bt_fail == 0 else "VIDA FALLA")
 		get_tree().quit()
 var sc_last: int = 0
@@ -1596,6 +1618,33 @@ func life_check() -> void:
 			ub += 1
 	var us_ok := special_use(24) == 6 and special_use(23) == 7 and special_use(28) == 5
 	bt(ub == 0 and us_ok, "LIFE_CHECK uso de cada edificio " + ("ok" if ub == 0 and us_ok else "FALLA %d" % ub))
+# efectos: humo en las chimeneas, partes que giran marcadas, rayo que ilumina
+func fx2_check() -> void:
+	var nch := 0
+	for c in smoke_pts:
+		nch += smoke_pts[c].size()
+	bt(nch > 0, "FX2_CHECK chimeneas con humo " + ("ok (%d)" % nch if nch > 0 else "FALLA"))
+	var kinds := {}
+	for id in [45, 36, 34]:
+		var mesh: ArrayMesh = cat_mesh(special_model[id], 0, LOD_NEAR)
+		var uv2: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+		for v in uv2:
+			if int(v.y + 0.5) >= 16:
+				kinds[id] = int(v.y + 0.5) / 16
+				break
+	var rot_ok: bool = kinds.get(45, 0) == 1 and kinds.get(36, 0) == 2 and kinds.get(34, 0) == 3
+	bt(rot_ok, "FX2_CHECK partes que giran " + ("ok" if rot_ok else "FALLA %s" % str(kinds)))
+	weather = "Tormenta"
+	flash_t = 0.4
+	var fl := storm_fx(0.01)
+	bt(fl > 0.0, "FX2_CHECK rayo ilumina " + ("ok" if fl > 0.0 else "FALLA"))
+	flash_t = 0.0
+	weather = "Soleado"
+	smoke_t = 1.0
+	var n0 := smoke_n
+	cam_target = smoke_pts.values().filter(func(a): return not a.is_empty())[0][0]
+	smoke_fx(0.5)
+	bt(smoke_n > n0, "FX2_CHECK sale humo " + ("ok (%d)" % (smoke_n - n0) if smoke_n > n0 else "FALLA"))
 # cada calle lleva sus vecinas y los cruces a los que llega; las rectas que llegan a un cruce tienen senda
 func road_check() -> void:
 	var straight := 0

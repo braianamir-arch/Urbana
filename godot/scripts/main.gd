@@ -3157,6 +3157,10 @@ func config_wfx(kind: String) -> void:
 	wfx.preprocess = wfx.lifetime
 	wfx_r = 0.0
 func update_fx() -> void:
+	var fl := storm_fx(get_process_delta_time())
+	if fl > 0.0:
+		env.ambient_light_energy += 4.0 * fl
+		env.ambient_light_color = env.ambient_light_color.lerp(Color(0.75, 0.8, 1.0), fl)
 	if opts["g_clouds"] and int(opts["quality"]) >= 1:
 		cloud_drift += wind * get_process_delta_time() * 0.0035
 		sky_mat.set_shader_parameter("cloud_off", cloud_drift)
@@ -3652,6 +3656,8 @@ func update_chunks(max_n: int) -> void:
 func build_chunk(c: int) -> void:
 	begin_buf()
 	_binst.clear()
+	cur_chunk = c
+	smoke_pts[c] = []
 	var x0 := (c % NCH) * CH
 	var z0 := (c / NCH) * CH
 	for z in range(z0, z0 + CH):
@@ -3664,6 +3670,7 @@ func build_chunk(c: int) -> void:
 		mm.instance_count = _counts[m]
 		if _counts[m] > 0:
 			mm.buffer = _bufs[m].slice(0, _counts[m] * 20)
+	cur_chunk = -1
 	flush_buildings(c)
 func begin_buf() -> void:
 	_counts.resize(NMESH)
@@ -4210,6 +4217,14 @@ var mb_uv2 := PackedVector2Array()
 var mb_i := PackedInt32Array()
 # transformación aplicada a todo lo que se agrega (para piezas giradas)
 var mb_xf := Transform3D.IDENTITY
+# etapa 5: partes que giran (1 aspas, 2 rueda, 3 calesita) con su eje en mb_piv (alto, z) y puntas de
+# chimeneas, para el humo
+var mb_rot: int = 0
+var mb_piv := Vector2.ZERO
+var mb_chims: Array = []
+# humo: puntas de chimenea en el mundo, por bloque
+var smoke_pts: Dictionary = {}
+var cur_chunk: int = -1
 # catálogo: lista de modelos y mallas ya armadas
 var cat_models: Array = []
 var cat_cache: Dictionary = {}
@@ -4241,6 +4256,8 @@ func mb_begin() -> void:
 	mb_uv2 = PackedVector2Array()
 	mb_i = PackedInt32Array()
 	mb_xf = Transform3D.IDENTITY
+	mb_rot = 0
+	mb_chims = []
 # UV en metros a partir de la posición final: en paredes u = a lo largo de la pared, v = -altura;
 # en techos y pisos (x, z). Así las texturas siguen sin cortes de una pieza a la otra.
 func mb_vert(p: Vector3, n: Vector3, mat: int, tm: int, uv: Vector2, auto_uv: bool) -> void:
@@ -4255,8 +4272,13 @@ func mb_vert(p: Vector3, n: Vector3, mat: int, tm: int, uv: Vector2, auto_uv: bo
 	mb_v.append(p)
 	mb_n.append(n)
 	mb_t.append_array([t.x, t.y, t.z, 1.0])
-	mb_uv.append(uv)
-	mb_uv2.append(Vector2(mat, tm))
+	if mb_rot > 0:
+		# las partes que giran llevan el eje en el UV (el shader las hace girar)
+		mb_uv.append(mb_piv)
+		mb_uv2.append(Vector2(mat, tm + 16 * mb_rot))
+	else:
+		mb_uv.append(uv)
+		mb_uv2.append(Vector2(mat, tm))
 # cuadrilátero a→b→c→d antihorario visto de frente (a abajo a la izquierda, d arriba a la izquierda).
 # Si uva != uvc el UV va de uva (en a) a uvc (en c); si no, se calcula en metros.
 func mb_quad(a: Vector3, b: Vector3, c: Vector3, d: Vector3, mat: int, tm: int, uva := Vector2.ZERO, uvc := Vector2.ZERO) -> void:
@@ -4422,6 +4444,8 @@ func cat_mesh(m: int, floors: int, lod: int) -> ArrayMesh:
 		cat_cache[key] = empty
 		return empty
 	md["recipe"].call(lod, floors, md.get("w", CELL * (1.85 if md["big"] else 0.82)))
+	if not md.has("chim"):
+		md["chim"] = mb_chims.duplicate()
 	var mesh := mb_end()
 	cat_cache[key] = mesh
 	return mesh
@@ -4463,6 +4487,14 @@ func emit_model(m: int, f: int, x: float, y: float, z: float, rot: float, sc: fl
 	var s := sin(rot) * sc
 	b.append_array([c, 0.0, s, x, 0.0, sy, 0.0, y, -s, 0.0, c, z, col.r, col.g, col.b, col.a, cust.x, cust.y, cust.z, cust.w])
 	_binst[key] = b
+	# chimeneas de este modelo: se anotan en el mundo para el humo (no en los quemados)
+	var md: Dictionary = cat_models[m]
+	if cur_chunk >= 0 and md["fam"] in ["edificio", "especial"] and cust.x < 0.5:
+		if not md.has("chim"):
+			cat_mesh(m, f, LOD_FAR)
+		for q in md["chim"]:
+			var lp: Vector3 = q
+			smoke_pts[cur_chunk].append(Vector3(c * lp.x + s * lp.z + x, sy * lp.y + y, -s * lp.x + c * lp.z + z))
 	if bcheck_on:
 		mcheck_log.append([world_to_cell(Vector3(x, 0, z)), m])
 # vuelca las instancias juntadas por build_chunk en los nodos del bloque (uno por modelo y versión)
@@ -5064,6 +5096,7 @@ func mb_sawtooth(x0: float, x1: float, z0: float, z1: float, y: float, n: int, h
 		mb_tri(Vector3(x1, y, b), Vector3(x1, y, a), Vector3(x1, y + h, a), BM_BRICK, 0)
 		mb_tri(Vector3(x0, y, a), Vector3(x0, y, b), Vector3(x0, y + h, a), BM_BRICK, 0)
 func mb_chimney(c: Vector3, h: float, r: float) -> void:
+	mb_chims.append(mb_xf * (c + Vector3(0, h, 0)))
 	mb_cyl(c, r, h, 10, BM_BRICK, 0)
 	mb_cyl(c + Vector3(0, h - 0.4, 0), r + 0.05, 0.25, 10, BM_CONCRETE, 0)
 func rc_galpon_chapa(lod: int, _f: int, _w: float) -> void:
@@ -5738,8 +5771,10 @@ func rc_sp_34(lod: int, _f: int, w: float) -> void:
 	# calesita: plataforma redonda, poste central, techo cónico a rayas y caballitos
 	sp_ground(w, BM_SIDEWALK)
 	var seg := 16 if lod == LOD_NEAR else 10
-	mb_cyl(Vector3(0, 0.08, 0), 1.6, 0.25, seg, BM_WOOD, 0)
 	mb_cyl(Vector3(0, 0.33, 0), 0.12, 2.0, 8, BM_PAINTED, 2)
+	# plataforma, techo y caballitos giran alrededor del poste (etapa 5)
+	mb_rot = 3
+	mb_cyl(Vector3(0, 0.08, 0), 1.6, 0.25, seg, BM_WOOD, 0)
 	mb_cone(Vector3(0, 2.3, 0), 1.75, 0.9, seg, BM_PAINTED, 2)
 	mb_cyl(Vector3(0, 2.1, 0), 1.75, 0.2, seg, BM_PLAIN, 0)
 	if lod != LOD_FAR:
@@ -5748,6 +5783,7 @@ func rc_sp_34(lod: int, _f: int, w: float) -> void:
 			var p := Vector3(cos(a) * 1.2, 0.33, sin(a) * 1.2)
 			mb_cyl(p, 0.025, 1.8, 4, BM_PAINTED, 0)
 			mb_box(p + Vector3(0, 0.45, 0), Vector3(0.5, 0.25, 0.14), BM_PLAIN, 0)
+	mb_rot = 0
 func rc_sp_35(lod: int, _f: int, w: float) -> void:
 	# estadio: cancha, tribunas en escalones alrededor y cuatro torres de luz
 	sp_ground(w, BM_CONCRETE)
@@ -5772,6 +5808,9 @@ func rc_sp_36(lod: int, _f: int, w: float) -> void:
 		mb_limb(Vector3(-1.6, 0.08, sz), Vector3(0, cy, sz), 0.08, 0.06, 6)
 		mb_limb(Vector3(1.6, 0.08, sz), Vector3(0, cy, sz), 0.08, 0.06, 6)
 	var n: int = [16, 12, 8][lod]
+	# la rueda gira despacio (etapa 5)
+	mb_rot = 2
+	mb_piv = Vector2(cy, 0.0)
 	for k in n:
 		var a0: float = TAU * k / n
 		var a1: float = TAU * (k + 1) / n
@@ -5780,6 +5819,7 @@ func rc_sp_36(lod: int, _f: int, w: float) -> void:
 		if lod != LOD_FAR:
 			mb_limb(Vector3(0, cy, 0), Vector3(cos(a0) * r, cy + sin(a0) * r, 0), 0.025, 0.025, 4)
 			mb_box(Vector3(cos(a0) * r, cy + sin(a0) * r - 0.45, 0), Vector3(0.4, 0.35, 0.4), BM_PAINTED, 1)
+	mb_rot = 0
 func rc_sp_37(lod: int, _f: int, w: float) -> void:
 	# catedral: nave con techo a dos aguas, fachada con dos torres, rosetón y cúpula atrás
 	sp_ground(w, BM_SIDEWALK)
@@ -5892,6 +5932,9 @@ func rc_sp_45(lod: int, _f: int, w: float) -> void:
 	mb_limb(Vector3(0, 0.08, 0), Vector3(0, h, 0), 0.24, 0.12, [10, 8, 6][lod])
 	mb_box(Vector3(0, h - 0.2, -0.3), Vector3(0.5, 0.55, 1.4), BM_PAINTED, 0)
 	var hub := Vector3(0, h + 0.05, 0.45)
+	# aspas y cubo giran (etapa 5)
+	mb_rot = 1
+	mb_piv = Vector2(hub.y, 0.0)
 	mb_blob(hub, Vector3(0.22, 0.22, 0.3), 8, 4, 45, BM_PAINTED, 0, false)
 	for k in 3:
 		var a := TAU * k / 3.0 + 0.3
@@ -5899,6 +5942,7 @@ func rc_sp_45(lod: int, _f: int, w: float) -> void:
 		var side := Vector3(-sin(a), cos(a), 0) * 0.14
 		mb_quad(hub - side + Vector3(0, 0, 0.02), hub + side + Vector3(0, 0, 0.02), tip + side * 0.3, tip - side * 0.3, BM_PAINTED, 0)
 		mb_quad(hub + side, hub - side, tip - side * 0.3, tip + side * 0.3, BM_PAINTED, 0)
+	mb_rot = 0
 func rc_sp_46(lod: int, _f: int, w: float) -> void:
 	# represa: muro de hormigón con escalones del vertedero, lago detrás y casa de máquinas abajo
 	sp_ground(w, BM_CONCRETE)
@@ -6493,6 +6537,12 @@ var plane_t: float = 0.0
 var ship_t: float = 0.0
 var garbage_t: float = 0.0
 var flag_days: int = 0
+# etapa 5: humo de chimeneas, agua de las fuentes y rayos con tormenta
+var smoke_t: float = 0.0
+var smoke_n: int = 0
+var flash_t: float = 0.0
+var bolt_p := Vector3.ZERO
+var bolt_seed: int = 0
 var dyn_skip: int = 0
 func setup_agents() -> void:
 	dyn_nodes.clear()
@@ -6955,13 +7005,18 @@ func move_parts(dt: float) -> void:
 	for p in parts:
 		p["t"] = p["t"] - dt
 		if p["t"] <= 0.0:
+			if p.has("smoke"):
+				smoke_n -= 1
 			continue
+		if p.has("grow"):
+			p["s"] = p["s"] + p["grow"] * dt
 		p["v"] = p["v"] + Vector3(0, p.get("g", -6.0), 0) * dt
 		if p.has("fade"):
 			p["s"] = maxf(p["s"] * (1.0 - dt * 1.2), 0.02)
 		p["p"] = p["p"] + p["v"] * dt
 		keep.append(p)
 	parts = keep
+	smoke_fx(dt)
 	if randf() < 0.6:
 		for k in 3:
 			var i := randi() % (N * N)
@@ -6974,6 +7029,48 @@ func move_parts(dt: float) -> void:
 				continue
 			if bld[a] == 33 and randf() < 0.3:
 				parts.append({"p": cell_pos(a) + Vector3(0, 3, 0), "v": Vector3(wind.x * 0.5, 1.5, wind.y * 0.5), "t": 3.0, "g": 0.1, "col": Color(0.75, 0.75, 0.75), "s": 1.0})
+func smoke_fx(dt: float) -> void:
+	smoke_t += dt
+	if smoke_t < 0.2 or int(opts["quality"]) < 1 or cam_dist > 260.0 or not opts["g_dyn"]:
+		return
+	smoke_t = 0.0
+	for c in smoke_pts:
+		var cc := cell_pos(idx((c % NCH) * CH + CH / 2, (c / NCH) * CH + CH / 2))
+		if Vector2(cc.x - cam_target.x, cc.z - cam_target.z).length() > 260.0:
+			continue
+		for q in smoke_pts[c]:
+			if smoke_n >= 90 or randf() > 0.35:
+				continue
+			var top: Vector3 = q
+			var gray := randf_range(0.5, 0.68)
+			parts.append({"p": top + Vector3(randf_range(-0.1, 0.1), 0.1, randf_range(-0.1, 0.1)), "v": Vector3(wind.x * 0.5 + randf_range(-0.2, 0.2), 1.3, wind.y * 0.5 + randf_range(-0.2, 0.2)), "t": 5.0, "g": 0.04, "col": Color(gray, gray, gray * 0.98), "s": 0.45, "grow": 0.32, "smoke": true})
+			smoke_n += 1
+	# fuentes de las plazas: chorritos de agua
+	if weather != "Nieve":
+		for a in anchors:
+			if bld[a] != 30:
+				continue
+			var fp := cell_pos(a) + Vector3(CELL * 0.5, 0.0, CELL * 0.5) * (DEF[30]["sz"] - 1)
+			if Vector2(fp.x - cam_target.x, fp.z - cam_target.z).length() > 150.0:
+				continue
+			for k in 3:
+				var an := randf() * TAU
+				parts.append({"p": fp + Vector3(0, 0.95, 0), "v": Vector3(cos(an) * 0.5, 2.6, sin(an) * 0.5), "t": 0.6, "g": -9.0, "col": Color(0.72, 0.86, 1.0), "s": 0.09})
+# tormenta: de vez en cuando un rayo que ilumina todo y un trueno
+func storm_fx(delta: float) -> float:
+	if weather != "Tormenta" or not started:
+		flash_t = 0.0
+		return 0.0
+	if flash_t <= 0.0 and randf() < delta * 0.1:
+		flash_t = 0.4
+		bolt_seed = randi()
+		bolt_p = cam_target + Vector3(randf_range(-90, 90), 0, randf_range(-90, 90))
+		sfx("thunder")
+	if flash_t <= 0.0:
+		return 0.0
+	flash_t -= delta
+	# dos destellos seguidos
+	return maxf(flash_t, 0.0) / 0.4 * (1.0 if fmod(flash_t, 0.16) > 0.06 else 0.25)
 func confetti(cols: Array) -> void:
 	for k in 140:
 		var p := cam_target + Vector3(randf_range(-60, 60), randf_range(20, 45), randf_range(-60, 60))
@@ -7342,6 +7439,19 @@ func draw_dynamic() -> void:
 				if nflag > 60:
 					break
 	draw_stars(nf)
+	if flash_t > 0.0:
+		# el rayo: tramos en zigzag del cielo al suelo
+		var a := bolt_p + Vector3(0, 70, 0)
+		var bc := Color(0.85, 0.9, 1.0)
+		for k in 9:
+			var b := a + Vector3((hsh(bolt_seed % 9973, k) - 0.5) * 6.0, -70.0 / 9.0, (hsh(bolt_seed % 9973, k + 20) - 0.5) * 6.0)
+			if k == 8:
+				b.y = bolt_p.y
+			# tramo que baja y quiebre hacia el costado
+			em(M_BOX, a.x, b.y, a.z, 0.55, a.y - b.y, 0.55, 0.0, bc, 0, 0, 8.0)
+			var hz := Vector2(b.x - a.x, b.z - a.z)
+			em(M_BOX, (a.x + b.x) * 0.5, b.y, (a.z + b.z) * 0.5, 0.55, 0.55, hz.length() + 0.55, atan2(hz.x, hz.y), bc, 0, 0, 8.0)
+			a = b
 	for p in parts:
 		var pp: Vector3 = p["p"]
 		var s2: float = p["s"]
@@ -10610,6 +10720,10 @@ func setup_audio() -> void:
 				var e := minf(lt * 25.0, 1.0) * minf((0.28 - lt) * 25.0, 1.0)
 				v += (sin(TAU * (330.0 + k * 50.0) * t) + sin(TAU * (415.0 + k * 50.0) * t)) * 0.07 * e
 		return v)
+	# trueno: ruido grave que retumba y se apaga
+	sounds["thunder"] = make_sound(2.6, func(t: float) -> float:
+		var e := minf(t * 30.0, 1.0) * exp(-t * 1.6) * (0.7 + 0.3 * sin(TAU * 3.0 * t))
+		return soft.call(0.03) * e * 2.2)
 	sounds["cheer"] = make_sound(1.5, func(t: float) -> float:
 		var env2 := sin(PI * t / 1.5)
 		return soft.call(0.22) * env2 * 0.5 * (0.75 + 0.25 * sin(TAU * 5.0 * t)))
@@ -12736,6 +12850,28 @@ func run_vida(dir: String) -> void:
 		vida_cam(sc_last, 16.0, 3.0)
 	elif f == 440:
 		shot_to(dir, "madrugada")
+		fx2_check()
+		var ind := -1
+		for c in smoke_pts:
+			if not smoke_pts[c].is_empty():
+				var wc: Vector2i = world_to_cell(smoke_pts[c][0])
+				ind = idx(wc.x, wc.y)
+		vida_cam(ind if ind >= 0 else sc_last, 40.0, 11.0)
+		weather = "Soleado"
+	elif f == 560:
+		shot_to(dir, "humo")
+		var wh := sc_last
+		for a in anchors:
+			if bld[a] == 36:
+				wh = a
+		vida_cam(wh, 30.0, 16.0)
+		weather = "Tormenta"
+	elif f == 600:
+		flash_t = 0.4
+		bolt_seed = 12345
+		bolt_p = cam_target + Vector3(14, 0, -10)
+	elif f == 602:
+		shot_to(dir, "tormenta_rayo")
 		print("VIDA OK" if bt_fail == 0 else "VIDA FALLA")
 		get_tree().quit()
 var sc_last: int = 0
@@ -12772,6 +12908,33 @@ func life_check() -> void:
 			ub += 1
 	var us_ok := special_use(24) == 6 and special_use(23) == 7 and special_use(28) == 5
 	bt(ub == 0 and us_ok, "LIFE_CHECK uso de cada edificio " + ("ok" if ub == 0 and us_ok else "FALLA %d" % ub))
+# efectos: humo en las chimeneas, partes que giran marcadas, rayo que ilumina
+func fx2_check() -> void:
+	var nch := 0
+	for c in smoke_pts:
+		nch += smoke_pts[c].size()
+	bt(nch > 0, "FX2_CHECK chimeneas con humo " + ("ok (%d)" % nch if nch > 0 else "FALLA"))
+	var kinds := {}
+	for id in [45, 36, 34]:
+		var mesh: ArrayMesh = cat_mesh(special_model[id], 0, LOD_NEAR)
+		var uv2: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
+		for v in uv2:
+			if int(v.y + 0.5) >= 16:
+				kinds[id] = int(v.y + 0.5) / 16
+				break
+	var rot_ok: bool = kinds.get(45, 0) == 1 and kinds.get(36, 0) == 2 and kinds.get(34, 0) == 3
+	bt(rot_ok, "FX2_CHECK partes que giran " + ("ok" if rot_ok else "FALLA %s" % str(kinds)))
+	weather = "Tormenta"
+	flash_t = 0.4
+	var fl := storm_fx(0.01)
+	bt(fl > 0.0, "FX2_CHECK rayo ilumina " + ("ok" if fl > 0.0 else "FALLA"))
+	flash_t = 0.0
+	weather = "Soleado"
+	smoke_t = 1.0
+	var n0 := smoke_n
+	cam_target = smoke_pts.values().filter(func(a): return not a.is_empty())[0][0]
+	smoke_fx(0.5)
+	bt(smoke_n > n0, "FX2_CHECK sale humo " + ("ok (%d)" % (smoke_n - n0) if smoke_n > n0 else "FALLA"))
 # cada calle lleva sus vecinas y los cruces a los que llega; las rectas que llegan a un cruce tienen senda
 func road_check() -> void:
 	var straight := 0

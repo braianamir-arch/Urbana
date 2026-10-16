@@ -34,6 +34,14 @@ var mb_uv2 := PackedVector2Array()
 var mb_i := PackedInt32Array()
 # transformación aplicada a todo lo que se agrega (para piezas giradas)
 var mb_xf := Transform3D.IDENTITY
+# etapa 5: partes que giran (1 aspas, 2 rueda, 3 calesita) con su eje en mb_piv (alto, z) y puntas de
+# chimeneas, para el humo
+var mb_rot: int = 0
+var mb_piv := Vector2.ZERO
+var mb_chims: Array = []
+# humo: puntas de chimenea en el mundo, por bloque
+var smoke_pts: Dictionary = {}
+var cur_chunk: int = -1
 # catálogo: lista de modelos y mallas ya armadas
 var cat_models: Array = []
 var cat_cache: Dictionary = {}
@@ -65,6 +73,8 @@ func mb_begin() -> void:
 	mb_uv2 = PackedVector2Array()
 	mb_i = PackedInt32Array()
 	mb_xf = Transform3D.IDENTITY
+	mb_rot = 0
+	mb_chims = []
 # UV en metros a partir de la posición final: en paredes u = a lo largo de la pared, v = -altura;
 # en techos y pisos (x, z). Así las texturas siguen sin cortes de una pieza a la otra.
 func mb_vert(p: Vector3, n: Vector3, mat: int, tm: int, uv: Vector2, auto_uv: bool) -> void:
@@ -79,8 +89,13 @@ func mb_vert(p: Vector3, n: Vector3, mat: int, tm: int, uv: Vector2, auto_uv: bo
 	mb_v.append(p)
 	mb_n.append(n)
 	mb_t.append_array([t.x, t.y, t.z, 1.0])
-	mb_uv.append(uv)
-	mb_uv2.append(Vector2(mat, tm))
+	if mb_rot > 0:
+		# las partes que giran llevan el eje en el UV (el shader las hace girar)
+		mb_uv.append(mb_piv)
+		mb_uv2.append(Vector2(mat, tm + 16 * mb_rot))
+	else:
+		mb_uv.append(uv)
+		mb_uv2.append(Vector2(mat, tm))
 # cuadrilátero a→b→c→d antihorario visto de frente (a abajo a la izquierda, d arriba a la izquierda).
 # Si uva != uvc el UV va de uva (en a) a uvc (en c); si no, se calcula en metros.
 func mb_quad(a: Vector3, b: Vector3, c: Vector3, d: Vector3, mat: int, tm: int, uva := Vector2.ZERO, uvc := Vector2.ZERO) -> void:
@@ -246,6 +261,8 @@ func cat_mesh(m: int, floors: int, lod: int) -> ArrayMesh:
 		cat_cache[key] = empty
 		return empty
 	md["recipe"].call(lod, floors, md.get("w", CELL * (1.85 if md["big"] else 0.82)))
+	if not md.has("chim"):
+		md["chim"] = mb_chims.duplicate()
 	var mesh := mb_end()
 	cat_cache[key] = mesh
 	return mesh
@@ -287,6 +304,14 @@ func emit_model(m: int, f: int, x: float, y: float, z: float, rot: float, sc: fl
 	var s := sin(rot) * sc
 	b.append_array([c, 0.0, s, x, 0.0, sy, 0.0, y, -s, 0.0, c, z, col.r, col.g, col.b, col.a, cust.x, cust.y, cust.z, cust.w])
 	_binst[key] = b
+	# chimeneas de este modelo: se anotan en el mundo para el humo (no en los quemados)
+	var md: Dictionary = cat_models[m]
+	if cur_chunk >= 0 and md["fam"] in ["edificio", "especial"] and cust.x < 0.5:
+		if not md.has("chim"):
+			cat_mesh(m, f, LOD_FAR)
+		for q in md["chim"]:
+			var lp: Vector3 = q
+			smoke_pts[cur_chunk].append(Vector3(c * lp.x + s * lp.z + x, sy * lp.y + y, -s * lp.x + c * lp.z + z))
 	if bcheck_on:
 		mcheck_log.append([world_to_cell(Vector3(x, 0, z)), m])
 # vuelca las instancias juntadas por build_chunk en los nodos del bloque (uno por modelo y versión)
@@ -888,6 +913,7 @@ func mb_sawtooth(x0: float, x1: float, z0: float, z1: float, y: float, n: int, h
 		mb_tri(Vector3(x1, y, b), Vector3(x1, y, a), Vector3(x1, y + h, a), BM_BRICK, 0)
 		mb_tri(Vector3(x0, y, a), Vector3(x0, y, b), Vector3(x0, y + h, a), BM_BRICK, 0)
 func mb_chimney(c: Vector3, h: float, r: float) -> void:
+	mb_chims.append(mb_xf * (c + Vector3(0, h, 0)))
 	mb_cyl(c, r, h, 10, BM_BRICK, 0)
 	mb_cyl(c + Vector3(0, h - 0.4, 0), r + 0.05, 0.25, 10, BM_CONCRETE, 0)
 func rc_galpon_chapa(lod: int, _f: int, _w: float) -> void:
