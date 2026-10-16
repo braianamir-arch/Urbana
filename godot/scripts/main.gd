@@ -800,8 +800,14 @@ func sim_process(delta: float) -> void:
 			sim_cycle += 1
 	if day_timer >= DAY_SECONDS:
 		day_timer -= DAY_SECONDS
+		if not day_queue.is_empty():
+			# por si el día anterior no terminó (velocidad muy alta): se completa ahora
+			for p in day_queue:
+				new_day_part(p)
+		day_queue = DAY_PARTS.duplicate()
+	if not day_queue.is_empty():
 		lab_step = 22
-		new_day()
+		new_day_part(day_queue.pop_front())
 # en el juego las etapas pesadas se reparten en más cuadros (mismo trabajo, en el mismo orden que
 # run_sim_stage, que es lo que usan las pruebas y la carga de partidas)
 var net_on: bool = false
@@ -1649,46 +1655,65 @@ func ignite(i: int) -> void:
 	toast("¡Incendio! Los bomberos cerca lo apagan más rápido.")
 	dispatch_from("fire", 21, i)
 	no_fire_days = 0
+# el cambio de día: en las pruebas va todo junto; en el juego, una parte por cuadro (antes trababa ~50 ms)
+const DAY_PARTS := ["begin", "economy", "production", "garbage", "tourism", "events", "cine", "politics", "season", "history", "save"]
+var day_queue: Array = []
+var nd_s0: int = 0
 func new_day() -> void:
-	day += 1
-	var s0 := season()
-	daily_economy()
-	daily_production()
-	daily_garbage()
-	daily_tourism()
-	daily_events()
-	cine_daily()
-	daily_politics()
-	if season() != built_season:
-		built_season = season()
-		terrain_dirty = true
-		mark_all_dirty()
-	for k in history:
-		var arr: Array = history[k]
-		var v := 0.0
-		match k:
-			"pop":
-				v = pop
-			"money":
-				v = money
-			"happy":
-				v = avg_happy
-			"appr":
-				v = approval
-		arr.append(v)
-		if arr.size() > 120:
-			arr.pop_front()
-	check_achievements()
-	pick_daily_challenge()
-	for k in counters.keys():
-		if String(k).begins_with("day_"):
-			counters[k] = 0.0
-	counters["pop_start"] = pop
-	counters["money_start"] = money
-	if day % 2 == 0:
-		save_game_bg(slot)
-	if s0 != season():
-		add_news("Empieza el " + SEASONS[season()].to_lower())
+	for p in DAY_PARTS:
+		new_day_part(p)
+func new_day_part(p: String) -> void:
+	match p:
+		"begin":
+			day += 1
+			nd_s0 = season()
+		"economy":
+			daily_economy()
+		"production":
+			daily_production()
+		"garbage":
+			daily_garbage()
+		"tourism":
+			daily_tourism()
+		"events":
+			daily_events()
+		"cine":
+			cine_daily()
+		"politics":
+			daily_politics()
+		"season":
+			if season() != built_season:
+				built_season = season()
+				terrain_dirty = true
+				mark_all_dirty()
+		"history":
+			for k in history:
+				var arr: Array = history[k]
+				var v := 0.0
+				match k:
+					"pop":
+						v = pop
+					"money":
+						v = money
+					"happy":
+						v = avg_happy
+					"appr":
+						v = approval
+				arr.append(v)
+				if arr.size() > 120:
+					arr.pop_front()
+			check_achievements()
+			pick_daily_challenge()
+			for k in counters.keys():
+				if String(k).begins_with("day_"):
+					counters[k] = 0.0
+			counters["pop_start"] = pop
+			counters["money_start"] = money
+		"save":
+			if day % 2 == 0:
+				save_game_bg(slot)
+			if nd_s0 != season():
+				add_news("Empieza el " + SEASONS[season()].to_lower())
 func daily_economy() -> void:
 	var b := {}
 	var r_tax: float = pop * tax[0] / 100.0 * 0.55 * class_mult
@@ -7515,11 +7540,10 @@ func draw_dynamic() -> void:
 			draw_crash(c, p, r, near2)
 		var ln: float = CAR_LN[kd]
 		var bh: float = CAR_BH[kd]
-		var roofc: Color = c["roof"]
-		var rf := 0.0 if roofc == col else (1.0 if roofc.v > 0.5 else 2.0)
 		var on := lit and fade > 0.9
 		# una sola pieza por auto: el modelo trae carrocería, vidrios, techo, ruedas y luces
-		ce(CR_CAR + kd, p.x, p.y, p.z, r, fade, col, Vector4(rf, (0.5 + nf * 3.0) if on else 0.0, (0.5 + nf * 1.8) if on else 0.0, 2.0 if kd == 3 else 1.0))
+		# los modelos van a lo largo de X y miden 1,7 m: se giran y se agrandan al tamaño de antes, sobre el asfalto
+		ce(CR_CAR + kd, p.x, p.y + 0.2, p.z, r - PI * 0.5, fade * 1.18, col, Vector4(0.0, 6.0 / 8.0, 0.5, 0.0))
 		if on:
 			veh_glow(p, r, ln, 0.4, bh * 0.85 + 0.2, 5.0)
 	if drive != null:
@@ -8227,22 +8251,33 @@ var crowd_mat: ShaderMaterial
 var crowd_nodes: Array = []
 var crowd_bufs: Array = []
 var crowd_n := PackedInt32Array()
+# tipo de auto en movimiento (0 sedán, 1 hatch, 2 camioneta, 3 taxi, 4 utilitario) → modelo del catálogo
+const MOVING_CARS := ["sedan", "hatch", "camioneta", "taxi", "utilitario"]
+var car_near_nodes: Array = []
+var car_mid_nodes: Array = []
 func setup_crowd() -> void:
 	crowd_mat = ShaderMaterial.new()
 	var sh := Shader.new()
 	sh.code = SHADER_CROWD.code
 	crowd_mat.shader = sh
-	var meshes2: Array = [person_mesh()]
-	for k in 5:
-		meshes2.append(car_mesh(k))
 	crowd_nodes.clear()
 	crowd_bufs.clear()
-	for m in meshes2:
-		crowd_nodes.append(new_mm_node(m, crowd_mat))
+	car_near_nodes.clear()
+	car_mid_nodes.clear()
+	crowd_nodes.append(new_mm_node(person_mesh(), crowd_mat))
+	# autos: los mismos modelos detallados que los estacionados (etapa 2), versión cerca y media
+	for k in 5:
+		var id: int = prop_ids[MOVING_CARS[k]]
+		var nn := new_mm_node(cat_mesh(id, 0, LOD_NEAR), building_mat)
+		nn.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		car_near_nodes.append(nn)
+		car_mid_nodes.append(new_mm_node(cat_mesh(id, 0, LOD_MID), building_lite_mat))
+		crowd_nodes.append(nn)
+	for k in 6:
 		var b := PackedFloat32Array()
 		b.resize(2000)
 		crowd_bufs.append(b)
-	crowd_n.resize(meshes2.size())
+	crowd_n.resize(6)
 	crowd_n.fill(0)
 # partes (UV2.x): 0 remera, 1 pantalón, 2 piel, 3 pelo, 4 zapatos, 5 mochila, 11 brazos;
 # movimiento (UV2.y): 1 y 2 piernas, 3 y 4 brazos
@@ -8314,8 +8349,14 @@ func ce(k: int, x: float, y: float, z: float, rot: float, sc: float, col: Color,
 	crowd_n[k] += 1
 func crowd_flush() -> void:
 	crowd_mat.set_shader_parameter("night", night)
-	for k in crowd_nodes.size():
-		flush_mm(crowd_nodes[k].multimesh, crowd_n[k], crowd_bufs[k])
+	flush_mm(crowd_nodes[CR_PERSON].multimesh, crowd_n[CR_PERSON], crowd_bufs[CR_PERSON])
+	# los autos: versión cerca cuando la cámara está acercada (con ruedas, faros y sombra)
+	var near := b_near_on and int(opts["quality"]) > 0
+	for k in 5:
+		var on: MultiMeshInstance3D = car_near_nodes[k] if near else car_mid_nodes[k]
+		var off: MultiMeshInstance3D = car_mid_nodes[k] if near else car_near_nodes[k]
+		flush_mm(on.multimesh, crowd_n[CR_CAR + k], crowd_bufs[CR_CAR + k])
+		off.multimesh.visible_instance_count = 0
 func pal_idx(c: Color, pal: Array, fallback: int) -> int:
 	var i := pal.find(c)
 	return i if i >= 0 else fallback
@@ -8355,7 +8396,7 @@ func warm_shaders() -> void:
 	warm_add_mm(meshes[M_BOX], city_mat, k)
 	warm_add_mm(meshes[M_SPH], null, k + 1)
 	warm_add_mm(crowd_nodes[CR_PERSON].multimesh.mesh, crowd_mat, k + 2)
-	warm_add_mm(crowd_nodes[CR_CAR].multimesh.mesh, crowd_mat, k + 3)
+	warm_add_mm(crowd_nodes[CR_CAR].multimesh.mesh, building_mat, k + 3)
 	warm_add_mm(glow_node.multimesh.mesh, glow_node.material_override, k + 4)
 	for mt in [terrain_mat, terrain_simple_mat, water_mat]:
 		var mi := MeshInstance3D.new()
@@ -13482,6 +13523,16 @@ func run_vida(dir: String) -> void:
 		var dms := (Time.get_ticks_usec() - t0) / 100000.0
 		print("BENCH dibujo_moviles_ms=%.2f autos=%d gente=%d instancias_gente=%d instancias_autos=%d" % [dms, cars.size(), peds.size(), crowd_n[0], crowd_n[1] + crowd_n[2] + crowd_n[3] + crowd_n[4] + crowd_n[5]])
 		bt(crowd_n[0] > 0 and cars_near == 0, "CROWD_CHECK gente de una pieza " + ("ok" if crowd_n[0] > 0 else "FALLA"))
+	elif f == 643:
+		var cc0: Array = cars[cars.size() / 2]["p"]
+		var cp0 := cell_pos(cc0[clampi(int(cars[cars.size() / 2]["k"]), 0, cc0.size() - 1)])
+		cam_target = cp0
+		cam_goal = cp0
+		cam_dist = 9.0
+		cam_dist_goal = 9.0
+		cam_pitch = 0.5
+	elif f == 644:
+		shot_to(dir, "autos_cerca")
 	elif f == 645:
 		var pc := cell_pos(peds[peds.size() / 2]["c"])
 		cam_target = pc

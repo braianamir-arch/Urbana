@@ -1640,6 +1640,16 @@ func run_vida(dir: String) -> void:
 		var dms := (Time.get_ticks_usec() - t0) / 100000.0
 		print("BENCH dibujo_moviles_ms=%.2f autos=%d gente=%d instancias_gente=%d instancias_autos=%d" % [dms, cars.size(), peds.size(), crowd_n[0], crowd_n[1] + crowd_n[2] + crowd_n[3] + crowd_n[4] + crowd_n[5]])
 		bt(crowd_n[0] > 0 and cars_near == 0, "CROWD_CHECK gente de una pieza " + ("ok" if crowd_n[0] > 0 else "FALLA"))
+	elif f == 643:
+		var cc0: Array = cars[cars.size() / 2]["p"]
+		var cp0 := cell_pos(cc0[clampi(int(cars[cars.size() / 2]["k"]), 0, cc0.size() - 1)])
+		cam_target = cp0
+		cam_goal = cp0
+		cam_dist = 9.0
+		cam_dist_goal = 9.0
+		cam_pitch = 0.5
+	elif f == 644:
+		shot_to(dir, "autos_cerca")
 	elif f == 645:
 		var pc := cell_pos(peds[peds.size() / 2]["c"])
 		cam_target = pc

@@ -8,22 +8,33 @@ var crowd_mat: ShaderMaterial
 var crowd_nodes: Array = []
 var crowd_bufs: Array = []
 var crowd_n := PackedInt32Array()
+# tipo de auto en movimiento (0 sedán, 1 hatch, 2 camioneta, 3 taxi, 4 utilitario) → modelo del catálogo
+const MOVING_CARS := ["sedan", "hatch", "camioneta", "taxi", "utilitario"]
+var car_near_nodes: Array = []
+var car_mid_nodes: Array = []
 func setup_crowd() -> void:
 	crowd_mat = ShaderMaterial.new()
 	var sh := Shader.new()
 	sh.code = SHADER_CROWD.code
 	crowd_mat.shader = sh
-	var meshes2: Array = [person_mesh()]
-	for k in 5:
-		meshes2.append(car_mesh(k))
 	crowd_nodes.clear()
 	crowd_bufs.clear()
-	for m in meshes2:
-		crowd_nodes.append(new_mm_node(m, crowd_mat))
+	car_near_nodes.clear()
+	car_mid_nodes.clear()
+	crowd_nodes.append(new_mm_node(person_mesh(), crowd_mat))
+	# autos: los mismos modelos detallados que los estacionados (etapa 2), versión cerca y media
+	for k in 5:
+		var id: int = prop_ids[MOVING_CARS[k]]
+		var nn := new_mm_node(cat_mesh(id, 0, LOD_NEAR), building_mat)
+		nn.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		car_near_nodes.append(nn)
+		car_mid_nodes.append(new_mm_node(cat_mesh(id, 0, LOD_MID), building_lite_mat))
+		crowd_nodes.append(nn)
+	for k in 6:
 		var b := PackedFloat32Array()
 		b.resize(2000)
 		crowd_bufs.append(b)
-	crowd_n.resize(meshes2.size())
+	crowd_n.resize(6)
 	crowd_n.fill(0)
 # partes (UV2.x): 0 remera, 1 pantalón, 2 piel, 3 pelo, 4 zapatos, 5 mochila, 11 brazos;
 # movimiento (UV2.y): 1 y 2 piernas, 3 y 4 brazos
@@ -95,8 +106,14 @@ func ce(k: int, x: float, y: float, z: float, rot: float, sc: float, col: Color,
 	crowd_n[k] += 1
 func crowd_flush() -> void:
 	crowd_mat.set_shader_parameter("night", night)
-	for k in crowd_nodes.size():
-		flush_mm(crowd_nodes[k].multimesh, crowd_n[k], crowd_bufs[k])
+	flush_mm(crowd_nodes[CR_PERSON].multimesh, crowd_n[CR_PERSON], crowd_bufs[CR_PERSON])
+	# los autos: versión cerca cuando la cámara está acercada (con ruedas, faros y sombra)
+	var near := b_near_on and int(opts["quality"]) > 0
+	for k in 5:
+		var on: MultiMeshInstance3D = car_near_nodes[k] if near else car_mid_nodes[k]
+		var off: MultiMeshInstance3D = car_mid_nodes[k] if near else car_near_nodes[k]
+		flush_mm(on.multimesh, crowd_n[CR_CAR + k], crowd_bufs[CR_CAR + k])
+		off.multimesh.visible_instance_count = 0
 func pal_idx(c: Color, pal: Array, fallback: int) -> int:
 	var i := pal.find(c)
 	return i if i >= 0 else fallback
@@ -136,7 +153,7 @@ func warm_shaders() -> void:
 	warm_add_mm(meshes[M_BOX], city_mat, k)
 	warm_add_mm(meshes[M_SPH], null, k + 1)
 	warm_add_mm(crowd_nodes[CR_PERSON].multimesh.mesh, crowd_mat, k + 2)
-	warm_add_mm(crowd_nodes[CR_CAR].multimesh.mesh, crowd_mat, k + 3)
+	warm_add_mm(crowd_nodes[CR_CAR].multimesh.mesh, building_mat, k + 3)
 	warm_add_mm(glow_node.multimesh.mesh, glow_node.material_override, k + 4)
 	for mt in [terrain_mat, terrain_simple_mat, water_mat]:
 		var mi := MeshInstance3D.new()

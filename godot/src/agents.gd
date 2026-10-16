@@ -748,11 +748,10 @@ func draw_dynamic() -> void:
 			draw_crash(c, p, r, near2)
 		var ln: float = CAR_LN[kd]
 		var bh: float = CAR_BH[kd]
-		var roofc: Color = c["roof"]
-		var rf := 0.0 if roofc == col else (1.0 if roofc.v > 0.5 else 2.0)
 		var on := lit and fade > 0.9
 		# una sola pieza por auto: el modelo trae carrocería, vidrios, techo, ruedas y luces
-		ce(CR_CAR + kd, p.x, p.y, p.z, r, fade, col, Vector4(rf, (0.5 + nf * 3.0) if on else 0.0, (0.5 + nf * 1.8) if on else 0.0, 2.0 if kd == 3 else 1.0))
+		# los modelos van a lo largo de X y miden 1,7 m: se giran y se agrandan al tamaño de antes, sobre el asfalto
+		ce(CR_CAR + kd, p.x, p.y + 0.2, p.z, r - PI * 0.5, fade * 1.18, col, Vector4(0.0, 6.0 / 8.0, 0.5, 0.0))
 		if on:
 			veh_glow(p, r, ln, 0.4, bh * 0.85 + 0.2, 5.0)
 	if drive != null:

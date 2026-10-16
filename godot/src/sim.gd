@@ -37,8 +37,14 @@ func sim_process(delta: float) -> void:
 			sim_cycle += 1
 	if day_timer >= DAY_SECONDS:
 		day_timer -= DAY_SECONDS
+		if not day_queue.is_empty():
+			# por si el día anterior no terminó (velocidad muy alta): se completa ahora
+			for p in day_queue:
+				new_day_part(p)
+		day_queue = DAY_PARTS.duplicate()
+	if not day_queue.is_empty():
 		lab_step = 22
-		new_day()
+		new_day_part(day_queue.pop_front())
 # en el juego las etapas pesadas se reparten en más cuadros (mismo trabajo, en el mismo orden que
 # run_sim_stage, que es lo que usan las pruebas y la carga de partidas)
 var net_on: bool = false
@@ -886,46 +892,65 @@ func ignite(i: int) -> void:
 	toast("¡Incendio! Los bomberos cerca lo apagan más rápido.")
 	dispatch_from("fire", 21, i)
 	no_fire_days = 0
+# el cambio de día: en las pruebas va todo junto; en el juego, una parte por cuadro (antes trababa ~50 ms)
+const DAY_PARTS := ["begin", "economy", "production", "garbage", "tourism", "events", "cine", "politics", "season", "history", "save"]
+var day_queue: Array = []
+var nd_s0: int = 0
 func new_day() -> void:
-	day += 1
-	var s0 := season()
-	daily_economy()
-	daily_production()
-	daily_garbage()
-	daily_tourism()
-	daily_events()
-	cine_daily()
-	daily_politics()
-	if season() != built_season:
-		built_season = season()
-		terrain_dirty = true
-		mark_all_dirty()
-	for k in history:
-		var arr: Array = history[k]
-		var v := 0.0
-		match k:
-			"pop":
-				v = pop
-			"money":
-				v = money
-			"happy":
-				v = avg_happy
-			"appr":
-				v = approval
-		arr.append(v)
-		if arr.size() > 120:
-			arr.pop_front()
-	check_achievements()
-	pick_daily_challenge()
-	for k in counters.keys():
-		if String(k).begins_with("day_"):
-			counters[k] = 0.0
-	counters["pop_start"] = pop
-	counters["money_start"] = money
-	if day % 2 == 0:
-		save_game_bg(slot)
-	if s0 != season():
-		add_news("Empieza el " + SEASONS[season()].to_lower())
+	for p in DAY_PARTS:
+		new_day_part(p)
+func new_day_part(p: String) -> void:
+	match p:
+		"begin":
+			day += 1
+			nd_s0 = season()
+		"economy":
+			daily_economy()
+		"production":
+			daily_production()
+		"garbage":
+			daily_garbage()
+		"tourism":
+			daily_tourism()
+		"events":
+			daily_events()
+		"cine":
+			cine_daily()
+		"politics":
+			daily_politics()
+		"season":
+			if season() != built_season:
+				built_season = season()
+				terrain_dirty = true
+				mark_all_dirty()
+		"history":
+			for k in history:
+				var arr: Array = history[k]
+				var v := 0.0
+				match k:
+					"pop":
+						v = pop
+					"money":
+						v = money
+					"happy":
+						v = avg_happy
+					"appr":
+						v = approval
+				arr.append(v)
+				if arr.size() > 120:
+					arr.pop_front()
+			check_achievements()
+			pick_daily_challenge()
+			for k in counters.keys():
+				if String(k).begins_with("day_"):
+					counters[k] = 0.0
+			counters["pop_start"] = pop
+			counters["money_start"] = money
+		"save":
+			if day % 2 == 0:
+				save_game_bg(slot)
+			if nd_s0 != season():
+				add_news("Empieza el " + SEASONS[season()].to_lower())
 func daily_economy() -> void:
 	var b := {}
 	var r_tax: float = pop * tax[0] / 100.0 * 0.55 * class_mult
