@@ -23,6 +23,7 @@ var env: Environment
 var sky_mat: ShaderMaterial
 var cloud_drift := Vector2.ZERO
 const SHADER_CITY := preload("res://shaders/city.gdshader")
+const SHADER_CROWD := preload("res://shaders/crowd.gdshader")
 const SHADER_BUILDING := preload("res://shaders/building.gdshader")
 const SHADER_BUILDING_LITE := preload("res://shaders/building_lite.gdshader")
 const SHADER_WATER := preload("res://shaders/water.gdshader")
@@ -847,7 +848,7 @@ var cb_bufs: Array = []
 var cb_counts := PackedInt32Array()
 var cb_binst: Dictionary = {}
 var cb_smoke: Array = []
-const CB_ROWS := 8
+const CB_ROWS := 4
 func update_chunks(max_n: int) -> void:
 	if max_n == 1 and started:
 		chunk_step()

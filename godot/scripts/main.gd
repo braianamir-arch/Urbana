@@ -1584,7 +1584,7 @@ func new_day() -> void:
 	counters["pop_start"] = pop
 	counters["money_start"] = money
 	if day % 2 == 0:
-		save_game(slot)
+		save_game_bg(slot)
 	if s0 != season():
 		add_news("Empieza el " + SEASONS[season()].to_lower())
 func daily_economy() -> void:
@@ -2898,6 +2898,7 @@ var env: Environment
 var sky_mat: ShaderMaterial
 var cloud_drift := Vector2.ZERO
 const SHADER_CITY := preload("res://shaders/city.gdshader")
+const SHADER_CROWD := preload("res://shaders/crowd.gdshader")
 const SHADER_BUILDING := preload("res://shaders/building.gdshader")
 const SHADER_BUILDING_LITE := preload("res://shaders/building_lite.gdshader")
 const SHADER_WATER := preload("res://shaders/water.gdshader")
@@ -3722,7 +3723,7 @@ var cb_bufs: Array = []
 var cb_counts := PackedInt32Array()
 var cb_binst: Dictionary = {}
 var cb_smoke: Array = []
-const CB_ROWS := 8
+const CB_ROWS := 4
 func update_chunks(max_n: int) -> void:
 	if max_n == 1 and started:
 		chunk_step()
@@ -6728,6 +6729,7 @@ func setup_agents() -> void:
 	glow_node = new_mm_node(gq, gm)
 	glow_buf.resize(4000)
 	dyn_nodes.append(glow_node)
+	setup_crowd()
 func gl(kind: float, x: float, y: float, z: float, sx: float, sz: float, rot: float, col: Color, sz2: float = 0.0) -> void:
 	var c := cos(rot)
 	var s := sin(rot)
@@ -6771,6 +6773,12 @@ func veh_lights(p: Vector3, r: float, ln: float, hw: float, hy: float, nf: float
 			em(M_BOX, p.x + rx + sr * ln * 0.5, p.y + hy, p.z + rz + cr * ln * 0.5, 0.2, 0.12, 0.06, r, Color(1.0, 0.95, 0.75), 0, 0, hl)
 			em(M_BOX, p.x + rx - sr * ln * 0.5, p.y + hy, p.z + rz - cr * ln * 0.5, 0.2, 0.12, 0.06, r, Color(0.9, 0.08, 0.06), 0, 0, tl)
 	if lit:
+		veh_glow(p, r, ln, hw, hy, beam)
+# halos de luz de un vehículo de noche (los faros en sí van en el modelo)
+func veh_glow(p: Vector3, r: float, ln: float, hw: float, hy: float, beam: float) -> void:
+	var sr := sin(r)
+	var cr := cos(r)
+	if true:
 		var halo_k := 1.5 if weather == "Lluvia" or weather == "Tormenta" else 1.0
 		var k := ln * 0.5 + beam * 0.5
 		gl(0.0, p.x + sr * k, p.y + 0.32, p.z + cr * k, 2.6 + hw, beam, r, Color(1.0, 0.92, 0.7, 0.55))
@@ -7372,12 +7380,12 @@ func draw_dynamic() -> void:
 	var wet_now := weather == "Lluvia" or weather == "Tormenta"
 	var lit: bool = nf > 0.25 and near and opts["quality"] >= 1
 	glow_n = 0
+	crowd_begin()
 	# solo lo que está cerca de la cámara (lo de más lejos ni se ve y costaba mucho armarlo)
 	var vr := clampf(cam_dist * 1.8 + 30.0, 70.0, 420.0)
 	var vr2 := vr * vr
 	var cx0 := cam_target.x
 	var cz0 := cam_target.z
-	var ped_lod := cam_dist > 130.0
 	for c in cars:
 		var cpath: Array = c["p"]
 		var cc0 := cell_pos(cpath[clampi(int(c["k"]), 0, cpath.size() - 1)])
@@ -7396,25 +7404,15 @@ func draw_dynamic() -> void:
 			continue
 		if c.get("crash", 0.0) > 0.0:
 			draw_crash(c, p, r, near2)
-		var ln: float = [2.0, 1.9, 2.5, 2.0, 2.4][kd]
-		var bh: float = [0.45, 0.56, 0.7, 0.45, 0.55][kd]
+		var ln: float = CAR_LN[kd]
+		var bh: float = CAR_BH[kd]
 		var roofc: Color = c["roof"]
-		var sr := sin(r)
-		var cr := cos(r)
-		var fw := fade
-		em(M_BOX, p.x - sr * ln * 0.16, p.y + 0.2, p.z - cr * ln * 0.16, 0.95 * fw, bh * fw, ln * 0.68, r, col, 0, 0, 0, 1.5)
-		em(M_BOX, p.x + sr * ln * 0.33, p.y + 0.2, p.z + cr * ln * 0.33, 0.9 * fw, bh * 0.72 * fw, ln * 0.34, r, col, 0, 0, 0, 1.5)
-		var cl := ln * (0.85 if kd == 2 else 0.5)
-		var ch := 0.4 + (0.25 if kd == 2 else 0.0)
-		var cby := p.y + 0.2 + bh * 0.88
-		em(M_SPH, p.x - sr * ln * 0.1, cby, p.z - cr * ln * 0.1, 0.84 * fw, ch * fw, cl, r, Color(0.07, 0.09, 0.12), 0, 0, 0, 1.5)
-		em(M_BOX, p.x - sr * ln * 0.1, cby + ch * 0.82, p.z - cr * ln * 0.1, 0.66 * fw, 0.05 * fw, cl * 0.7, r, roofc, 0, 0, 0, 1.5)
-		if near2:
-			for sg in [-1.0, 1.0]:
-				em(M_BOX, p.x + cr * sg * 0.52 + sr * ln * 0.12, p.y + 0.2 + bh * 0.95, p.z - sr * sg * 0.52 + cr * ln * 0.12, 0.1, 0.07, 0.12, r, roofc if kd != 3 else col, 0, 0, 0, 1.5)
-			if kd == 3:
-				em(M_BOX, p.x - sr * ln * 0.1, cby + ch * 0.9, p.z - cr * ln * 0.1, 0.32, 0.1, 0.18, r, Color(1.0, 0.95, 0.7), 0, 0, 0.5 + nf * 2.2)
-		veh_lights(p, r, ln, 0.4, bh * 0.85 + 0.2, nf, lit and fade > 0.9, near2, 5.0)
+		var rf := 0.0 if roofc == col else (1.0 if roofc.v > 0.5 else 2.0)
+		var on := lit and fade > 0.9
+		# una sola pieza por auto: el modelo trae carrocería, vidrios, techo, ruedas y luces
+		ce(CR_CAR + kd, p.x, p.y, p.z, r, fade, col, Vector4(rf, (0.5 + nf * 3.0) if on else 0.0, (0.5 + nf * 1.8) if on else 0.0, 2.0 if kd == 3 else 1.0))
+		if on:
+			veh_glow(p, r, ln, 0.4, bh * 0.85 + 0.2, 5.0)
 	if drive != null:
 		var pr2 := path_pos([drive["c"], drive["n"]], drive["t"], CELL * 0.18)
 		var p2: Vector3 = pr2[0]
@@ -7449,12 +7447,6 @@ func draw_dynamic() -> void:
 					em(M_SPH, p4.x + sin(rp) * 0.35, p4.y + 0.55, p4.z + cos(rp) * 0.35, 0.22, 0.22, 0.28, rp, Color(0.55, 0.35, 0.2))
 				3:
 					draw_bike(p4, rp, pd, pclose)
-				_ when ped_lod:
-					# de lejos: una sola pieza por persona
-					em(M_BOX, p4.x, p4.y, p4.z, 0.34, 1.7 * (0.72 if pd["kind"] == 1 else 1.0), 0.26, rp, pd["col"])
-					for f in pd["comp"]:
-						var offl: float = f["off"]
-						em(M_BOX, p4.x + cos(rp) * offl * pd["side"], p4.y, p4.z - sin(rp) * offl * pd["side"], 0.34 * f["s"], 1.7 * f["s"], 0.26, rp, f["col"])
 				_:
 					var s := 0.72 if pd["kind"] == 1 else 1.0
 					var ex := 1 if pd["bag"] else 0
@@ -7657,6 +7649,7 @@ func draw_dynamic() -> void:
 			if shown > 260:
 				break
 	flush_mm(glow_node.multimesh, glow_n, glow_buf)
+	crowd_flush()
 	for m in NMESH:
 		var node: MultiMeshInstance3D = dyn_nodes[m]
 		flush_mm(node.multimesh, _counts[m], _bufs[m])
@@ -7693,28 +7686,11 @@ func new_ped(c: int, kind: int) -> Dictionary:
 	pd["comp"] = comp
 	return pd
 func draw_person(x: float, y: float, z: float, rp: float, s: float, shirt: Color, pant: Color, skin: Color, hair: Color, ph: float, close: bool, extra: int, umb: Color = Color.BLACK) -> void:
-	var fx := sin(rp)
-	var fz := cos(rp)
+	# una sola pieza: el shader pinta pantalón, piel y pelo de la paleta y mueve piernas y brazos
+	var code := pal_idx(pant, PANTS, 0) + 8 * pal_idx(skin, SKINS, 0) + 64 * pal_idx(hair, HAIRS, 6 if hair.v < 0.5 else 7)
+	ce(CR_PERSON, x, y, z, rp, s, shirt, Vector4(code, ph, float(extra & 1) + (2.0 if extra & 4 else 0.0), 0.0))
 	var rx := cos(rp)
 	var rz := -sin(rp)
-	if close:
-		var sw := sin(ph) * 0.13 * s
-		for sg in [-1.0, 1.0]:
-			var g: float = sg
-			em(M_CYL, x + rx * g * 0.075 * s + fx * sw * g, y, z + rz * g * 0.075 * s + fz * sw * g, 0.12 * s, 0.5 * s, 0.12 * s, 0.0, pant)
-			em(M_SPH, x + rx * g * 0.075 * s + fx * (sw * g + 0.03 * s), y, z + rz * g * 0.075 * s + fz * (sw * g + 0.03 * s), 0.12 * s, 0.07 * s, 0.18 * s, rp, Color(0.12, 0.1, 0.09))
-			var ay := 0.5 * s if extra & 4 == 0 else 0.78 * s
-			var asw := -sw * g if extra & 4 == 0 else sin(ph * 2.0 + g) * 0.05 * s
-			em(M_CYL, x + rx * g * 0.2 * s + fx * asw, y + ay, z + rz * g * 0.2 * s + fz * asw, 0.08 * s, 0.4 * s, 0.08 * s, 0.0, shirt.darkened(0.1))
-		em(M_SPH, x, y + 0.44 * s, z, 0.34 * s, 0.56 * s, 0.22 * s, rp, shirt)
-		em(M_SPH, x, y + 0.86 * s, z, 0.22 * s, 0.26 * s, 0.22 * s, rp, skin)
-		em(M_SPH, x - fx * 0.02 * s, y + 0.99 * s, z - fz * 0.02 * s, 0.23 * s, 0.15 * s, 0.23 * s, rp, hair)
-		if extra & 1:
-			em(M_BOX, x - fx * 0.15 * s, y + 0.55 * s, z - fz * 0.15 * s, 0.26 * s, 0.32 * s, 0.12 * s, rp, Color(0.15, 0.17, 0.2))
-	else:
-		em(M_CYL, x, y, z, 0.24 * s, 0.5 * s, 0.24 * s, 0.0, pant)
-		em(M_SPH, x, y + 0.44 * s, z, 0.34 * s, 0.56 * s, 0.24 * s, rp, shirt)
-		em(M_SPH, x, y + 0.88 * s, z, 0.24 * s, 0.28 * s, 0.24 * s, 0.0, skin.lerp(hair, 0.4))
 	if extra & 2:
 		em(M_BOX, x + rx * 0.18 * s, y + 0.75 * s, z + rz * 0.18 * s, 0.03, 0.8 * s, 0.03, 0.0, Color(0.2, 0.2, 0.2))
 		em(M_SPH, x + rx * 0.1 * s, y + 1.45 * s, z + rz * 0.1 * s, 1.0 * s, 0.28 * s, 1.0 * s, 0.0, umb)
@@ -8123,6 +8099,109 @@ func draw_stars(nf: float) -> void:
 						em(M_BOX, p.x + fx * 4.5 * s, p.y + 1.9 * s, p.z + fz * 4.5 * s, 0.3 * s, 0.3 * s, 8.0 * s, r, Color(0.4, 0.75, 1.0), 0, 0, 4.0)
 		if close and who in KILLERS and nf > 0.4:
 			gl(2.0, p.x, p.y + 1.2, p.z, 1.0, 1.0, 0.0, Color(1.0, 0.1, 0.05, 0.5), 1.2)
+# ================================================================ src/crowd.gd
+# Gente y autos de una sola pieza: antes cada persona eran 8 a 10 piezas y cada auto unas 10, y armarlas
+# en cada cuadro era lo que más tardaba en el celular. Ahora es una instancia y el shader pinta y anima.
+const CR_PERSON := 0
+const CR_CAR := 1   # 1 a 5: un modelo por tipo de auto (sedán, hatch, camioneta, taxi, utilitario)
+const CAR_LN := [2.0, 1.9, 2.5, 2.0, 2.4]
+const CAR_BH := [0.45, 0.56, 0.7, 0.45, 0.55]
+var crowd_mat: ShaderMaterial
+var crowd_nodes: Array = []
+var crowd_bufs: Array = []
+var crowd_n := PackedInt32Array()
+func setup_crowd() -> void:
+	crowd_mat = ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = SHADER_CROWD.code
+	crowd_mat.shader = sh
+	var meshes2: Array = [person_mesh()]
+	for k in 5:
+		meshes2.append(car_mesh(k))
+	crowd_nodes.clear()
+	crowd_bufs.clear()
+	for m in meshes2:
+		crowd_nodes.append(new_mm_node(m, crowd_mat))
+		var b := PackedFloat32Array()
+		b.resize(2000)
+		crowd_bufs.append(b)
+	crowd_n.resize(meshes2.size())
+	crowd_n.fill(0)
+# partes (UV2.x): 0 remera, 1 pantalón, 2 piel, 3 pelo, 4 zapatos, 5 mochila, 11 brazos;
+# movimiento (UV2.y): 1 y 2 piernas, 3 y 4 brazos
+func person_mesh() -> ArrayMesh:
+	mb_begin()
+	for sd in [-1.0, 1.0]:
+		var leg := 1 if sd < 0.0 else 2
+		mb_cyl(Vector3(sd * 0.075, 0.0, 0.0), 0.06, 0.5, 6, 1, leg)
+		mb_box(Vector3(sd * 0.075, 0.0, 0.03), Vector3(0.12, 0.07, 0.18), 4, leg)
+		mb_cyl(Vector3(sd * 0.2, 0.5, 0.0), 0.04, 0.4, 5, 11, 3 if sd < 0.0 else 4)
+	mb_blob(Vector3(0, 0.72, 0), Vector3(0.17, 0.28, 0.11), 8, 5, 0, 0, 0, false)
+	mb_blob(Vector3(0, 0.99, 0), Vector3(0.11, 0.13, 0.11), 8, 5, 0, 2, 0, false)
+	mb_blob(Vector3(0, 1.065, -0.02), Vector3(0.115, 0.075, 0.115), 8, 4, 0, 3, 0, false)
+	mb_box(Vector3(0, 0.55, -0.15), Vector3(0.26, 0.32, 0.12), 5, 0)
+	return mb_end()
+# partes: 0 carrocería, 4 ruedas, 6 vidrio, 7 techo, 8 faros, 9 luces traseras, 10 cartel de taxi
+func car_mesh(kd: int) -> ArrayMesh:
+	mb_begin()
+	var ln: float = CAR_LN[kd]
+	var bh: float = CAR_BH[kd]
+	var cl := ln * (0.85 if kd == 2 else 0.5)
+	var ch := 0.4 + (0.25 if kd == 2 else 0.0)
+	var cby := 0.2 + bh * 0.88
+	mb_box(Vector3(0, 0.2, -ln * 0.16), Vector3(0.95, bh, ln * 0.68), 0, 0)
+	mb_box(Vector3(0, 0.2, ln * 0.33), Vector3(0.9, bh * 0.72, ln * 0.34), 0, 0)
+	mb_blob(Vector3(0, cby + ch * 0.5, -ln * 0.1), Vector3(0.42, ch * 0.5, cl * 0.5), 10, 5, 0, 6, 0, false)
+	mb_box(Vector3(0, cby + ch * 0.82, -ln * 0.1), Vector3(0.66, 0.05, cl * 0.7), 7, 0)
+	for sg in [-1.0, 1.0]:
+		for fz in [-0.32, 0.32]:
+			mb_blob(Vector3(sg * 0.4, 0.21, fz * ln), Vector3(0.1, 0.21, 0.21), 8, 4, 0, 4, 0, false)
+	var hy := bh * 0.85 + 0.2
+	for sg in [-0.28, 0.28]:
+		mb_box(Vector3(sg, hy - 0.06, ln * 0.5), Vector3(0.2, 0.12, 0.06), 8, 0)
+		mb_box(Vector3(sg, hy - 0.06, -ln * 0.5 - 0.03), Vector3(0.2, 0.12, 0.06), 9, 0)
+	if kd == 3:
+		mb_box(Vector3(0, cby + ch * 0.9, -ln * 0.1), Vector3(0.32, 0.1, 0.18), 10, 0)
+	return mb_end()
+func crowd_begin() -> void:
+	crowd_n.fill(0)
+# una instancia del modelo k, girada rot sobre Y y escalada sc
+func ce(k: int, x: float, y: float, z: float, rot: float, sc: float, col: Color, cu: Vector4) -> void:
+	var o: int = crowd_n[k] * 20
+	var b: PackedFloat32Array = crowd_bufs[k]
+	if o + 20 > b.size():
+		b.resize(b.size() * 2)
+		crowd_bufs[k] = b
+	var c := cos(rot) * sc
+	var s := sin(rot) * sc
+	b[o] = c
+	b[o + 1] = 0.0
+	b[o + 2] = s
+	b[o + 3] = x
+	b[o + 4] = 0.0
+	b[o + 5] = sc
+	b[o + 6] = 0.0
+	b[o + 7] = y
+	b[o + 8] = -s
+	b[o + 9] = 0.0
+	b[o + 10] = c
+	b[o + 11] = z
+	b[o + 12] = col.r
+	b[o + 13] = col.g
+	b[o + 14] = col.b
+	b[o + 15] = col.a
+	b[o + 16] = cu.x
+	b[o + 17] = cu.y
+	b[o + 18] = cu.z
+	b[o + 19] = cu.w
+	crowd_n[k] += 1
+func crowd_flush() -> void:
+	crowd_mat.set_shader_parameter("night", night)
+	for k in crowd_nodes.size():
+		flush_mm(crowd_nodes[k].multimesh, crowd_n[k], crowd_bufs[k])
+func pal_idx(c: Color, pal: Array, fallback: int) -> int:
+	var i := pal.find(c)
+	return i if i >= 0 else fallback
 # ================================================================ src/life.gd
 # Etapa 4: horario de la ciudad (casa, trabajo, escuela, calle) y uso de cada edificio para las ventanas.
 # Parte de la gente en cada lugar, hora por hora (0 a 23). Lo que falta para 1 está en la calle.
@@ -8209,7 +8288,12 @@ var lab_dc_n: int = 0
 var lab_since: float = 0.0
 var lab_zoom_prev: float = 0.0
 var lab_sum: float = 0.0
+var lab_st_total: int = 0
+# el aviso de cierre se muestra una sola vez por cierre
+var lab_crash_seen: bool = false
 func lab_reset() -> void:
+	# después de "Medir de nuevo" ya no se repite el aviso del cierre anterior
+	lab_crash_seen = lab_count > 0
 	lab_hist.clear()
 	for p in LAB_PARTS.size():
 		var a := PackedFloat32Array()
@@ -8221,6 +8305,7 @@ func lab_reset() -> void:
 	lab_k = 0
 	lab_count = 0
 	lab_stutters.clear()
+	lab_st_total = 0
 	lab_dc = 0.0
 	lab_obj = 0.0
 	lab_prim = 0.0
@@ -8237,7 +8322,10 @@ func lab_frame(delta: float) -> void:
 	lab_since += delta
 	var avg := lab_avg_frame()
 	# el cuadro largo se nota en el delta del cuadro siguiente: la culpa es del trabajo del cuadro anterior
-	if lab_count > 30 and ms > 25.0 and ms > avg * 1.5 and lab_stutters.size() < 200:
+	if lab_count > 30 and ms > 25.0 and ms > avg * 1.5:
+		if lab_stutters.size() >= 200:
+			lab_stutters.pop_front()
+			lab_st_total += 1
 		var worst := 0
 		for p in LAB_PARTS.size():
 			if lab_prev[p] > lab_prev[worst]:
@@ -8305,13 +8393,13 @@ func lab_report() -> Dictionary:
 			zoomed += 1
 	return {
 		"frame": fr, "fps": 1000.0 / maxf(fr, 0.1), "low1": lab_low1(), "parts": parts, "cpu": cpu,
-		"rest": maxf(fr - cpu, 0.0), "stutters": lab_stutters.size(), "st_part": by_part, "st_zoom": zoomed,
+		"rest": maxf(fr - cpu, 0.0), "stutters": lab_stutters.size() + lab_st_total, "st_part": by_part, "st_zoom": zoomed,
 		"dc": lab_dc / maxi(lab_dc_n, 1), "obj": lab_obj / maxi(lab_dc_n, 1), "prim": lab_prim / maxi(lab_dc_n, 1),
 		"vram": Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
 		"mem": Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0,
 		"quality": ["Baja", "Media", "Alta"][int(opts["quality"])], "res": "%dx%d" % [int(sz.x), int(sz.y)],
 		"model": OS.get_model_name(), "os": OS.get_name(), "secs": lab_since, "frames": lab_n(),
-		"pop": pop, "cars": cars.size(), "peds": peds.size(), "crash": prev_crumb != "" and not prev_crumb.contains("cierre limpio"),
+		"pop": pop, "cars": cars.size(), "peds": peds.size(), "crash": prev_crumb != "" and not prev_crumb.contains("cierre limpio") and not lab_crash_seen,
 		"crumb": prev_crumb,
 	}
 func lab_head(r: Dictionary) -> String:
@@ -11251,9 +11339,39 @@ func snapshot() -> Dictionary:
 		"terr": b64(terr), "hgt": b64(hgt), "road": b64(road), "zone": b64(zone), "bld": b64(bld), "lvl": b64(lvl), "part": b64(part),
 		"occ": b64(occ), "vari": b64(vari), "tree": b64(tree), "wire": b64(wire), "garbp": b64(garbp), "owned": b64(owned), "district": b64(district),
 	}
+# guardado automático: la foto de la partida se saca acá (rápido) y el texto y el archivo se arman en otro
+# hilo con una copia propia de los datos, así no se traba el juego cada dos días
+var save_job: int = -1
+func save_game_bg(s: int) -> void:
+	if test_city:
+		return
+	if save_job >= 0:
+		if not WorkerThreadPool.is_task_completed(save_job):
+			return
+		WorkerThreadPool.wait_for_task_completion(save_job)
+		save_job = -1
+	var d: Dictionary = snapshot().duplicate(true)
+	var path := slot_path(s)
+	var bpath := slot_path(s, true)
+	save_job = WorkerThreadPool.add_task(func(): write_save(path, bpath, d))
+func write_save(path: String, bpath: String, d: Dictionary) -> void:
+	if FileAccess.file_exists(path):
+		var old := FileAccess.get_file_as_string(path)
+		if old.length() > 100:
+			var fb := FileAccess.open(bpath, FileAccess.WRITE)
+			if fb:
+				fb.store_string(old)
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(d))
+func save_wait() -> void:
+	if save_job >= 0:
+		WorkerThreadPool.wait_for_task_completion(save_job)
+		save_job = -1
 func save_game(s: int) -> void:
 	if test_city:
 		return
+	save_wait()
 	var path := slot_path(s)
 	if FileAccess.file_exists(path):
 		var old := FileAccess.get_file_as_string(path)
@@ -12229,6 +12347,10 @@ func run_sim() -> void:
 				sim_cycle = 0
 				run_sim_stage(st)
 			print("PROFSIM %d %.1f ms" % [st, (Time.get_ticks_usec() - t2) / 5000.0])
+		for fnm in ["daily_economy", "daily_production", "daily_garbage", "daily_tourism", "daily_events", "cine_daily", "daily_politics", "check_achievements", "pick_daily_challenge"]:
+			var t4 := Time.get_ticks_usec()
+			call(fnm)
+			print("PROFDAY %s %.1f ms" % [fnm, (Time.get_ticks_usec() - t4) / 1000.0])
 		var t3 := Time.get_ticks_usec()
 		new_day()
 		print("PROFSIM new_day %.1f ms" % ((Time.get_ticks_usec() - t3) / 1000.0))
@@ -13143,6 +13265,36 @@ func run_vida(dir: String) -> void:
 		bolt_p = cam_target + Vector3(14, 0, -10)
 	elif f == 602:
 		shot_to(dir, "tormenta_rayo")
+		weather = "Soleado"
+		flash_t = 0.0
+		# gente y autos de cerca, de día y en hora pico
+		pop = 5000
+		for k in 3000:
+			spawn_agents(0.016)
+		var best: int = road_list[0]
+		for c in road_list:
+			if road[c] >= 2 and zone[c + 1] > 0:
+				best = c
+				break
+		vida_cam(best, 14.0, 17.5)
+		cam_pitch = 0.45
+	elif f == 640:
+		var cars_near := 0
+		var t0 := Time.get_ticks_usec()
+		for k in 100:
+			draw_dynamic()
+		var dms := (Time.get_ticks_usec() - t0) / 100000.0
+		print("BENCH dibujo_moviles_ms=%.2f autos=%d gente=%d instancias_gente=%d instancias_autos=%d" % [dms, cars.size(), peds.size(), crowd_n[0], crowd_n[1] + crowd_n[2] + crowd_n[3] + crowd_n[4] + crowd_n[5]])
+		bt(crowd_n[0] > 0 and cars_near == 0, "CROWD_CHECK gente de una pieza " + ("ok" if crowd_n[0] > 0 else "FALLA"))
+	elif f == 645:
+		var pc := cell_pos(peds[peds.size() / 2]["c"])
+		cam_target = pc
+		cam_goal = pc
+		cam_dist = 7.0
+		cam_dist_goal = 7.0
+		cam_pitch = 0.4
+	elif f == 650:
+		shot_to(dir, "gente_cerca")
 		print("VIDA OK" if bt_fail == 0 else "VIDA FALLA")
 		get_tree().quit()
 var sc_last: int = 0
@@ -13280,9 +13432,9 @@ func _unhandled_input(event: InputEvent) -> void:
 var idle_t: float = 0.0
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
-		crumb("cierre limpio")
 		if started:
 			save_game(slot)
+		crumb("cierre limpio")
 var first_chunks: bool = true
 func _ready() -> void:
 	if FileAccess.file_exists("user://ultimo_paso.txt"):

@@ -701,6 +701,10 @@ func run_sim() -> void:
 				sim_cycle = 0
 				run_sim_stage(st)
 			print("PROFSIM %d %.1f ms" % [st, (Time.get_ticks_usec() - t2) / 5000.0])
+		for fnm in ["daily_economy", "daily_production", "daily_garbage", "daily_tourism", "daily_events", "cine_daily", "daily_politics", "check_achievements", "pick_daily_challenge"]:
+			var t4 := Time.get_ticks_usec()
+			call(fnm)
+			print("PROFDAY %s %.1f ms" % [fnm, (Time.get_ticks_usec() - t4) / 1000.0])
 		var t3 := Time.get_ticks_usec()
 		new_day()
 		print("PROFSIM new_day %.1f ms" % ((Time.get_ticks_usec() - t3) / 1000.0))
@@ -1615,6 +1619,36 @@ func run_vida(dir: String) -> void:
 		bolt_p = cam_target + Vector3(14, 0, -10)
 	elif f == 602:
 		shot_to(dir, "tormenta_rayo")
+		weather = "Soleado"
+		flash_t = 0.0
+		# gente y autos de cerca, de día y en hora pico
+		pop = 5000
+		for k in 3000:
+			spawn_agents(0.016)
+		var best: int = road_list[0]
+		for c in road_list:
+			if road[c] >= 2 and zone[c + 1] > 0:
+				best = c
+				break
+		vida_cam(best, 14.0, 17.5)
+		cam_pitch = 0.45
+	elif f == 640:
+		var cars_near := 0
+		var t0 := Time.get_ticks_usec()
+		for k in 100:
+			draw_dynamic()
+		var dms := (Time.get_ticks_usec() - t0) / 100000.0
+		print("BENCH dibujo_moviles_ms=%.2f autos=%d gente=%d instancias_gente=%d instancias_autos=%d" % [dms, cars.size(), peds.size(), crowd_n[0], crowd_n[1] + crowd_n[2] + crowd_n[3] + crowd_n[4] + crowd_n[5]])
+		bt(crowd_n[0] > 0 and cars_near == 0, "CROWD_CHECK gente de una pieza " + ("ok" if crowd_n[0] > 0 else "FALLA"))
+	elif f == 645:
+		var pc := cell_pos(peds[peds.size() / 2]["c"])
+		cam_target = pc
+		cam_goal = pc
+		cam_dist = 7.0
+		cam_dist_goal = 7.0
+		cam_pitch = 0.4
+	elif f == 650:
+		shot_to(dir, "gente_cerca")
 		print("VIDA OK" if bt_fail == 0 else "VIDA FALLA")
 		get_tree().quit()
 var sc_last: int = 0

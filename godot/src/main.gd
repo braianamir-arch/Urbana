@@ -23,9 +23,9 @@ func _unhandled_input(event: InputEvent) -> void:
 var idle_t: float = 0.0
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED:
-		crumb("cierre limpio")
 		if started:
 			save_game(slot)
+		crumb("cierre limpio")
 var first_chunks: bool = true
 func _ready() -> void:
 	if FileAccess.file_exists("user://ultimo_paso.txt"):

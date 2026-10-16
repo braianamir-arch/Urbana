@@ -821,7 +821,7 @@ func new_day() -> void:
 	counters["pop_start"] = pop
 	counters["money_start"] = money
 	if day % 2 == 0:
-		save_game(slot)
+		save_game_bg(slot)
 	if s0 != season():
 		add_news("Empieza el " + SEASONS[season()].to_lower())
 func daily_economy() -> void:

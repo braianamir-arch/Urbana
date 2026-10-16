@@ -194,9 +194,39 @@ func snapshot() -> Dictionary:
 		"terr": b64(terr), "hgt": b64(hgt), "road": b64(road), "zone": b64(zone), "bld": b64(bld), "lvl": b64(lvl), "part": b64(part),
 		"occ": b64(occ), "vari": b64(vari), "tree": b64(tree), "wire": b64(wire), "garbp": b64(garbp), "owned": b64(owned), "district": b64(district),
 	}
+# guardado automático: la foto de la partida se saca acá (rápido) y el texto y el archivo se arman en otro
+# hilo con una copia propia de los datos, así no se traba el juego cada dos días
+var save_job: int = -1
+func save_game_bg(s: int) -> void:
+	if test_city:
+		return
+	if save_job >= 0:
+		if not WorkerThreadPool.is_task_completed(save_job):
+			return
+		WorkerThreadPool.wait_for_task_completion(save_job)
+		save_job = -1
+	var d: Dictionary = snapshot().duplicate(true)
+	var path := slot_path(s)
+	var bpath := slot_path(s, true)
+	save_job = WorkerThreadPool.add_task(func(): write_save(path, bpath, d))
+func write_save(path: String, bpath: String, d: Dictionary) -> void:
+	if FileAccess.file_exists(path):
+		var old := FileAccess.get_file_as_string(path)
+		if old.length() > 100:
+			var fb := FileAccess.open(bpath, FileAccess.WRITE)
+			if fb:
+				fb.store_string(old)
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(d))
+func save_wait() -> void:
+	if save_job >= 0:
+		WorkerThreadPool.wait_for_task_completion(save_job)
+		save_job = -1
 func save_game(s: int) -> void:
 	if test_city:
 		return
+	save_wait()
 	var path := slot_path(s)
 	if FileAccess.file_exists(path):
 		var old := FileAccess.get_file_as_string(path)

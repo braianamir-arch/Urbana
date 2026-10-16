@@ -64,6 +64,7 @@ func setup_agents() -> void:
 	glow_node = new_mm_node(gq, gm)
 	glow_buf.resize(4000)
 	dyn_nodes.append(glow_node)
+	setup_crowd()
 func gl(kind: float, x: float, y: float, z: float, sx: float, sz: float, rot: float, col: Color, sz2: float = 0.0) -> void:
 	var c := cos(rot)
 	var s := sin(rot)
@@ -107,6 +108,12 @@ func veh_lights(p: Vector3, r: float, ln: float, hw: float, hy: float, nf: float
 			em(M_BOX, p.x + rx + sr * ln * 0.5, p.y + hy, p.z + rz + cr * ln * 0.5, 0.2, 0.12, 0.06, r, Color(1.0, 0.95, 0.75), 0, 0, hl)
 			em(M_BOX, p.x + rx - sr * ln * 0.5, p.y + hy, p.z + rz - cr * ln * 0.5, 0.2, 0.12, 0.06, r, Color(0.9, 0.08, 0.06), 0, 0, tl)
 	if lit:
+		veh_glow(p, r, ln, hw, hy, beam)
+# halos de luz de un vehículo de noche (los faros en sí van en el modelo)
+func veh_glow(p: Vector3, r: float, ln: float, hw: float, hy: float, beam: float) -> void:
+	var sr := sin(r)
+	var cr := cos(r)
+	if true:
 		var halo_k := 1.5 if weather == "Lluvia" or weather == "Tormenta" else 1.0
 		var k := ln * 0.5 + beam * 0.5
 		gl(0.0, p.x + sr * k, p.y + 0.32, p.z + cr * k, 2.6 + hw, beam, r, Color(1.0, 0.92, 0.7, 0.55))
@@ -708,12 +715,12 @@ func draw_dynamic() -> void:
 	var wet_now := weather == "Lluvia" or weather == "Tormenta"
 	var lit: bool = nf > 0.25 and near and opts["quality"] >= 1
 	glow_n = 0
+	crowd_begin()
 	# solo lo que está cerca de la cámara (lo de más lejos ni se ve y costaba mucho armarlo)
 	var vr := clampf(cam_dist * 1.8 + 30.0, 70.0, 420.0)
 	var vr2 := vr * vr
 	var cx0 := cam_target.x
 	var cz0 := cam_target.z
-	var ped_lod := cam_dist > 130.0
 	for c in cars:
 		var cpath: Array = c["p"]
 		var cc0 := cell_pos(cpath[clampi(int(c["k"]), 0, cpath.size() - 1)])
@@ -732,25 +739,15 @@ func draw_dynamic() -> void:
 			continue
 		if c.get("crash", 0.0) > 0.0:
 			draw_crash(c, p, r, near2)
-		var ln: float = [2.0, 1.9, 2.5, 2.0, 2.4][kd]
-		var bh: float = [0.45, 0.56, 0.7, 0.45, 0.55][kd]
+		var ln: float = CAR_LN[kd]
+		var bh: float = CAR_BH[kd]
 		var roofc: Color = c["roof"]
-		var sr := sin(r)
-		var cr := cos(r)
-		var fw := fade
-		em(M_BOX, p.x - sr * ln * 0.16, p.y + 0.2, p.z - cr * ln * 0.16, 0.95 * fw, bh * fw, ln * 0.68, r, col, 0, 0, 0, 1.5)
-		em(M_BOX, p.x + sr * ln * 0.33, p.y + 0.2, p.z + cr * ln * 0.33, 0.9 * fw, bh * 0.72 * fw, ln * 0.34, r, col, 0, 0, 0, 1.5)
-		var cl := ln * (0.85 if kd == 2 else 0.5)
-		var ch := 0.4 + (0.25 if kd == 2 else 0.0)
-		var cby := p.y + 0.2 + bh * 0.88
-		em(M_SPH, p.x - sr * ln * 0.1, cby, p.z - cr * ln * 0.1, 0.84 * fw, ch * fw, cl, r, Color(0.07, 0.09, 0.12), 0, 0, 0, 1.5)
-		em(M_BOX, p.x - sr * ln * 0.1, cby + ch * 0.82, p.z - cr * ln * 0.1, 0.66 * fw, 0.05 * fw, cl * 0.7, r, roofc, 0, 0, 0, 1.5)
-		if near2:
-			for sg in [-1.0, 1.0]:
-				em(M_BOX, p.x + cr * sg * 0.52 + sr * ln * 0.12, p.y + 0.2 + bh * 0.95, p.z - sr * sg * 0.52 + cr * ln * 0.12, 0.1, 0.07, 0.12, r, roofc if kd != 3 else col, 0, 0, 0, 1.5)
-			if kd == 3:
-				em(M_BOX, p.x - sr * ln * 0.1, cby + ch * 0.9, p.z - cr * ln * 0.1, 0.32, 0.1, 0.18, r, Color(1.0, 0.95, 0.7), 0, 0, 0.5 + nf * 2.2)
-		veh_lights(p, r, ln, 0.4, bh * 0.85 + 0.2, nf, lit and fade > 0.9, near2, 5.0)
+		var rf := 0.0 if roofc == col else (1.0 if roofc.v > 0.5 else 2.0)
+		var on := lit and fade > 0.9
+		# una sola pieza por auto: el modelo trae carrocería, vidrios, techo, ruedas y luces
+		ce(CR_CAR + kd, p.x, p.y, p.z, r, fade, col, Vector4(rf, (0.5 + nf * 3.0) if on else 0.0, (0.5 + nf * 1.8) if on else 0.0, 2.0 if kd == 3 else 1.0))
+		if on:
+			veh_glow(p, r, ln, 0.4, bh * 0.85 + 0.2, 5.0)
 	if drive != null:
 		var pr2 := path_pos([drive["c"], drive["n"]], drive["t"], CELL * 0.18)
 		var p2: Vector3 = pr2[0]
@@ -785,12 +782,6 @@ func draw_dynamic() -> void:
 					em(M_SPH, p4.x + sin(rp) * 0.35, p4.y + 0.55, p4.z + cos(rp) * 0.35, 0.22, 0.22, 0.28, rp, Color(0.55, 0.35, 0.2))
 				3:
 					draw_bike(p4, rp, pd, pclose)
-				_ when ped_lod:
-					# de lejos: una sola pieza por persona
-					em(M_BOX, p4.x, p4.y, p4.z, 0.34, 1.7 * (0.72 if pd["kind"] == 1 else 1.0), 0.26, rp, pd["col"])
-					for f in pd["comp"]:
-						var offl: float = f["off"]
-						em(M_BOX, p4.x + cos(rp) * offl * pd["side"], p4.y, p4.z - sin(rp) * offl * pd["side"], 0.34 * f["s"], 1.7 * f["s"], 0.26, rp, f["col"])
 				_:
 					var s := 0.72 if pd["kind"] == 1 else 1.0
 					var ex := 1 if pd["bag"] else 0
@@ -993,6 +984,7 @@ func draw_dynamic() -> void:
 			if shown > 260:
 				break
 	flush_mm(glow_node.multimesh, glow_n, glow_buf)
+	crowd_flush()
 	for m in NMESH:
 		var node: MultiMeshInstance3D = dyn_nodes[m]
 		flush_mm(node.multimesh, _counts[m], _bufs[m])
@@ -1029,28 +1021,11 @@ func new_ped(c: int, kind: int) -> Dictionary:
 	pd["comp"] = comp
 	return pd
 func draw_person(x: float, y: float, z: float, rp: float, s: float, shirt: Color, pant: Color, skin: Color, hair: Color, ph: float, close: bool, extra: int, umb: Color = Color.BLACK) -> void:
-	var fx := sin(rp)
-	var fz := cos(rp)
+	# una sola pieza: el shader pinta pantalón, piel y pelo de la paleta y mueve piernas y brazos
+	var code := pal_idx(pant, PANTS, 0) + 8 * pal_idx(skin, SKINS, 0) + 64 * pal_idx(hair, HAIRS, 6 if hair.v < 0.5 else 7)
+	ce(CR_PERSON, x, y, z, rp, s, shirt, Vector4(code, ph, float(extra & 1) + (2.0 if extra & 4 else 0.0), 0.0))
 	var rx := cos(rp)
 	var rz := -sin(rp)
-	if close:
-		var sw := sin(ph) * 0.13 * s
-		for sg in [-1.0, 1.0]:
-			var g: float = sg
-			em(M_CYL, x + rx * g * 0.075 * s + fx * sw * g, y, z + rz * g * 0.075 * s + fz * sw * g, 0.12 * s, 0.5 * s, 0.12 * s, 0.0, pant)
-			em(M_SPH, x + rx * g * 0.075 * s + fx * (sw * g + 0.03 * s), y, z + rz * g * 0.075 * s + fz * (sw * g + 0.03 * s), 0.12 * s, 0.07 * s, 0.18 * s, rp, Color(0.12, 0.1, 0.09))
-			var ay := 0.5 * s if extra & 4 == 0 else 0.78 * s
-			var asw := -sw * g if extra & 4 == 0 else sin(ph * 2.0 + g) * 0.05 * s
-			em(M_CYL, x + rx * g * 0.2 * s + fx * asw, y + ay, z + rz * g * 0.2 * s + fz * asw, 0.08 * s, 0.4 * s, 0.08 * s, 0.0, shirt.darkened(0.1))
-		em(M_SPH, x, y + 0.44 * s, z, 0.34 * s, 0.56 * s, 0.22 * s, rp, shirt)
-		em(M_SPH, x, y + 0.86 * s, z, 0.22 * s, 0.26 * s, 0.22 * s, rp, skin)
-		em(M_SPH, x - fx * 0.02 * s, y + 0.99 * s, z - fz * 0.02 * s, 0.23 * s, 0.15 * s, 0.23 * s, rp, hair)
-		if extra & 1:
-			em(M_BOX, x - fx * 0.15 * s, y + 0.55 * s, z - fz * 0.15 * s, 0.26 * s, 0.32 * s, 0.12 * s, rp, Color(0.15, 0.17, 0.2))
-	else:
-		em(M_CYL, x, y, z, 0.24 * s, 0.5 * s, 0.24 * s, 0.0, pant)
-		em(M_SPH, x, y + 0.44 * s, z, 0.34 * s, 0.56 * s, 0.24 * s, rp, shirt)
-		em(M_SPH, x, y + 0.88 * s, z, 0.24 * s, 0.28 * s, 0.24 * s, 0.0, skin.lerp(hair, 0.4))
 	if extra & 2:
 		em(M_BOX, x + rx * 0.18 * s, y + 0.75 * s, z + rz * 0.18 * s, 0.03, 0.8 * s, 0.03, 0.0, Color(0.2, 0.2, 0.2))
 		em(M_SPH, x + rx * 0.1 * s, y + 1.45 * s, z + rz * 0.1 * s, 1.0 * s, 0.28 * s, 1.0 * s, 0.0, umb)

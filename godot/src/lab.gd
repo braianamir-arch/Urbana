@@ -15,7 +15,12 @@ var lab_dc_n: int = 0
 var lab_since: float = 0.0
 var lab_zoom_prev: float = 0.0
 var lab_sum: float = 0.0
+var lab_st_total: int = 0
+# el aviso de cierre se muestra una sola vez por cierre
+var lab_crash_seen: bool = false
 func lab_reset() -> void:
+	# después de "Medir de nuevo" ya no se repite el aviso del cierre anterior
+	lab_crash_seen = lab_count > 0
 	lab_hist.clear()
 	for p in LAB_PARTS.size():
 		var a := PackedFloat32Array()
@@ -27,6 +32,7 @@ func lab_reset() -> void:
 	lab_k = 0
 	lab_count = 0
 	lab_stutters.clear()
+	lab_st_total = 0
 	lab_dc = 0.0
 	lab_obj = 0.0
 	lab_prim = 0.0
@@ -43,7 +49,10 @@ func lab_frame(delta: float) -> void:
 	lab_since += delta
 	var avg := lab_avg_frame()
 	# el cuadro largo se nota en el delta del cuadro siguiente: la culpa es del trabajo del cuadro anterior
-	if lab_count > 30 and ms > 25.0 and ms > avg * 1.5 and lab_stutters.size() < 200:
+	if lab_count > 30 and ms > 25.0 and ms > avg * 1.5:
+		if lab_stutters.size() >= 200:
+			lab_stutters.pop_front()
+			lab_st_total += 1
 		var worst := 0
 		for p in LAB_PARTS.size():
 			if lab_prev[p] > lab_prev[worst]:
@@ -111,13 +120,13 @@ func lab_report() -> Dictionary:
 			zoomed += 1
 	return {
 		"frame": fr, "fps": 1000.0 / maxf(fr, 0.1), "low1": lab_low1(), "parts": parts, "cpu": cpu,
-		"rest": maxf(fr - cpu, 0.0), "stutters": lab_stutters.size(), "st_part": by_part, "st_zoom": zoomed,
+		"rest": maxf(fr - cpu, 0.0), "stutters": lab_stutters.size() + lab_st_total, "st_part": by_part, "st_zoom": zoomed,
 		"dc": lab_dc / maxi(lab_dc_n, 1), "obj": lab_obj / maxi(lab_dc_n, 1), "prim": lab_prim / maxi(lab_dc_n, 1),
 		"vram": Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED) / 1048576.0,
 		"mem": Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0,
 		"quality": ["Baja", "Media", "Alta"][int(opts["quality"])], "res": "%dx%d" % [int(sz.x), int(sz.y)],
 		"model": OS.get_model_name(), "os": OS.get_name(), "secs": lab_since, "frames": lab_n(),
-		"pop": pop, "cars": cars.size(), "peds": peds.size(), "crash": prev_crumb != "" and not prev_crumb.contains("cierre limpio"),
+		"pop": pop, "cars": cars.size(), "peds": peds.size(), "crash": prev_crumb != "" and not prev_crumb.contains("cierre limpio") and not lab_crash_seen,
 		"crumb": prev_crumb,
 	}
 func lab_head(r: Dictionary) -> String:
