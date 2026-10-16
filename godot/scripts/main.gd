@@ -806,7 +806,7 @@ func sim_process(delta: float) -> void:
 				new_day_part(p)
 		day_queue = DAY_PARTS.duplicate()
 	if not day_queue.is_empty():
-		lab_step = 22
+		lab_step = 22 + DAY_PARTS.find(day_queue[0])
 		new_day_part(day_queue.pop_front())
 # en el juego las etapas pesadas se reparten en más cuadros (mismo trabajo, en el mismo orden que
 # run_sim_stage, que es lo que usan las pruebas y la carga de partidas)
@@ -8406,7 +8406,16 @@ func warm_shaders() -> void:
 		mi.position = Vector3((k + 5) * 0.01, 0.01, 0)
 		warm_node.add_child(mi)
 		k += 1
-	warm_frames = 4
+	# lluvia y nieve: sus partículas se armaban recién con la primera tormenta (un corte de casi medio segundo)
+	if opts["g_rain"] and int(opts["quality"]) >= 1:
+		if wfx == null:
+			make_wfx()
+		config_wfx("rain")
+		wfx.global_position = cam.global_position - cam.global_transform.basis.z * 20.0
+		wfx.emitting = true
+		warm_rain = true
+	warm_frames = 6
+var warm_rain: bool = false
 func warm_step() -> void:
 	if warm_node == null:
 		if started and not warm_done and not first_chunks:
@@ -8414,9 +8423,17 @@ func warm_step() -> void:
 			warm_shaders()
 		return
 	warm_frames -= 1
+	if warm_rain and warm_frames == 3:
+		config_wfx("snow")
+		wfx.emitting = true
 	if warm_frames <= 0:
 		warm_node.queue_free()
 		warm_node = null
+		if warm_rain:
+			warm_rain = false
+			wfx.emitting = wfx_kind != ""
+			if wfx_kind != "":
+				config_wfx(wfx_kind)
 # ================================================================ src/life.gd
 # Etapa 4: horario de la ciudad (casa, trabajo, escuela, calle) y uso de cada edificio para las ventanas.
 # Parte de la gente en cada lugar, hora por hora (0 a 23). Lo que falta para 1 está en la calle.
@@ -8504,10 +8521,13 @@ var lab_since: float = 0.0
 var lab_zoom_prev: float = 0.0
 var lab_sum: float = 0.0
 # qué paso de la simulación corrió en este cuadro (para decir cuál traba)
-const LAB_STEPS := ["listas", "luz: redes", "luz: consumo", "luz: reparto", "agua: redes", "agua: consumo", "agua: reparto", "cobertura de servicios", "contaminación", "ambiente (1/2)", "ambiente (2/2)", "tránsito: caminos", "tránsito: preparar", "tránsito: viajes 1", "tránsito: viajes 2", "tránsito: viajes 3", "tránsito: viajes 4", "tránsito: viajes 5", "felicidad", "crecimiento", "estadísticas e incendios", "progreso", "cambio de día y guardado"]
+const LAB_STEPS := ["listas", "luz: redes", "luz: consumo", "luz: reparto", "agua: redes", "agua: consumo", "agua: reparto", "cobertura de servicios", "contaminación", "ambiente (1/2)", "ambiente (2/2)", "tránsito: caminos", "tránsito: preparar", "tránsito: viajes 1", "tránsito: viajes 2", "tránsito: viajes 3", "tránsito: viajes 4", "tránsito: viajes 5", "felicidad", "crecimiento", "estadísticas e incendios", "progreso", "día: empieza", "día: economía", "día: producción", "día: basura", "día: turismo", "día: eventos y clima", "día: cine", "día: política", "día: cambio de estación", "día: historial y logros", "día: guardado"]
 var lab_step: int = -1
 var lab_prev_step: int = -1
 var lab_st_total: int = 0
+# distancia de la cámara: de cerca se dibuja la versión con más detalle y pesa más
+var lab_dist_sum: float = 0.0
+var lab_near_frames: int = 0
 # el aviso de cierre se muestra una sola vez por cierre
 var lab_crash_seen: bool = false
 func lab_reset() -> void:
@@ -8525,6 +8545,8 @@ func lab_reset() -> void:
 	lab_count = 0
 	lab_stutters.clear()
 	lab_st_total = 0
+	lab_dist_sum = 0.0
+	lab_near_frames = 0
 	lab_dc = 0.0
 	lab_obj = 0.0
 	lab_prim = 0.0
@@ -8561,6 +8583,9 @@ func lab_frame(delta: float) -> void:
 		lab_prev[p] = lab_cur[p]
 		lab_cur[p] = 0.0
 	lab_zoom_prev = cam_dist
+	lab_dist_sum += cam_dist
+	if b_near_on:
+		lab_near_frames += 1
 	lab_prev_step = lab_step
 	lab_step = -1
 	if Engine.get_process_frames() % 30 == 0:
@@ -8622,9 +8647,10 @@ func lab_report() -> Dictionary:
 		"model": OS.get_model_name(), "os": OS.get_name(), "secs": lab_since, "frames": lab_n(),
 		"pop": pop, "cars": cars.size(), "peds": peds.size(), "crash": prev_crumb != "" and not prev_crumb.contains("cierre limpio") and not lab_crash_seen,
 		"crumb": prev_crumb,
+		"dist": lab_dist_sum / maxi(lab_count, 1), "near": 100.0 * lab_near_frames / maxi(lab_count, 1),
 	}
 func lab_head(r: Dictionary) -> String:
-	return "Proyecto URBANA en Godot 4.7 (carpeta godot/, el código se edita en godot/src/*.gd y se arma con python3 tools/godot_modules.py build). Medido con la Sala de computación en mi celular (%s, %s), calidad %s, pantalla %s, ciudad de %d vecinos, %d autos y %d personas en la calle, durante %d s." % [r["model"], r["os"], r["quality"], r["res"], r["pop"], r["cars"], r["peds"], int(r["secs"])]
+	return "Proyecto URBANA en Godot 4.7 (carpeta godot/, el código se edita en godot/src/*.gd y se arma con python3 tools/godot_modules.py build). Medido con la Sala de computación en mi celular (%s, %s), calidad %s, pantalla %s, ciudad de %d vecinos, %d autos y %d personas en la calle, durante %d s. Cámara a %.0f m de promedio, %.0f %% del tiempo acercada (edificios con todo el detalle)." % [r["model"], r["os"], r["quality"], r["res"], r["pop"], r["cars"], r["peds"], int(r["secs"]), r["dist"], r["near"]]
 func lab_parts_text(r: Dictionary) -> String:
 	var t := "Cuadro promedio %.1f ms (%.0f fps, el 1 %% más lento a %.0f fps). Por parte, promedio y peor cuadro:" % [r["frame"], r["fps"], r["low1"]]
 	for k in r["parts"]:

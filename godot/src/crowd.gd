@@ -163,7 +163,16 @@ func warm_shaders() -> void:
 		mi.position = Vector3((k + 5) * 0.01, 0.01, 0)
 		warm_node.add_child(mi)
 		k += 1
-	warm_frames = 4
+	# lluvia y nieve: sus partículas se armaban recién con la primera tormenta (un corte de casi medio segundo)
+	if opts["g_rain"] and int(opts["quality"]) >= 1:
+		if wfx == null:
+			make_wfx()
+		config_wfx("rain")
+		wfx.global_position = cam.global_position - cam.global_transform.basis.z * 20.0
+		wfx.emitting = true
+		warm_rain = true
+	warm_frames = 6
+var warm_rain: bool = false
 func warm_step() -> void:
 	if warm_node == null:
 		if started and not warm_done and not first_chunks:
@@ -171,6 +180,14 @@ func warm_step() -> void:
 			warm_shaders()
 		return
 	warm_frames -= 1
+	if warm_rain and warm_frames == 3:
+		config_wfx("snow")
+		wfx.emitting = true
 	if warm_frames <= 0:
 		warm_node.queue_free()
 		warm_node = null
+		if warm_rain:
+			warm_rain = false
+			wfx.emitting = wfx_kind != ""
+			if wfx_kind != "":
+				config_wfx(wfx_kind)

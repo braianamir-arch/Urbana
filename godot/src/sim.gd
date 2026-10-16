@@ -43,7 +43,7 @@ func sim_process(delta: float) -> void:
 				new_day_part(p)
 		day_queue = DAY_PARTS.duplicate()
 	if not day_queue.is_empty():
-		lab_step = 22
+		lab_step = 22 + DAY_PARTS.find(day_queue[0])
 		new_day_part(day_queue.pop_front())
 # en el juego las etapas pesadas se reparten en más cuadros (mismo trabajo, en el mismo orden que
 # run_sim_stage, que es lo que usan las pruebas y la carga de partidas)
