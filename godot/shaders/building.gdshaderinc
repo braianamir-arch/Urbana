@@ -5,12 +5,12 @@ uniform float snow = 0.0;
 uniform float wet = 0.0;
 uniform float cshadow = 0.0;
 uniform float ao_on = 0.0;
-uniform float tex_on = 0.0;
+uniform float tex_on = 0.0;     // 0 en calidad Baja: colores lisos
 // etapa 4: presencia (casas, trabajos, escuelas, negocios), despiertos en casa y hora (life.gd)
 uniform vec4 pres = vec4(0.9, 0.3, 0.0, 0.5);
 uniform float awake = 0.6;
 uniform float hourf = 12.0;
-uniform float wind = 0.0;       // 1 con viento (g_wind): mueve el follaje     // 0 en calidad Baja: colores lisos
+uniform float wind = 0.0;       // 1 con viento (g_wind): mueve el follaje
 uniform vec4 hinfo = vec4(1.0, 0.0, 1.0, 0.0);
 uniform sampler2D hmap : filter_linear, repeat_disable;
 uniform sampler2D ctex : filter_linear, repeat_enable;

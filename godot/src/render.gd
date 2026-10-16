@@ -217,7 +217,8 @@ var water_simple_mat: StandardMaterial3D
 func apply_quality() -> void:
 	var q: int = opts["quality"]
 	# calidad Baja usa solo la versión lejana de los edificios: hay que rehacer los bloques
-	if bq_last >= 0 and (bq_last == 0) != (q == 0):
+	# cualquier cambio de calidad rehace los bloques (Media y Alta también dibujan cosas distintas)
+	if bq_last >= 0 and bq_last != q:
 		mark_all_dirty()
 	bq_last = q
 	RenderingServer.directional_shadow_atlas_set_size(2048 if q < 2 else 4096, true)
@@ -398,6 +399,12 @@ func set_city_tex(on: bool) -> void:
 			m.set_shader_parameter("alb_arr", a)
 			m.set_shader_parameter("nrm_arr", n)
 		city_tex_loaded = true
+	elif not on and city_tex_loaded and int(opts["quality"]) == 0:
+		# en Baja (y en el modo seguro) se sueltan las texturas para liberar memoria de video
+		for m in [building_mat, building_lite_mat, city_mat]:
+			m.set_shader_parameter("alb_arr", null)
+			m.set_shader_parameter("nrm_arr", null)
+		city_tex_loaded = false
 	for m in [building_mat, building_lite_mat, city_mat]:
 		m.set_shader_parameter("tex_on", 1.0 if on else 0.0)
 func use_tex_terrain() -> bool:
@@ -1126,6 +1133,8 @@ func emit_def(i: int, p: Vector3) -> void:
 			em(M_BOX, x + w * 0.3, y, z - w * 0.3, 0.3, h + 8.0, 0.3, 0.0, Color(0.95, 0.75, 0.1))
 			em(M_BOX, x + w * 0.1, y + h + 7.6, z - w * 0.3, w * 0.5, 0.3, 0.3, 0.0, Color(0.95, 0.75, 0.1))
 			return
+	# por las dudas: un especial sin receta se ve como una caja de su color
+	em(M_BOX, x, y, z, w * 0.8, 3.0, w * 0.8, 0.0, col)
 func build_overlay() -> void:
 	var mm := overlay_node.multimesh
 	if view_mode == "":

@@ -13,7 +13,7 @@ timeout 4800 xvfb-run -a -s "-screen 0 1280x720x24" "$GODOT" --path "$ROOT/godot
 PID=$!
 # un error de sintaxis deja a Godot abierto sin hacer nada: se corta enseguida
 while kill -0 $PID 2>/dev/null; do
-	if grep -q "Parse Error" "$OUT/album.log" 2>/dev/null; then sleep 1; pkill -P $PID; pkill -x godot; break; fi
+	if grep -q "Parse Error" "$OUT/album.log" 2>/dev/null; then sleep 1; kill -- -$PID 2>/dev/null; pkill -P $PID; break; fi
 	sleep 2
 done
 wait $PID 2>/dev/null

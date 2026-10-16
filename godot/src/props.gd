@@ -164,6 +164,10 @@ func emit_street_furniture(i: int, p: Vector3, y: float, t: int, horiz: bool) ->
 		var rot := (PI if side > 0 else 0.0) if horiz else (-PI * 0.5 if side > 0 else PI * 0.5)
 		var bx := p.x + off.x
 		var bz := p.z + off.y
+		# del lado del farol (mitad de la celda) el mobiliario se corre para no atravesarlo
+		if side == -1 and t >= 2 and (cx(i) + cz(i) * 3) % 3 == 0:
+			bx += along.x * 1.3
+			bz += along.y * 1.3
 		if zone[j] == Z_R and lvl[j] >= 1 and t == 2 and hsh(i, side + 30) < 0.35:
 			# árbol de vereda (chico)
 			var kind: int = [1, 2, 3, 1][int(hsh(i, side + 31) * 4.0) % 4]

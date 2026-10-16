@@ -68,7 +68,7 @@ func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 	var seg: int = [8, 5, 4][lod]
 	var bseg: int = [8, 5, 5][lod]
 	var brings: int = [6, 3, 3][lod]
-	var bare := f == 1 and kind in [1, 2, 3, 7]
+	var bare := f == 1 and kind in [1, 2, 3]
 	var nb: int = [10, 2, 1][lod]
 	var jit := func(k: int, q: int) -> float: return hsh(sd * 7 + k, q) - 0.5
 	match kind:

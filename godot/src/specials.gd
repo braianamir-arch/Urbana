@@ -32,7 +32,7 @@ func emit_special(i: int, p: Vector3) -> bool:
 	if not special_model.has(id):
 		return false
 	var d: Dictionary = DEF[id]
-	if d["c"] == "wonder" and wonder_progress.get(i, WONDER_STEPS) < WONDER_STEPS:
+	if d["c"] == "wonder" and wonder_progress.get(i, 0) < WONDER_STEPS:
 		return false
 	var sz: int = d["sz"]
 	var x := p.x + (sz - 1) * CELL * 0.5
