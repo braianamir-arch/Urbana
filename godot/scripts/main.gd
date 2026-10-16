@@ -788,10 +788,13 @@ func sim_process(delta: float) -> void:
 	if sim_stage < 0 and sim_acc >= 1.0:
 		sim_acc = 0.0
 		sim_stage = 0
-	if sim_stage >= 0:
+	# a la velocidad más rápida van dos pasos por cuadro, así la ciudad crece al mismo ritmo que antes
+	for rep_k in (2 if m >= 4.0 else 1):
+		if sim_stage < 0:
+			break
 		run_sim_step(sim_stage)
 		sim_stage += 1
-		if sim_stage > 11:
+		if sim_stage > 21:
 			sim_stage = -1
 			sim_cycle += 1
 	if day_timer >= DAY_SECONDS:
@@ -806,34 +809,48 @@ func run_sim_step(k: int) -> void:
 		0:
 			collect_lists()
 			net_on = sim_dirty or sim_cycle % 5 == 0
-		1:
+		1, 2, 3, 4, 5, 6:
 			if net_on:
-				net_pass(0)
-		2:
-			if net_on:
-				net_pass(1)
-				net_finish()
-		3:
+				var ps := (k - 1) / 3
+				match (k - 1) % 3:
+					0:
+						net_a(ps)
+					1:
+						net_b(ps)
+					2:
+						net_c(ps)
+						if ps == 1:
+							net_finish()
+		7:
 			compute_coverage()
-		4:
+		8:
 			env_a()
-		5:
-			env_b()
-		6:
+		9:
+			env_b_part(0, 2)
+		10:
+			env_b_part(1, 2)
+		11:
 			tr_on = sim_dirty or sim_cycle % 3 == 0
 			if tr_on:
 				traffic_a()
-		7:
+		12:
 			if tr_on:
-				traffic_b()
-		8:
+				tb_start()
+		13, 14, 15, 16:
+			if tr_on:
+				tb_trips(65)
+		17:
+			if tr_on:
+				tb_trips(tb_sample)
+				tb_end()
+		18:
 			compute_happiness()
-		9:
+		19:
 			grow_zones()
-		10:
+		20:
 			compute_stats()
 			fire_tick()
-		11:
+		21:
 			sim_dirty = false
 			check_progress()
 func run_sim_stage(s: int) -> void:
@@ -884,6 +901,16 @@ func compute_networks() -> void:
 	net_finish()
 # una red (0 luz, 1 agua): en el juego cada una va en su propio cuadro para no trabar
 func net_pass(pass_i: int) -> void:
+	net_a(pass_i)
+	net_b(pass_i)
+	net_c(pass_i)
+var nt_sup: Array = []
+var nt_use: Array = []
+var nt_ncomp: int = 0
+var nt_bcid: Dictionary = {}
+var nt_cond := PackedByteArray()
+# 1) qué celdas conducen y cómo se agrupan en redes
+func net_a(pass_i: int) -> void:
 	var water := pass_i == 1
 	comp.resize(N * N)
 	comp.fill(-1)
@@ -891,8 +918,13 @@ func net_pass(pass_i: int) -> void:
 	var use: Array = []
 	var ncomp := 0
 	var q := PackedInt32Array()
+	# conducts() una sola vez por celda (antes se preguntaba hasta 4 veces)
+	nt_cond.resize(N * N)
 	for i in N * N:
-		if comp[i] >= 0 or not conducts(i, water):
+		nt_cond[i] = 1 if conducts(i, water) else 0
+	var cond := nt_cond
+	for i in N * N:
+		if comp[i] >= 0 or cond[i] == 0:
 			continue
 		var cid := ncomp
 		ncomp += 1
@@ -907,18 +939,26 @@ func net_pass(pass_i: int) -> void:
 			head += 1
 			var x := cx(j)
 			var z := cz(j)
-			if x > 0 and comp[j - 1] < 0 and conducts(j - 1, water):
+			if x > 0 and comp[j - 1] < 0 and cond[j - 1] == 1:
 				comp[j - 1] = cid
 				q.append(j - 1)
-			if x < N - 1 and comp[j + 1] < 0 and conducts(j + 1, water):
+			if x < N - 1 and comp[j + 1] < 0 and cond[j + 1] == 1:
 				comp[j + 1] = cid
 				q.append(j + 1)
-			if z > 0 and comp[j - N] < 0 and conducts(j - N, water):
+			if z > 0 and comp[j - N] < 0 and cond[j - N] == 1:
 				comp[j - N] = cid
 				q.append(j - N)
-			if z < N - 1 and comp[j + N] < 0 and conducts(j + N, water):
+			if z < N - 1 and comp[j + N] < 0 and cond[j + N] == 1:
 				comp[j + N] = cid
 				q.append(j + N)
+	nt_sup = sup
+	nt_use = use
+	nt_ncomp = ncomp
+# 2) cuánto consume y produce cada red
+func net_b(pass_i: int) -> void:
+	var water := pass_i == 1
+	var sup: Array = nt_sup
+	var use: Array = nt_use
 	var bcid := {}
 	for i in N * N:
 		if bld[i] > 0 and (part[i] < 0 or part[i] == i):
@@ -954,6 +994,14 @@ func net_pass(pass_i: int) -> void:
 				sup[cid] += float(d[key]) * eff
 			else:
 				use[cid] += 3.0 + float(d["upk"]) * 0.05
+	nt_bcid = bcid
+# 3) a quién le llega
+func net_c(pass_i: int) -> void:
+	var water := pass_i == 1
+	var sup: Array = nt_sup
+	var use: Array = nt_use
+	var ncomp := nt_ncomp
+	var bcid: Dictionary = nt_bcid
 	var tot_sup := 0.0
 	var tot_use := 0.0
 	var frac: Array = []
@@ -1108,15 +1156,22 @@ func env_a() -> void:
 		if tree[i] > 0:
 			pollution[i] -= 0.06
 func env_b() -> void:
+	env_b_part(0, 2)
+	env_b_part(1, 2)
+func env_b_part(k: int, parts: int) -> void:
 	var pc: PackedFloat32Array = cov[CV_POL]
 	var pk: PackedFloat32Array = cov[CV_PARK]
 	var hc: PackedFloat32Array = cov[CV_HEALTH]
 	var e1: PackedFloat32Array = cov[CV_EDU1]
 	var tc: PackedFloat32Array = cov[CV_TRANSIT]
 	var crime_mod: float = mods["crime"] - (0.1 if has_decree("patrulla") else 0.0) - (0.08 if has_decree("toque") else 0.0)
-	env_half = 1 - env_half
+	if k == 0:
+		env_half = 1 - env_half
 	var half := N * N / 2
-	for i in range(env_half * half, env_half * half + half + (N * N - 2 * half) * env_half):
+	var r0 := env_half * half
+	var r1 := env_half * half + half + (N * N - 2 * half) * env_half
+	var ln := r1 - r0
+	for i in range(r0 + ln * k / parts, r0 + ln * (k + 1) / parts):
 		var p := clampf(pollution[i], 0.0, 1.5)
 		pollution[i] = p
 		if terr[i] == T_WATER:
@@ -1188,9 +1243,20 @@ func traffic_a() -> void:
 	tr_dist = dist
 	tr_nxt = nxt
 func traffic_b() -> void:
+	tb_start()
+	tb_trips(tb_sample)
+	tb_end()
+var tb_newload := PackedFloat32Array()
+var tb_homes: Array = []
+var tb_sample: int = 0
+var tb_done: int = 0
+var tb_w: float = 0.0
+var tb_tot_len: float = 0.0
+var tb_trips_n: int = 0
+var tb_green: float = 0.0
+var tb_lots: Array = []
+func tb_start() -> void:
 	var nn := N * N
-	var dist := tr_dist
-	var nxt := tr_nxt
 	var newload := PackedFloat32Array()
 	newload.resize(nn)
 	newload.fill(0.0)
@@ -1210,7 +1276,30 @@ func traffic_b() -> void:
 	for a in anchors:
 		if bld[a] > 0 and DEF[bld[a]].get("park", false):
 			lots.append(a)
-	for s in sample:
+	tb_newload = newload
+	tb_homes = homes
+	tb_sample = sample
+	tb_done = 0
+	tb_w = w
+	tb_tot_len = tot_len
+	tb_trips_n = trips
+	tb_green = green
+	tb_lots = lots
+# hasta n viajes más (en el juego van en tandas, en el mismo orden)
+func tb_trips(n: int) -> void:
+	var nn := N * N
+	var dist := tr_dist
+	var nxt := tr_nxt
+	var newload := tb_newload
+	var homes: Array = tb_homes
+	var w := tb_w
+	var tot_len := tb_tot_len
+	var trips := tb_trips_n
+	var green := tb_green
+	var tcov: PackedFloat32Array = cov[CV_TRANSIT]
+	var lots: Array = tb_lots
+	var end := mini(tb_done + n, tb_sample)
+	for s in range(tb_done, end):
 		var h: int = homes[randi() % homes.size()]
 		var r0 := -1
 		for o in [1, -1, N, -N]:
@@ -1247,6 +1336,17 @@ func traffic_b() -> void:
 		commute[h] = c
 		if car_paths.size() < 70 and path.size() > 3:
 			car_paths.append(path)
+	tb_done = end
+	tb_newload = newload
+	tb_tot_len = tot_len
+	tb_trips_n = trips
+	tb_green = green
+func tb_end() -> void:
+	var nn := N * N
+	var newload := tb_newload
+	var tot_len := tb_tot_len
+	var trips := tb_trips_n
+	var green := tb_green
 	for i in nn:
 		tload[i] = tload[i] * 0.4 + newload[i] * 0.6
 	avg_commute = tot_len / maxf(trips, 1)
@@ -6677,8 +6777,10 @@ var ship_t: float = 0.0
 var garbage_t: float = 0.0
 var flag_days: int = 0
 # etapa 5: humo de chimeneas, agua de las fuentes y rayos con tormenta
-var burn_cells := PackedInt32Array()
-var burn_dirty: bool = true
+var road_list_seen: bool = false
+# celdas incendiadas: se revisa un pedazo del mapa por cuadro (recorrerlo entero trababa)
+var burn_set: Dictionary = {}
+var burn_sweep: int = 0
 var smoke_t: float = 0.0
 var smoke_n: int = 0
 var flash_t: float = 0.0
@@ -6803,8 +6905,13 @@ func agents_process(delta: float) -> void:
 	if speed == 0:
 		m = 0.0
 	var dt := delta * m
-	if sim_dirty or road_list.is_empty():
+	# la lista de calles se rehace una vez por cambio (y cada segundo mientras se sigue construyendo);
+	# antes se rehacía en todos los cuadros hasta que terminaba la vuelta de simulación
+	if road_list.is_empty() or (sim_dirty and (not road_list_seen or Engine.get_process_frames() % 60 == 0)):
 		rebuild_road_list()
+		road_list_seen = true
+	if not sim_dirty:
+		road_list_seen = false
 	for c in anim_cells.keys():
 		anim_cells[c] = anim_cells[c] - dt
 		if anim_cells[c] <= 0.0:
@@ -7582,13 +7689,13 @@ func draw_dynamic() -> void:
 		if randf() < 0.05:
 			parts.append({"p": Vector3(bx, p9.y + 0.5, bz), "v": Vector3(randf_range(-1, 1), 1.0, randf_range(-1, 1)), "t": 1.2, "g": 0.0, "col": Color(0.8, 0.75, 0.65), "s": 0.9})
 	# incendios: la lista de celdas se rehace cada medio segundo, no se recorre todo el mapa en cada cuadro
-	if Engine.get_process_frames() % 30 == 0 or burn_dirty:
-		burn_dirty = false
-		burn_cells.clear()
-		for i in N * N:
-			if burn[i] > 0.0:
-				burn_cells.append(i)
-	for i in burn_cells:
+	for k in range(burn_sweep, mini(burn_sweep + 512, N * N)):
+		if burn[k] > 0.0:
+			burn_set[k] = true
+		elif burn_set.has(k):
+			burn_set.erase(k)
+	burn_sweep = (burn_sweep + 512) % (N * N)
+	for i in burn_set.keys():
 		if burn[i] > 0.0:
 			emit_flames(cell_pos(i), i)
 	if flag_days > 0 and cam_dist < 250.0:

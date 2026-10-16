@@ -12,8 +12,10 @@ var ship_t: float = 0.0
 var garbage_t: float = 0.0
 var flag_days: int = 0
 # etapa 5: humo de chimeneas, agua de las fuentes y rayos con tormenta
-var burn_cells := PackedInt32Array()
-var burn_dirty: bool = true
+var road_list_seen: bool = false
+# celdas incendiadas: se revisa un pedazo del mapa por cuadro (recorrerlo entero trababa)
+var burn_set: Dictionary = {}
+var burn_sweep: int = 0
 var smoke_t: float = 0.0
 var smoke_n: int = 0
 var flash_t: float = 0.0
@@ -138,8 +140,13 @@ func agents_process(delta: float) -> void:
 	if speed == 0:
 		m = 0.0
 	var dt := delta * m
-	if sim_dirty or road_list.is_empty():
+	# la lista de calles se rehace una vez por cambio (y cada segundo mientras se sigue construyendo);
+	# antes se rehacía en todos los cuadros hasta que terminaba la vuelta de simulación
+	if road_list.is_empty() or (sim_dirty and (not road_list_seen or Engine.get_process_frames() % 60 == 0)):
 		rebuild_road_list()
+		road_list_seen = true
+	if not sim_dirty:
+		road_list_seen = false
 	for c in anim_cells.keys():
 		anim_cells[c] = anim_cells[c] - dt
 		if anim_cells[c] <= 0.0:
@@ -917,13 +924,13 @@ func draw_dynamic() -> void:
 		if randf() < 0.05:
 			parts.append({"p": Vector3(bx, p9.y + 0.5, bz), "v": Vector3(randf_range(-1, 1), 1.0, randf_range(-1, 1)), "t": 1.2, "g": 0.0, "col": Color(0.8, 0.75, 0.65), "s": 0.9})
 	# incendios: la lista de celdas se rehace cada medio segundo, no se recorre todo el mapa en cada cuadro
-	if Engine.get_process_frames() % 30 == 0 or burn_dirty:
-		burn_dirty = false
-		burn_cells.clear()
-		for i in N * N:
-			if burn[i] > 0.0:
-				burn_cells.append(i)
-	for i in burn_cells:
+	for k in range(burn_sweep, mini(burn_sweep + 512, N * N)):
+		if burn[k] > 0.0:
+			burn_set[k] = true
+		elif burn_set.has(k):
+			burn_set.erase(k)
+	burn_sweep = (burn_sweep + 512) % (N * N)
+	for i in burn_set.keys():
 		if burn[i] > 0.0:
 			emit_flames(cell_pos(i), i)
 	if flag_days > 0 and cam_dist < 250.0:
