@@ -79,6 +79,7 @@ func _process(delta: float) -> void:
 		lab_add(1, lt)
 	else:
 		cam_yaw += delta * 0.05
+	warm_step()
 	crumb("luz")
 	lt = Time.get_ticks_usec()
 	update_light()

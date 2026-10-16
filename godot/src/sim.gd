@@ -29,6 +29,7 @@ func sim_process(delta: float) -> void:
 	for rep_k in (2 if m >= 4.0 else 1):
 		if sim_stage < 0:
 			break
+		lab_step = sim_stage
 		run_sim_step(sim_stage)
 		sim_stage += 1
 		if sim_stage > 21:
@@ -36,6 +37,7 @@ func sim_process(delta: float) -> void:
 			sim_cycle += 1
 	if day_timer >= DAY_SECONDS:
 		day_timer -= DAY_SECONDS
+		lab_step = 22
 		new_day()
 # en el juego las etapas pesadas se reparten en más cuadros (mismo trabajo, en el mismo orden que
 # run_sim_stage, que es lo que usan las pruebas y la carga de partidas)

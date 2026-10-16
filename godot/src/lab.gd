@@ -15,6 +15,10 @@ var lab_dc_n: int = 0
 var lab_since: float = 0.0
 var lab_zoom_prev: float = 0.0
 var lab_sum: float = 0.0
+# qué paso de la simulación corrió en este cuadro (para decir cuál traba)
+const LAB_STEPS := ["listas", "luz: redes", "luz: consumo", "luz: reparto", "agua: redes", "agua: consumo", "agua: reparto", "cobertura de servicios", "contaminación", "ambiente (1/2)", "ambiente (2/2)", "tránsito: caminos", "tránsito: preparar", "tránsito: viajes 1", "tránsito: viajes 2", "tránsito: viajes 3", "tránsito: viajes 4", "tránsito: viajes 5", "felicidad", "crecimiento", "estadísticas e incendios", "progreso", "cambio de día y guardado"]
+var lab_step: int = -1
+var lab_prev_step: int = -1
 var lab_st_total: int = 0
 # el aviso de cierre se muestra una sola vez por cierre
 var lab_crash_seen: bool = false
@@ -58,7 +62,7 @@ func lab_frame(delta: float) -> void:
 			if lab_prev[p] > lab_prev[worst]:
 				worst = p
 		var zooming := absf(cam_dist - lab_zoom_prev) > 0.5
-		lab_stutters.append({"ms": ms, "part": worst, "part_ms": lab_prev[worst], "zoom": zooming, "move": cam_moving_t > 0.0, "dist": cam_dist})
+		lab_stutters.append({"ms": ms, "part": worst, "part_ms": lab_prev[worst], "zoom": zooming, "move": cam_moving_t > 0.0, "dist": cam_dist, "step": lab_prev_step})
 	for p in LAB_PARTS.size():
 		lab_hist[p][lab_k] = lab_cur[p]
 	lab_sum += ms - lab_frames[lab_k]
@@ -69,6 +73,8 @@ func lab_frame(delta: float) -> void:
 		lab_prev[p] = lab_cur[p]
 		lab_cur[p] = 0.0
 	lab_zoom_prev = cam_dist
+	lab_prev_step = lab_step
+	lab_step = -1
 	if Engine.get_process_frames() % 30 == 0:
 		lab_dc += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 		lab_obj += Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
@@ -166,7 +172,23 @@ func lab_suggestions() -> Array:
 		var extra := " %d de ellos mientras hacías zoom." % r["st_zoom"] if r["st_zoom"] > 0 else ""
 		var lst := ""
 		for s in lab_stutters.slice(maxi(lab_stutters.size() - 8, 0)):
-			lst += "\n- cuadro de %.0f ms, %s tardó %.1f ms%s (cámara a %.0f m)" % [s["ms"], LAB_PARTS[s["part"]], s["part_ms"], ", con zoom" if s["zoom"] else (", moviendo" if s["move"] else ""), s["dist"]]
+			var pn: String = LAB_PARTS[s["part"]]
+			var stp: int = s.get("step", -1)
+			if s["part"] == 0 and stp >= 0 and stp < LAB_STEPS.size():
+				pn += " (paso: " + LAB_STEPS[stp] + ")"
+			lst += "\n- cuadro de %.0f ms, %s tardó %.1f ms%s (cámara a %.0f m)" % [s["ms"], pn, s["part_ms"], ", con zoom" if s["zoom"] else (", moviendo" if s["move"] else ""), s["dist"]]
+		var stc := {}
+		for s2 in lab_stutters:
+			var st2: int = s2.get("step", -1)
+			if s2["part"] == 0 and st2 >= 0 and st2 < LAB_STEPS.size():
+				stc[LAB_STEPS[st2]] = stc.get(LAB_STEPS[st2], 0) + 1
+		if not stc.is_empty():
+			var ks: Array = stc.keys()
+			ks.sort_custom(func(x, y): return stc[x] > stc[y])
+			var parts_t: Array = []
+			for kk in ks.slice(0, 5):
+				parts_t.append("%s (%d)" % [kk, stc[kk]])
+			lst += "\nPasos de la simulación que más trabaron: " + ", ".join(parts_t) + "."
 		out.append(["Trabones: %d cuadros cortados" % r["stutters"], "La mayoría por %s.%s" % [LAB_PARTS[sp], extra],
 			head + "\nHubo %d trabones (cuadros de más de 25 ms y 1,5 veces el normal). La parte culpable más seguida es \"%s\" (%s).%s Los últimos:%s\nRepartí ese trabajo en varios cuadros o hacelo antes de que haga falta, para que no se corte el movimiento." % [r["stutters"], LAB_PARTS[sp], LAB_FUNCS[sp], extra, lst]])
 	if r["dc"] > 500.0:

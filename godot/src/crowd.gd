@@ -100,3 +100,60 @@ func crowd_flush() -> void:
 func pal_idx(c: Color, pal: Array, fallback: int) -> int:
 	var i := pal.find(c)
 	return i if i >= 0 else fallback
+# Precalentado: en Android cada efecto (shader) se arma la primera vez que aparece en pantalla y eso
+# cortaba el movimiento (cuadros de 60 a 120 ms). Al arrancar la ciudad se dibuja durante unos cuadros un
+# pedacito de cada material frente a la cámara (de 1 píxel, no se nota) para que ya estén armados.
+var warm_node: Node3D = null
+var warm_frames: int = 0
+var warm_done: bool = false
+func warm_add_mm(mesh: Mesh, mat: Material, k: int) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.use_custom_data = true
+	mm.mesh = mesh
+	mm.instance_count = 1
+	mm.set_instance_transform(0, Transform3D(Basis().scaled(Vector3.ONE * 0.004), Vector3((k - 4) * 0.01, 0, 0)))
+	mm.set_instance_color(0, Color(0.5, 0.5, 0.5))
+	mm.set_instance_custom_data(0, Color(0, 0, 0, 0))
+	var n := MultiMeshInstance3D.new()
+	n.multimesh = mm
+	if mat != null:
+		n.material_override = mat
+	warm_node.add_child(n)
+func warm_shaders() -> void:
+	if warm_node != null or cam == null:
+		return
+	warm_node = Node3D.new()
+	cam.add_child(warm_node)
+	warm_node.position = Vector3(0, 0, -2.0)
+	var k := 0
+	# edificios: versión cerca (con todos sus detalles) y media/lejana, con un modelo de verdad
+	for m in mini(cat_models.size(), 3):
+		warm_add_mm(cat_mesh(m, cat_models[m]["floors"].get(cat_models[m]["levels"][0], [0])[0], LOD_NEAR), building_mat, k)
+		warm_add_mm(cat_mesh(m, 0, LOD_MID), building_lite_mat, k + 1)
+		k += 2
+	warm_add_mm(meshes[M_BOX], city_mat, k)
+	warm_add_mm(meshes[M_SPH], null, k + 1)
+	warm_add_mm(crowd_nodes[CR_PERSON].multimesh.mesh, crowd_mat, k + 2)
+	warm_add_mm(crowd_nodes[CR_CAR].multimesh.mesh, crowd_mat, k + 3)
+	warm_add_mm(glow_node.multimesh.mesh, glow_node.material_override, k + 4)
+	for mt in [terrain_mat, terrain_simple_mat, water_mat]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = meshes[M_BOX]
+		mi.material_override = mt
+		mi.scale = Vector3.ONE * 0.004
+		mi.position = Vector3((k + 5) * 0.01, 0.01, 0)
+		warm_node.add_child(mi)
+		k += 1
+	warm_frames = 4
+func warm_step() -> void:
+	if warm_node == null:
+		if started and not warm_done and not first_chunks:
+			warm_done = true
+			warm_shaders()
+		return
+	warm_frames -= 1
+	if warm_frames <= 0:
+		warm_node.queue_free()
+		warm_node = null

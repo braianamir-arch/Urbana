@@ -796,7 +796,12 @@ func draw_dynamic() -> void:
 						ex |= 2
 					if pd.get("panic", 0.0) > 0.0:
 						ex |= 4
-					draw_person(p4.x, p4.y, p4.z, rp, s, pd["col"], pd["pant"], pd["skin"], pd["hair"], ph, pclose, ex, pd["umb"])
+					# los colores de cada persona se traducen una sola vez
+					if not pd.has("code"):
+						pd["code"] = person_code(pd["pant"], pd["skin"], pd["hair"])
+						for f0 in pd["comp"]:
+							f0["code"] = person_code(f0["pant"], f0["skin"], f0["hair"])
+					draw_person(p4.x, p4.y, p4.z, rp, s, pd["col"], pd["pant"], pd["skin"], pd["hair"], ph, pclose, ex, pd["umb"], pd["code"])
 					var rx4 := cos(rp)
 					var rz4 := -sin(rp)
 					for f in pd["comp"]:
@@ -807,7 +812,7 @@ func draw_dynamic() -> void:
 							ex2 |= 2
 						if ex & 4:
 							ex2 |= 4
-						draw_person(p4.x + rx4 * off * pd["side"], p4.y, p4.z + rz4 * off * pd["side"], rp, fs, f["col"], f["pant"], f["skin"], f["hair"], ph + 1.3, pclose, ex2, f["umb"])
+						draw_person(p4.x + rx4 * off * pd["side"], p4.y, p4.z + rz4 * off * pd["side"], rp, fs, f["col"], f["pant"], f["skin"], f["hair"], ph + 1.3, pclose, ex2, f["umb"], f.get("code", -1))
 		for ln in lines:
 			if ln["pts"].size() < 2 or not (ln["kind"] in ["bus", "tram"]):
 				continue
@@ -1027,9 +1032,12 @@ func new_ped(c: int, kind: int) -> Dictionary:
 			comp.append(k)
 	pd["comp"] = comp
 	return pd
-func draw_person(x: float, y: float, z: float, rp: float, s: float, shirt: Color, pant: Color, skin: Color, hair: Color, ph: float, close: bool, extra: int, umb: Color = Color.BLACK) -> void:
+func person_code(pant: Color, skin: Color, hair: Color) -> int:
+	return pal_idx(pant, PANTS, 0) + 8 * pal_idx(skin, SKINS, 0) + 64 * pal_idx(hair, HAIRS, 6 if hair.v < 0.5 else 7)
+func draw_person(x: float, y: float, z: float, rp: float, s: float, shirt: Color, pant: Color, skin: Color, hair: Color, ph: float, close: bool, extra: int, umb: Color = Color.BLACK, code: int = -1) -> void:
 	# una sola pieza: el shader pinta pantalón, piel y pelo de la paleta y mueve piernas y brazos
-	var code := pal_idx(pant, PANTS, 0) + 8 * pal_idx(skin, SKINS, 0) + 64 * pal_idx(hair, HAIRS, 6 if hair.v < 0.5 else 7)
+	if code < 0:
+		code = person_code(pant, skin, hair)
 	ce(CR_PERSON, x, y, z, rp, s, shirt, Vector4(code, ph, float(extra & 1) + (2.0 if extra & 4 else 0.0), 0.0))
 	var rx := cos(rp)
 	var rz := -sin(rp)

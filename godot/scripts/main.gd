@@ -792,6 +792,7 @@ func sim_process(delta: float) -> void:
 	for rep_k in (2 if m >= 4.0 else 1):
 		if sim_stage < 0:
 			break
+		lab_step = sim_stage
 		run_sim_step(sim_stage)
 		sim_stage += 1
 		if sim_stage > 21:
@@ -799,6 +800,7 @@ func sim_process(delta: float) -> void:
 			sim_cycle += 1
 	if day_timer >= DAY_SECONDS:
 		day_timer -= DAY_SECONDS
+		lab_step = 22
 		new_day()
 # en el juego las etapas pesadas se reparten en más cuadros (mismo trabajo, en el mismo orden que
 # run_sim_stage, que es lo que usan las pruebas y la carga de partidas)
@@ -7561,7 +7563,12 @@ func draw_dynamic() -> void:
 						ex |= 2
 					if pd.get("panic", 0.0) > 0.0:
 						ex |= 4
-					draw_person(p4.x, p4.y, p4.z, rp, s, pd["col"], pd["pant"], pd["skin"], pd["hair"], ph, pclose, ex, pd["umb"])
+					# los colores de cada persona se traducen una sola vez
+					if not pd.has("code"):
+						pd["code"] = person_code(pd["pant"], pd["skin"], pd["hair"])
+						for f0 in pd["comp"]:
+							f0["code"] = person_code(f0["pant"], f0["skin"], f0["hair"])
+					draw_person(p4.x, p4.y, p4.z, rp, s, pd["col"], pd["pant"], pd["skin"], pd["hair"], ph, pclose, ex, pd["umb"], pd["code"])
 					var rx4 := cos(rp)
 					var rz4 := -sin(rp)
 					for f in pd["comp"]:
@@ -7572,7 +7579,7 @@ func draw_dynamic() -> void:
 							ex2 |= 2
 						if ex & 4:
 							ex2 |= 4
-						draw_person(p4.x + rx4 * off * pd["side"], p4.y, p4.z + rz4 * off * pd["side"], rp, fs, f["col"], f["pant"], f["skin"], f["hair"], ph + 1.3, pclose, ex2, f["umb"])
+						draw_person(p4.x + rx4 * off * pd["side"], p4.y, p4.z + rz4 * off * pd["side"], rp, fs, f["col"], f["pant"], f["skin"], f["hair"], ph + 1.3, pclose, ex2, f["umb"], f.get("code", -1))
 		for ln in lines:
 			if ln["pts"].size() < 2 or not (ln["kind"] in ["bus", "tram"]):
 				continue
@@ -7792,9 +7799,12 @@ func new_ped(c: int, kind: int) -> Dictionary:
 			comp.append(k)
 	pd["comp"] = comp
 	return pd
-func draw_person(x: float, y: float, z: float, rp: float, s: float, shirt: Color, pant: Color, skin: Color, hair: Color, ph: float, close: bool, extra: int, umb: Color = Color.BLACK) -> void:
+func person_code(pant: Color, skin: Color, hair: Color) -> int:
+	return pal_idx(pant, PANTS, 0) + 8 * pal_idx(skin, SKINS, 0) + 64 * pal_idx(hair, HAIRS, 6 if hair.v < 0.5 else 7)
+func draw_person(x: float, y: float, z: float, rp: float, s: float, shirt: Color, pant: Color, skin: Color, hair: Color, ph: float, close: bool, extra: int, umb: Color = Color.BLACK, code: int = -1) -> void:
 	# una sola pieza: el shader pinta pantalón, piel y pelo de la paleta y mueve piernas y brazos
-	var code := pal_idx(pant, PANTS, 0) + 8 * pal_idx(skin, SKINS, 0) + 64 * pal_idx(hair, HAIRS, 6 if hair.v < 0.5 else 7)
+	if code < 0:
+		code = person_code(pant, skin, hair)
 	ce(CR_PERSON, x, y, z, rp, s, shirt, Vector4(code, ph, float(extra & 1) + (2.0 if extra & 4 else 0.0), 0.0))
 	var rx := cos(rp)
 	var rz := -sin(rp)
@@ -8309,6 +8319,63 @@ func crowd_flush() -> void:
 func pal_idx(c: Color, pal: Array, fallback: int) -> int:
 	var i := pal.find(c)
 	return i if i >= 0 else fallback
+# Precalentado: en Android cada efecto (shader) se arma la primera vez que aparece en pantalla y eso
+# cortaba el movimiento (cuadros de 60 a 120 ms). Al arrancar la ciudad se dibuja durante unos cuadros un
+# pedacito de cada material frente a la cámara (de 1 píxel, no se nota) para que ya estén armados.
+var warm_node: Node3D = null
+var warm_frames: int = 0
+var warm_done: bool = false
+func warm_add_mm(mesh: Mesh, mat: Material, k: int) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.use_custom_data = true
+	mm.mesh = mesh
+	mm.instance_count = 1
+	mm.set_instance_transform(0, Transform3D(Basis().scaled(Vector3.ONE * 0.004), Vector3((k - 4) * 0.01, 0, 0)))
+	mm.set_instance_color(0, Color(0.5, 0.5, 0.5))
+	mm.set_instance_custom_data(0, Color(0, 0, 0, 0))
+	var n := MultiMeshInstance3D.new()
+	n.multimesh = mm
+	if mat != null:
+		n.material_override = mat
+	warm_node.add_child(n)
+func warm_shaders() -> void:
+	if warm_node != null or cam == null:
+		return
+	warm_node = Node3D.new()
+	cam.add_child(warm_node)
+	warm_node.position = Vector3(0, 0, -2.0)
+	var k := 0
+	# edificios: versión cerca (con todos sus detalles) y media/lejana, con un modelo de verdad
+	for m in mini(cat_models.size(), 3):
+		warm_add_mm(cat_mesh(m, cat_models[m]["floors"].get(cat_models[m]["levels"][0], [0])[0], LOD_NEAR), building_mat, k)
+		warm_add_mm(cat_mesh(m, 0, LOD_MID), building_lite_mat, k + 1)
+		k += 2
+	warm_add_mm(meshes[M_BOX], city_mat, k)
+	warm_add_mm(meshes[M_SPH], null, k + 1)
+	warm_add_mm(crowd_nodes[CR_PERSON].multimesh.mesh, crowd_mat, k + 2)
+	warm_add_mm(crowd_nodes[CR_CAR].multimesh.mesh, crowd_mat, k + 3)
+	warm_add_mm(glow_node.multimesh.mesh, glow_node.material_override, k + 4)
+	for mt in [terrain_mat, terrain_simple_mat, water_mat]:
+		var mi := MeshInstance3D.new()
+		mi.mesh = meshes[M_BOX]
+		mi.material_override = mt
+		mi.scale = Vector3.ONE * 0.004
+		mi.position = Vector3((k + 5) * 0.01, 0.01, 0)
+		warm_node.add_child(mi)
+		k += 1
+	warm_frames = 4
+func warm_step() -> void:
+	if warm_node == null:
+		if started and not warm_done and not first_chunks:
+			warm_done = true
+			warm_shaders()
+		return
+	warm_frames -= 1
+	if warm_frames <= 0:
+		warm_node.queue_free()
+		warm_node = null
 # ================================================================ src/life.gd
 # Etapa 4: horario de la ciudad (casa, trabajo, escuela, calle) y uso de cada edificio para las ventanas.
 # Parte de la gente en cada lugar, hora por hora (0 a 23). Lo que falta para 1 está en la calle.
@@ -8395,6 +8462,10 @@ var lab_dc_n: int = 0
 var lab_since: float = 0.0
 var lab_zoom_prev: float = 0.0
 var lab_sum: float = 0.0
+# qué paso de la simulación corrió en este cuadro (para decir cuál traba)
+const LAB_STEPS := ["listas", "luz: redes", "luz: consumo", "luz: reparto", "agua: redes", "agua: consumo", "agua: reparto", "cobertura de servicios", "contaminación", "ambiente (1/2)", "ambiente (2/2)", "tránsito: caminos", "tránsito: preparar", "tránsito: viajes 1", "tránsito: viajes 2", "tránsito: viajes 3", "tránsito: viajes 4", "tránsito: viajes 5", "felicidad", "crecimiento", "estadísticas e incendios", "progreso", "cambio de día y guardado"]
+var lab_step: int = -1
+var lab_prev_step: int = -1
 var lab_st_total: int = 0
 # el aviso de cierre se muestra una sola vez por cierre
 var lab_crash_seen: bool = false
@@ -8438,7 +8509,7 @@ func lab_frame(delta: float) -> void:
 			if lab_prev[p] > lab_prev[worst]:
 				worst = p
 		var zooming := absf(cam_dist - lab_zoom_prev) > 0.5
-		lab_stutters.append({"ms": ms, "part": worst, "part_ms": lab_prev[worst], "zoom": zooming, "move": cam_moving_t > 0.0, "dist": cam_dist})
+		lab_stutters.append({"ms": ms, "part": worst, "part_ms": lab_prev[worst], "zoom": zooming, "move": cam_moving_t > 0.0, "dist": cam_dist, "step": lab_prev_step})
 	for p in LAB_PARTS.size():
 		lab_hist[p][lab_k] = lab_cur[p]
 	lab_sum += ms - lab_frames[lab_k]
@@ -8449,6 +8520,8 @@ func lab_frame(delta: float) -> void:
 		lab_prev[p] = lab_cur[p]
 		lab_cur[p] = 0.0
 	lab_zoom_prev = cam_dist
+	lab_prev_step = lab_step
+	lab_step = -1
 	if Engine.get_process_frames() % 30 == 0:
 		lab_dc += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 		lab_obj += Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
@@ -8546,7 +8619,23 @@ func lab_suggestions() -> Array:
 		var extra := " %d de ellos mientras hacías zoom." % r["st_zoom"] if r["st_zoom"] > 0 else ""
 		var lst := ""
 		for s in lab_stutters.slice(maxi(lab_stutters.size() - 8, 0)):
-			lst += "\n- cuadro de %.0f ms, %s tardó %.1f ms%s (cámara a %.0f m)" % [s["ms"], LAB_PARTS[s["part"]], s["part_ms"], ", con zoom" if s["zoom"] else (", moviendo" if s["move"] else ""), s["dist"]]
+			var pn: String = LAB_PARTS[s["part"]]
+			var stp: int = s.get("step", -1)
+			if s["part"] == 0 and stp >= 0 and stp < LAB_STEPS.size():
+				pn += " (paso: " + LAB_STEPS[stp] + ")"
+			lst += "\n- cuadro de %.0f ms, %s tardó %.1f ms%s (cámara a %.0f m)" % [s["ms"], pn, s["part_ms"], ", con zoom" if s["zoom"] else (", moviendo" if s["move"] else ""), s["dist"]]
+		var stc := {}
+		for s2 in lab_stutters:
+			var st2: int = s2.get("step", -1)
+			if s2["part"] == 0 and st2 >= 0 and st2 < LAB_STEPS.size():
+				stc[LAB_STEPS[st2]] = stc.get(LAB_STEPS[st2], 0) + 1
+		if not stc.is_empty():
+			var ks: Array = stc.keys()
+			ks.sort_custom(func(x, y): return stc[x] > stc[y])
+			var parts_t: Array = []
+			for kk in ks.slice(0, 5):
+				parts_t.append("%s (%d)" % [kk, stc[kk]])
+			lst += "\nPasos de la simulación que más trabaron: " + ", ".join(parts_t) + "."
 		out.append(["Trabones: %d cuadros cortados" % r["stutters"], "La mayoría por %s.%s" % [LAB_PARTS[sp], extra],
 			head + "\nHubo %d trabones (cuadros de más de 25 ms y 1,5 veces el normal). La parte culpable más seguida es \"%s\" (%s).%s Los últimos:%s\nRepartí ese trabajo en varios cuadros o hacelo antes de que haga falta, para que no se corte el movimiento." % [r["stutters"], LAB_PARTS[sp], LAB_FUNCS[sp], extra, lst]])
 	if r["dc"] > 500.0:
@@ -13595,6 +13684,7 @@ func _process(delta: float) -> void:
 		lab_add(1, lt)
 	else:
 		cam_yaw += delta * 0.05
+	warm_step()
 	crumb("luz")
 	lt = Time.get_ticks_usec()
 	update_light()
