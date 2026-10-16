@@ -6,6 +6,10 @@ uniform float wet = 0.0;
 uniform float cshadow = 0.0;
 uniform float ao_on = 0.0;
 uniform float tex_on = 0.0;
+// etapa 4: presencia (casas, trabajos, escuelas, negocios), despiertos en casa y hora (life.gd)
+uniform vec4 pres = vec4(0.9, 0.3, 0.0, 0.5);
+uniform float awake = 0.6;
+uniform float hourf = 12.0;
 uniform float wind = 0.0;       // 1 con viento (g_wind): mueve el follaje     // 0 en calidad Baja: colores lisos
 uniform vec4 hinfo = vec4(1.0, 0.0, 1.0, 0.0);
 uniform sampler2D hmap : filter_linear, repeat_disable;
@@ -53,6 +57,16 @@ void vertex() {
 }
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+
+float circ(vec2 p, vec2 c, float r) { return 1.0 - smoothstep(r * 0.8, r, length(p - c)); }
+float rectm(vec2 p, vec4 r) { return step(r.x, p.x) * step(p.x, r.z) * step(r.y, p.y) * step(p.y, r.w); }
+// silueta de una persona dentro de la ventana: x centro, y donde apoya, s tamaño
+float person(vec2 p, float x, float y, float s) {
+	float head = circ(p, vec2(x, y + 0.58 * s), 0.11 * s);
+	// torso con hombros redondeados
+	float body = rectm(p, vec4(x - 0.2 * s, y, x + 0.2 * s, y + 0.46 * s)) * circ(p, vec2(x, y + 0.16 * s), 0.36 * s);
+	return max(head, body);
+}
 
 // reflejo aproximado: cielo arriba, otros edificios cerca del horizonte
 vec3 mirror(vec3 wp, vec3 n, vec3 cp, float nt) {
@@ -172,13 +186,102 @@ void fragment() {
 		refl *= mix(vec3(1.0), COLOR.rgb * 1.4, 0.4);
 		col = mix(inside, refl, k);
 		rough = 0.06;
+		// etapa 4: cuánta gente hay según el uso del edificio (cust.w) y la hora; prendidas solo donde hay
+		// alguien despierto
+		int u = int(cust.w + 0.5);
 		float litp = 0.55 * (1.0 - 0.45 * late);
+		float occp = litp;
+		bool ground = wid.y < 0.5;
+		if (u == 1 || u == 8 || (u == 4 && !ground)) {
+			occp = pres.x;
+			// no en todos los cuartos de una casa con gente hay luz
+			litp = pres.x * awake * 0.72;
+		} else if (u == 2 || (u == 4 && ground)) {
+			occp = pres.w;
+			litp = pres.w;
+		} else if (u == 3 || u == 5) {
+			occp = pres.y;
+			litp = pres.y;
+		} else if (u == 6) {
+			occp = pres.z;
+			litp = pres.z;
+		} else if (u == 7) {
+			occp = 0.85;
+			litp = 0.75;
+		}
+		float hw = hash(id + 1.3);
 		// máscara 3: vidrio que no es ventana (autos, refugios) o agua: refleja pero no se prende de noche
-		float lit = int(vtm + 0.5) == 3 ? 0.0 : step(hash(id + 1.3), litp);
+		float lit = int(vtm + 0.5) == 3 ? 0.0 : step(hw, litp);
+		vec3 wc = mix(vec3(1.0, 0.76, 0.42), vec3(0.72, 0.86, 1.0), step(0.8, hash(id + 7.3)));
+		bool work_pl = u == 2 || u == 3 || u == 5 || u == 6 || u == 7 || (u == 4 && ground);
+		if (work_pl && u != 3) {
+			wc = vec3(0.86, 0.92, 1.0);
+		}
+		// de día, en oficinas, escuelas y negocios con gente la luz de adentro también está prendida
+		if (work_pl && lit > 0.5) {
+			inside = mix(inside, wc * 0.55, 0.6 * (1.0 - night));
+			col = mix(inside, refl, k);
+		}
+#ifndef LITE
+		// lo que hace la gente adentro: tele, cocina, oficina, clase, negocio, hospital
+		if (u > 0 && int(vtm + 0.5) != 3 && hw < occp) {
+			float act = hash(id + 2.2);
+			float sil = 0.0;
+			float furn = 0.0;
+			vec3 glow = vec3(0.0);
+			float tt = TIME * 0.06 + act * 6.28;
+			if (u == 1 || u == 8 || (u == 4 && !ground)) {
+				bool eve = hourf >= 18.5 || hourf < 1.0;
+				bool meal = (hourf >= 7.0 && hourf < 8.5) || (hourf >= 12.0 && hourf < 14.0) || (hourf >= 19.5 && hourf < 21.5);
+				if (eve && act < 0.45) {
+					furn = rectm(wf, vec4(0.06, 0.0, 0.94, 0.22));
+					sil = person(wf, 0.35 + 0.3 * act, 0.1, 0.8);
+					float fl = 0.72 + 0.28 * sin(TIME * 7.0 + act * 40.0) * sin(TIME * 2.3 + act * 9.0);
+					wc = mix(wc, vec3(0.45, 0.6, 1.0) * fl, 0.75);
+				} else if (meal && act < 0.8) {
+					furn = rectm(wf, vec4(0.0, 0.0, 1.0, 0.28));
+					sil = person(wf, 0.5 + 0.28 * sin(tt * 3.0), 0.0, 1.05);
+				} else {
+					sil = person(wf, 0.5 + 0.32 * sin(tt * 2.0), 0.0, 1.0) * step(0.35, act);
+				}
+			} else if (u == 2 || (u == 4 && ground)) {
+				vec2 sg = floor(wf * vec2(9.0, 4.0));
+				float shelf = step(0.25, wf.y);
+				furn = step(0.8, fract(wf.y * 4.0)) * shelf;
+				glow = vec3(hash(sg + id), hash(sg + id + 3.0), 0.4) * step(fract(wf.y * 4.0), 0.5) * shelf * 0.3;
+				sil = person(wf, 0.3 + 0.4 * act, 0.0, 1.0);
+			} else if (u == 3 || u == 5) {
+				furn = rectm(wf, vec4(0.0, 0.0, 1.0, 0.25));
+				float mon = rectm(wf, vec4(0.32, 0.27, 0.68, 0.45));
+				sil = person(wf, 0.5, 0.18, 0.8) * (1.0 - mon);
+				glow = vec3(0.55, 0.75, 1.0) * mon;
+			} else if (u == 6) {
+				if (act < 0.35) {
+					// pizarrón verde y el maestro que camina adelante
+					furn = rectm(wf, vec4(0.08, 0.45, 0.92, 0.85));
+					glow = vec3(0.05, 0.16, 0.09) * furn;
+					sil = person(wf, 0.72 + 0.12 * sin(tt * 4.0), 0.0, 1.1);
+				} else {
+					// chicos en sus bancos
+					for (int k = 0; k < 3; k++) {
+						float fk = float(k);
+						sil = max(sil, person(wf, 0.2 + 0.3 * fk, 0.12 + 0.02 * sin(TIME * 1.3 + fk + act * 9.0), 0.6));
+					}
+					furn = rectm(wf, vec4(0.0, 0.0, 1.0, 0.16));
+				}
+			} else if (u == 7) {
+				furn = rectm(wf, vec4(0.1, 0.1, 0.72, 0.28));
+				sil = person(wf, 0.84, 0.0, 1.0) * step(0.5, act);
+			}
+			// de día se ven oscuros adentro; de noche, recortados contra la luz del cuarto
+			inside = mix(inside, vec3(0.03), max(sil, furn * 0.6) * 0.8);
+			col = mix(inside, refl, k);
+			wc = wc * (1.0 - sil * 0.92) * (1.0 - furn * 0.5) + glow * 1.6;
+		}
+#endif
 		if (h > 0.55 && wf.y > 0.5) {
 			lit *= 0.5;
 		}
-		vec3 wc = mix(vec3(1.0, 0.76, 0.42), vec3(0.72, 0.86, 1.0), step(0.8, hash(id + 7.3)));
 		emit += wc * lit * night * 1.2 * (1.0 - cust.x);
 	}
 	// nieve también en techos a dos aguas (hasta ~60°); SNOW_NY en buildings.gd

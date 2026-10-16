@@ -1242,6 +1242,7 @@ func update_light() -> void:
 	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
 	bmat_param("night", nf)
 	bmat_param("late", 1.0 if hour >= 1.0 and hour < 6.0 else 0.0)
+	life_update()
 	bmat_param("snow", 0.8 if weather == "Nieve" else 0.0)
 	bmat_param("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
 	terrain_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)

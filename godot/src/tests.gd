@@ -1537,8 +1537,65 @@ func run_vida(dir: String) -> void:
 		card_panel.visible = false
 	elif f == 260:
 		shot_to(dir, "calle_marcas")
+		life_check()
+		# de noche, de cerca sobre un edificio con casas
+		var best := -1
+		for i in N * N:
+			if zone[i] == Z_R and lvl[i] >= 3 and (best < 0 or lvl[i] > lvl[best]):
+				best = i
+		vida_cam(best, 16.0, 21.3)
+	elif f == 320:
+		shot_to(dir, "ventanas_noche")
+		var sc := -1
+		for a in anchors:
+			if bld[a] == 24 or bld[a] == 25:
+				sc = a
+		if sc < 0:
+			sc = anchors[0]
+		day += (9 - day % 7) % 7
+		print("escuela en día ", day % 7, " fin de semana ", life_weekend())
+		vida_cam(sc, 12.0, 10.0)
+	elif f == 380:
+		shot_to(dir, "escuela_dia")
+		vida_cam(sc_last, 16.0, 3.0)
+	elif f == 440:
+		shot_to(dir, "madrugada")
 		print("VIDA OK" if bt_fail == 0 else "VIDA FALLA")
 		get_tree().quit()
+var sc_last: int = 0
+func vida_cam(c: int, dist: float, h: float) -> void:
+	sc_last = c
+	cam_target = cell_pos(c)
+	cam_goal = cam_target
+	cam_dist = dist
+	cam_dist_goal = dist
+	cam_pitch = 0.35
+	day_timer = DAY_SECONDS * fmod(h - 6.0 + 24.0, 24.0) / 24.0
+	card_queue.clear()
+	card_panel.visible = false
+# el horario: nadie en dos lugares, nadie en la escuela de madrugada ni el fin de semana
+func life_check() -> void:
+	var bad := ""
+	for we in [false, true]:
+		for h in 24:
+			var m := life_mix(float(h), we)
+			if absf(m.x + m.y + m.z + m.w - 1.0) > 0.001 or m.x + m.y + m.z > 1.0001:
+				bad += " suma %d" % h
+			if m.z > 0.0 and (we or h < 7 or h >= 18):
+				bad += " escuela %d" % h
+	bt(bad == "", "LIFE_CHECK horario sin duplicados " + ("ok" if bad == "" else "FALLA" + bad))
+	var lit3 := life_presence(3.0, false).x * life_awake(3.0)
+	var lit21 := life_presence(21.0, false).x * life_awake(21.0)
+	bt(lit3 < 0.1 and lit21 > 0.6, "LIFE_CHECK luces de las casas: madrugada %.2f, noche %.2f " % [lit3, lit21] + ("ok" if lit3 < 0.1 and lit21 > 0.6 else "FALLA"))
+	var s3 := life_street(3.0, false)
+	var s8 := life_street(7.5, false)
+	bt(s3 < s8 * 0.3, "LIFE_CHECK calle: madrugada %.2f, hora pico %.2f " % [s3, s8] + ("ok" if s3 < s8 * 0.3 else "FALLA"))
+	var ub := 0
+	for i in N * N:
+		if zone[i] > 0 and building_use(i) == 0:
+			ub += 1
+	var us_ok := special_use(24) == 6 and special_use(23) == 7 and special_use(28) == 5
+	bt(ub == 0 and us_ok, "LIFE_CHECK uso de cada edificio " + ("ok" if ub == 0 and us_ok else "FALLA %d" % ub))
 # cada calle lleva sus vecinas y los cruces a los que llega; las rectas que llegan a un cruce tienen senda
 func road_check() -> void:
 	var straight := 0

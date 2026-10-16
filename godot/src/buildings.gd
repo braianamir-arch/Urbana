@@ -269,7 +269,7 @@ func emit_building(i: int, x: float, y: float, z: float, rot: float, wall: Color
 	var md: Dictionary = cat_models[pk.x]
 	var sc := 1.85 / 0.82 if part[i] == i and not md["big"] else 1.0
 	var col := building_color(i, zone[i], vari[i], wall)
-	emit_model(pk.x, pk.y, x, y, z, rot, sc, col, Vector4(1.0 if dark else 0.0, float(int(hsh(i, 44) * 8.0)) / 8.0, hsh(i, 42), 0.0))
+	emit_model(pk.x, pk.y, x, y, z, rot, sc, col, Vector4(1.0 if dark else 0.0, float(int(hsh(i, 44) * 8.0)) / 8.0, hsh(i, 42), float(building_use(i))))
 	if bcheck_on:
 		if bcheck_log.has(i):
 			bcheck_log[i]["n"] += 1

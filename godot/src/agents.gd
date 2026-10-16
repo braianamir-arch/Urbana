@@ -129,7 +129,9 @@ func rebuild_road_list() -> void:
 func spawn_agents(dt: float) -> void:
 	if dt <= 0.0:
 		return
-	var want_c := mini(max_cars(), pop / 10)
+	# el horario de la ciudad: hora pico llena, de madrugada casi nadie
+	var street := life_street(hour, life_weekend())
+	var want_c := int(mini(max_cars(), pop / 10) * street)
 	if cars.size() < want_c and not car_paths.is_empty() and randf() < 0.5:
 		var p: Array = car_paths[randi() % car_paths.size()]
 		if randf() < 0.5:
@@ -156,7 +158,7 @@ func spawn_agents(dt: float) -> void:
 			cd["look"] = rand_look()
 			cd["col"] = Color(0.1, 0.1, 0.12) if randf() < 0.5 else car_col
 		cars.append(cd)
-	var want_p := mini(max_peds(), pop / 5 + 6 if pop > 0 else 0)
+	var want_p := int(mini(max_peds(), pop / 5 + 6 if pop > 0 else 0) * street)
 	if peds.size() < want_p and road_list.size() > 4:
 		var c: int = road_list[randi() % road_list.size()]
 		if road[c] >= 2:
@@ -168,7 +170,17 @@ func spawn_agents(dt: float) -> void:
 				kind = 2
 			elif r < 0.45 and wire[c] & W_BIKE or r < 0.33:
 				kind = 3
-			peds.append(new_ped(c, kind))
+			var np := new_ped(c, kind)
+			# a la hora de la escuela: chicos con mochila que van o vuelven con un grande
+			if kind == 0 and life_school_rush(hour, life_weekend()) and randf() < 0.6:
+				var kid := rand_look()
+				kid["off"] = 0.42
+				kid["s"] = 0.62
+				kid["bag"] = true
+				kid["hand"] = true
+				kid["school"] = true
+				np["comp"] = [kid]
+			peds.append(np)
 	garbage_t += dt
 	if garbage_t > 6.0:
 		garbage_t = 0.0

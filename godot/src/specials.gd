@@ -40,7 +40,7 @@ func emit_special(i: int, p: Vector3) -> bool:
 	var rot := face_rot(i)
 	var m: int = special_model[id]
 	var dark := burn[i] > 0.0
-	emit_model(m, 0, x, p.y + 0.02, z, rot, 1.0, d["col"], Vector4(1.0 if dark else 0.0, float(SPECIAL_ACCENT.get(id, 5)) / 8.0, hsh(i, 42), 0.0))
+	emit_model(m, 0, x, p.y + 0.02, z, rot, 1.0, d["col"], Vector4(1.0 if dark else 0.0, float(SPECIAL_ACCENT.get(id, 5)) / 8.0, hsh(i, 42), float(special_use(id))))
 	if bcheck_on:
 		if not scheck_log.has(i):
 			scheck_log[i] = []

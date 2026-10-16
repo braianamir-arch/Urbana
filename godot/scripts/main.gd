@@ -4057,6 +4057,7 @@ func update_light() -> void:
 	city_mat.set_shader_parameter("snow", 0.8 if weather == "Nieve" else 0.0)
 	bmat_param("night", nf)
 	bmat_param("late", 1.0 if hour >= 1.0 and hour < 6.0 else 0.0)
+	life_update()
 	bmat_param("snow", 0.8 if weather == "Nieve" else 0.0)
 	bmat_param("wet", 1.0 if (weather == "Lluvia" or weather == "Tormenta") else 0.0)
 	terrain_mat.set_shader_parameter("snow", 1.0 if weather == "Nieve" else 0.0)
@@ -4444,7 +4445,7 @@ func emit_building(i: int, x: float, y: float, z: float, rot: float, wall: Color
 	var md: Dictionary = cat_models[pk.x]
 	var sc := 1.85 / 0.82 if part[i] == i and not md["big"] else 1.0
 	var col := building_color(i, zone[i], vari[i], wall)
-	emit_model(pk.x, pk.y, x, y, z, rot, sc, col, Vector4(1.0 if dark else 0.0, float(int(hsh(i, 44) * 8.0)) / 8.0, hsh(i, 42), 0.0))
+	emit_model(pk.x, pk.y, x, y, z, rot, sc, col, Vector4(1.0 if dark else 0.0, float(int(hsh(i, 44) * 8.0)) / 8.0, hsh(i, 42), float(building_use(i))))
 	if bcheck_on:
 		if bcheck_log.has(i):
 			bcheck_log[i]["n"] += 1
@@ -5542,7 +5543,7 @@ func emit_special(i: int, p: Vector3) -> bool:
 	var rot := face_rot(i)
 	var m: int = special_model[id]
 	var dark := burn[i] > 0.0
-	emit_model(m, 0, x, p.y + 0.02, z, rot, 1.0, d["col"], Vector4(1.0 if dark else 0.0, float(SPECIAL_ACCENT.get(id, 5)) / 8.0, hsh(i, 42), 0.0))
+	emit_model(m, 0, x, p.y + 0.02, z, rot, 1.0, d["col"], Vector4(1.0 if dark else 0.0, float(SPECIAL_ACCENT.get(id, 5)) / 8.0, hsh(i, 42), float(special_use(id))))
 	if bcheck_on:
 		if not scheck_log.has(i):
 			scheck_log[i] = []
@@ -6610,7 +6611,9 @@ func rebuild_road_list() -> void:
 func spawn_agents(dt: float) -> void:
 	if dt <= 0.0:
 		return
-	var want_c := mini(max_cars(), pop / 10)
+	# el horario de la ciudad: hora pico llena, de madrugada casi nadie
+	var street := life_street(hour, life_weekend())
+	var want_c := int(mini(max_cars(), pop / 10) * street)
 	if cars.size() < want_c and not car_paths.is_empty() and randf() < 0.5:
 		var p: Array = car_paths[randi() % car_paths.size()]
 		if randf() < 0.5:
@@ -6637,7 +6640,7 @@ func spawn_agents(dt: float) -> void:
 			cd["look"] = rand_look()
 			cd["col"] = Color(0.1, 0.1, 0.12) if randf() < 0.5 else car_col
 		cars.append(cd)
-	var want_p := mini(max_peds(), pop / 5 + 6 if pop > 0 else 0)
+	var want_p := int(mini(max_peds(), pop / 5 + 6 if pop > 0 else 0) * street)
 	if peds.size() < want_p and road_list.size() > 4:
 		var c: int = road_list[randi() % road_list.size()]
 		if road[c] >= 2:
@@ -6649,7 +6652,17 @@ func spawn_agents(dt: float) -> void:
 				kind = 2
 			elif r < 0.45 and wire[c] & W_BIKE or r < 0.33:
 				kind = 3
-			peds.append(new_ped(c, kind))
+			var np := new_ped(c, kind)
+			# a la hora de la escuela: chicos con mochila que van o vuelven con un grande
+			if kind == 0 and life_school_rush(hour, life_weekend()) and randf() < 0.6:
+				var kid := rand_look()
+				kid["off"] = 0.42
+				kid["s"] = 0.62
+				kid["bag"] = true
+				kid["hand"] = true
+				kid["school"] = true
+				np["comp"] = [kid]
+			peds.append(np)
 	garbage_t += dt
 	if garbage_t > 6.0:
 		garbage_t = 0.0
@@ -7824,6 +7837,73 @@ func draw_stars(nf: float) -> void:
 						em(M_BOX, p.x + fx * 4.5 * s, p.y + 1.9 * s, p.z + fz * 4.5 * s, 0.3 * s, 0.3 * s, 8.0 * s, r, Color(0.4, 0.75, 1.0), 0, 0, 4.0)
 		if close and who in KILLERS and nf > 0.4:
 			gl(2.0, p.x, p.y + 1.2, p.z, 1.0, 1.0, 0.0, Color(1.0, 0.1, 0.05, 0.5), 1.2)
+# ================================================================ src/life.gd
+# Etapa 4: horario de la ciudad (casa, trabajo, escuela, calle) y uso de cada edificio para las ventanas.
+# Parte de la gente en cada lugar, hora por hora (0 a 23). Lo que falta para 1 está en la calle.
+# Sale de una sola tabla, así nadie está en dos lugares a la vez.
+const LIFE_WD := [
+	[0.96, 0.04, 0.0], [0.97, 0.03, 0.0], [0.97, 0.03, 0.0], [0.97, 0.03, 0.0], [0.96, 0.04, 0.0], [0.93, 0.05, 0.0],
+	[0.85, 0.08, 0.0], [0.62, 0.15, 0.06], [0.38, 0.36, 0.2], [0.3, 0.43, 0.21], [0.29, 0.44, 0.21], [0.29, 0.44, 0.2],
+	[0.3, 0.38, 0.16], [0.31, 0.4, 0.19], [0.3, 0.44, 0.2], [0.3, 0.44, 0.14], [0.34, 0.4, 0.05], [0.45, 0.28, 0.01],
+	[0.58, 0.18, 0.0], [0.72, 0.1, 0.0], [0.82, 0.08, 0.0], [0.88, 0.06, 0.0], [0.92, 0.05, 0.0], [0.95, 0.04, 0.0]]
+const LIFE_WE := [
+	[0.9, 0.05, 0.0], [0.93, 0.04, 0.0], [0.95, 0.04, 0.0], [0.96, 0.04, 0.0], [0.96, 0.04, 0.0], [0.96, 0.04, 0.0],
+	[0.95, 0.05, 0.0], [0.92, 0.06, 0.0], [0.85, 0.08, 0.0], [0.72, 0.1, 0.0], [0.6, 0.12, 0.0], [0.55, 0.12, 0.0],
+	[0.55, 0.12, 0.0], [0.55, 0.12, 0.0], [0.55, 0.12, 0.0], [0.55, 0.12, 0.0], [0.58, 0.12, 0.0], [0.62, 0.11, 0.0],
+	[0.66, 0.1, 0.0], [0.68, 0.09, 0.0], [0.7, 0.08, 0.0], [0.74, 0.07, 0.0], [0.8, 0.06, 0.0], [0.86, 0.05, 0.0]]
+# de los que están en casa, cuántos están despiertos (con la luz prendida)
+const LIFE_AWAKE := [0.35, 0.18, 0.08, 0.05, 0.05, 0.1, 0.45, 0.85, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.92, 0.95, 0.97, 0.95, 0.85, 0.7, 0.5]
+# usos de los edificios (dato del modelo, cust.w): 1 casa, 2 negocio, 3 fábrica, 4 mixto (negocio abajo,
+# casas arriba), 5 oficina, 6 escuela, 7 hospital, 8 hotel
+const USE_SPECIAL := {22: 7, 23: 7, 24: 6, 25: 6, 26: 6, 59: 8, 60: 8, 61: 2, 62: 1, 42: 3, 43: 3, 49: 3, 51: 3, 52: 3, 64: 3}
+func life_weekend() -> bool:
+	return day % 7 == 0 or day % 7 == 6
+# (casa, trabajo, escuela, calle) a la hora h, entre una hora y la siguiente
+func life_mix(h: float, weekend: bool) -> Vector4:
+	var t: Array = LIFE_WE if weekend else LIFE_WD
+	var h0 := int(floorf(h)) % 24
+	var h1 := (h0 + 1) % 24
+	var k := h - floorf(h)
+	var a: Array = t[h0]
+	var b: Array = t[h1]
+	var home := lerpf(a[0], b[0], k)
+	var work := lerpf(a[1], b[1], k)
+	var school := lerpf(a[2], b[2], k)
+	return Vector4(home, work, school, maxf(1.0 - home - work - school, 0.0))
+func life_awake(h: float) -> float:
+	var h0 := int(floorf(h)) % 24
+	return lerpf(LIFE_AWAKE[h0], LIFE_AWAKE[(h0 + 1) % 24], h - floorf(h))
+func life_shop(h: float, weekend: bool) -> float:
+	var op := 10.0 if weekend else 9.0
+	return 0.9 if h >= op and h < 20.5 else 0.04
+# presencia relativa a la capacidad de cada lugar, para el shader: (casas, trabajos, escuelas, negocios)
+func life_presence(h: float, weekend: bool) -> Vector4:
+	var m := life_mix(h, weekend)
+	return Vector4(clampf(m.x / 0.97, 0.0, 1.0), clampf(m.y / 0.44, 0.0, 1.0), clampf(m.z / 0.21, 0.0, 1.0), life_shop(h, weekend))
+# cuánto tránsito y gente hay en la calle comparado con la hora pico
+func life_street(h: float, weekend: bool) -> float:
+	return clampf(life_mix(h, weekend).w / 0.25, 0.12, 1.0)
+func life_update() -> void:
+	var we := life_weekend()
+	bmat_param("pres", life_presence(hour, we))
+	bmat_param("awake", life_awake(hour))
+	bmat_param("hourf", hour)
+func building_use(i: int) -> int:
+	match zone[i]:
+		Z_R:
+			return 1
+		Z_C:
+			return 5 if lvl[i] >= 3 else 2
+		Z_I:
+			return 3
+		Z_M:
+			return 4
+	return 0
+func special_use(id: int) -> int:
+	return USE_SPECIAL.get(id, 5)
+# hora de ir o volver de la escuela (para los chicos con mochila)
+func life_school_rush(h: float, weekend: bool) -> bool:
+	return not weekend and ((h >= 7.0 and h < 8.3) or (h >= 12.0 and h < 13.3) or (h >= 16.8 and h < 17.8))
 # ================================================================ src/lab.gd
 # Sala de computación: mide el juego en el celular y arma pedidos de mejora para Claude Code.
 const LAB_PARTS := ["simulación", "autos y gente", "bloques de la ciudad", "cámara y luz", "interfaz"]
@@ -12633,8 +12713,65 @@ func run_vida(dir: String) -> void:
 		card_panel.visible = false
 	elif f == 260:
 		shot_to(dir, "calle_marcas")
+		life_check()
+		# de noche, de cerca sobre un edificio con casas
+		var best := -1
+		for i in N * N:
+			if zone[i] == Z_R and lvl[i] >= 3 and (best < 0 or lvl[i] > lvl[best]):
+				best = i
+		vida_cam(best, 16.0, 21.3)
+	elif f == 320:
+		shot_to(dir, "ventanas_noche")
+		var sc := -1
+		for a in anchors:
+			if bld[a] == 24 or bld[a] == 25:
+				sc = a
+		if sc < 0:
+			sc = anchors[0]
+		day += (9 - day % 7) % 7
+		print("escuela en día ", day % 7, " fin de semana ", life_weekend())
+		vida_cam(sc, 12.0, 10.0)
+	elif f == 380:
+		shot_to(dir, "escuela_dia")
+		vida_cam(sc_last, 16.0, 3.0)
+	elif f == 440:
+		shot_to(dir, "madrugada")
 		print("VIDA OK" if bt_fail == 0 else "VIDA FALLA")
 		get_tree().quit()
+var sc_last: int = 0
+func vida_cam(c: int, dist: float, h: float) -> void:
+	sc_last = c
+	cam_target = cell_pos(c)
+	cam_goal = cam_target
+	cam_dist = dist
+	cam_dist_goal = dist
+	cam_pitch = 0.35
+	day_timer = DAY_SECONDS * fmod(h - 6.0 + 24.0, 24.0) / 24.0
+	card_queue.clear()
+	card_panel.visible = false
+# el horario: nadie en dos lugares, nadie en la escuela de madrugada ni el fin de semana
+func life_check() -> void:
+	var bad := ""
+	for we in [false, true]:
+		for h in 24:
+			var m := life_mix(float(h), we)
+			if absf(m.x + m.y + m.z + m.w - 1.0) > 0.001 or m.x + m.y + m.z > 1.0001:
+				bad += " suma %d" % h
+			if m.z > 0.0 and (we or h < 7 or h >= 18):
+				bad += " escuela %d" % h
+	bt(bad == "", "LIFE_CHECK horario sin duplicados " + ("ok" if bad == "" else "FALLA" + bad))
+	var lit3 := life_presence(3.0, false).x * life_awake(3.0)
+	var lit21 := life_presence(21.0, false).x * life_awake(21.0)
+	bt(lit3 < 0.1 and lit21 > 0.6, "LIFE_CHECK luces de las casas: madrugada %.2f, noche %.2f " % [lit3, lit21] + ("ok" if lit3 < 0.1 and lit21 > 0.6 else "FALLA"))
+	var s3 := life_street(3.0, false)
+	var s8 := life_street(7.5, false)
+	bt(s3 < s8 * 0.3, "LIFE_CHECK calle: madrugada %.2f, hora pico %.2f " % [s3, s8] + ("ok" if s3 < s8 * 0.3 else "FALLA"))
+	var ub := 0
+	for i in N * N:
+		if zone[i] > 0 and building_use(i) == 0:
+			ub += 1
+	var us_ok := special_use(24) == 6 and special_use(23) == 7 and special_use(28) == 5
+	bt(ub == 0 and us_ok, "LIFE_CHECK uso de cada edificio " + ("ok" if ub == 0 and us_ok else "FALLA %d" % ub))
 # cada calle lleva sus vecinas y los cruces a los que llega; las rectas que llegan a un cruce tienen senda
 func road_check() -> void:
 	var straight := 0
