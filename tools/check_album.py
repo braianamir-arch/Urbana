@@ -65,8 +65,10 @@ def main():
     if s is None:
         check("nieve", False, "falta la captura")
     else:
-        lum = zone(s, SUELO).mean()
-        check("nieve: suelo blanco (brillo > 170)", lum > 170, f"{lum:.0f}")
+        # mediana: los árboles nevados de la zona no deben contar como "suelo"
+        x0, x1, y0, y1 = SUELO
+        lum = float(np.median(s[y0:y1, x0:x1].mean(axis=2)))
+        check("nieve: suelo blanco (mediana del brillo > 170)", lum > 170, f"{lum:.0f}")
     hd = load(d, "horizonte_dia")
     if hd is None:
         check("horizonte_dia", False, "falta la captura")

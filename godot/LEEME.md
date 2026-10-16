@@ -31,6 +31,11 @@ como una app aparte y no ve tus ciudades.
 | **Media** | igual que Alta | igual que Alta | una capa de olas, sin anillos de lluvia | igual que Alta |
 | **Baja** | atmósfera sin nubes | el suelo simple de antes | agua simple | los mismos modelos en su versión simple, con colores lisos |
 
+Árboles (fresno, plátano, jacarandá, pino, palo borracho, palmera, ombú) con copas que cambian con las
+estaciones y se mueven con el viento; en la calle, faroles, semáforos, autos estacionados, árboles de
+vereda, postes con cables, y —con la cámara acercada— bancos, tachos, canteros, paradas, carteles y
+bolardos. Los 51 edificios especiales tienen su propio modelo.
+
 Los edificios tienen tres versiones según la distancia. La más detallada (balcones, rejas, marcos)
 aparece cuando acercás la cámara; desde la vista normal se ven las fachadas con las ventanas pintadas,
 que es mucho más liviano para el celular.

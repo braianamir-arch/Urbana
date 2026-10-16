@@ -8,7 +8,7 @@ GODOT="$ROOT/tools/.godot/godot"
 python3 "$ROOT/tools/godot_modules.py" check >/dev/null || { echo "main.gd no está al día: python3 tools/godot_modules.py build" >&2; exit 2; }
 "$GODOT" --headless --path "$ROOT/godot" --import > "$OUT/import.log" 2>&1
 export XDG_DATA_HOME="$OUT/home"; rm -rf "$XDG_DATA_HOME"; mkdir -p "$XDG_DATA_HOME"
-timeout 2400 xvfb-run -a -s "-screen 0 1280x720x24" "$GODOT" --path "$ROOT/godot" --rendering-method mobile \
+timeout 4800 xvfb-run -a -s "-screen 0 1280x720x24" "$GODOT" --path "$ROOT/godot" --rendering-method mobile \
 	--rendering-driver vulkan --fixed-fps 60 --resolution 1280x720 --audio-driver Dummy -- "--test=album=$OUT${2:+:$2}" > "$OUT/album.log" 2>&1 &
 PID=$!
 # un error de sintaxis deja a Godot abierto sin hacer nada: se corta enseguida

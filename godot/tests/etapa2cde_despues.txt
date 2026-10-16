@@ -1,0 +1,9 @@
+# Mediciones después de la etapa 2c+2d+2e (misma máquina en la misma sesión; Vulkan por software lavapipe; Godot 4.7)
+# La máquina cambió a mitad de la etapa (reinicio): todo se midió alternando con la versión anterior (commit d37f416).
+frame_ms Alta (mediodía): antes 820,80 / ahora 823,80 → +0,4 %  (límite +5 %)
+frame_ms Baja: antes 356,24 / ahora 345,48 → −3,0 %  (límite +0 %)
+chunks_ms (5 × rehacer todos los bloques): antes 900 / ahora 1005 → 1,12×  (límite 1,3×)
+catalog_ms (catálogo completo con árboles, objetos y especiales): 1923  (límite 4000)
+pck Android: 71325192 bytes (antes 64988120 → +6,3 MB; límite +15 MB)
+Simulación: líneas SIM idénticas. compat_test: ok. check_album.py: 16/16 ok.
+BUILDING_CHECK, TREE_CHECK, PROP_CHECK, SPECIAL_CHECK (51) y CATALOG_CHECK: ok.
