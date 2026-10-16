@@ -17,6 +17,8 @@ var smoke_n: int = 0
 var flash_t: float = 0.0
 var bolt_p := Vector3.ZERO
 var bolt_seed: int = 0
+var thunder_job: int = -1
+var thunder_wav: AudioStreamWAV = null
 var dyn_skip: int = 0
 func setup_agents() -> void:
 	dyn_nodes.clear()
@@ -522,7 +524,7 @@ func smoke_fx(dt: float) -> void:
 	# fuentes de las plazas: chorritos de agua
 	if weather != "Nieve":
 		for a in anchors:
-			if bld[a] != 30:
+			if bld[a] != 30 or burn[a] > 0.0 or parts.size() > 400:
 				continue
 			var fp := cell_pos(a) + Vector3(CELL * 0.5, 0.0, CELL * 0.5) * (DEF[30]["sz"] - 1)
 			if Vector2(fp.x - cam_target.x, fp.z - cam_target.z).length() > 150.0:
@@ -535,6 +537,15 @@ func storm_fx(delta: float) -> float:
 	if weather != "Tormenta" or not started:
 		flash_t = 0.0
 		return 0.0
+	# el trueno se arma en otro hilo antes del primer rayo (armarlo tarda y trabaría el juego)
+	if sounds.get("thunder") is Dictionary:
+		if thunder_job < 0:
+			var sd: Dictionary = sounds["thunder"]
+			thunder_job = WorkerThreadPool.add_task(func(): thunder_wav = build_sound(sd["d"], sd["f"]))
+		if not WorkerThreadPool.is_task_completed(thunder_job):
+			return 0.0
+		WorkerThreadPool.wait_for_task_completion(thunder_job)
+		sounds["thunder"] = thunder_wav
 	if flash_t <= 0.0 and randf() < delta * 0.1:
 		flash_t = 0.4
 		bolt_seed = randi()

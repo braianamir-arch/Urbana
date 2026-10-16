@@ -3222,6 +3222,7 @@ func set_city_tex(on: bool) -> void:
 		city_tex_loaded = false
 	for m in [building_mat, building_lite_mat, city_mat]:
 		m.set_shader_parameter("tex_on", 1.0 if on else 0.0)
+	city_mat.set_shader_parameter("marks_on", 1.0 if int(opts["quality"]) >= 1 else 0.0)
 func use_tex_terrain() -> bool:
 	return int(opts["quality"]) >= 1 and bool(opts["g_detail"])
 func build_terrain() -> void:
@@ -3645,7 +3646,8 @@ func build_outer(grass: Color) -> void:
 func mark_dirty(i: int) -> void:
 	var x := cx(i)
 	var z := cz(i)
-	for o in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+	# también en diagonal: las marcas del asfalto miran calles a dos celdas
+	for o in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1)]:
 		var xx: int = clampi(x + o.x * 2, 0, N - 1)
 		var zz: int = clampi(z + o.y * 2, 0, N - 1)
 		chunk_dirty[(zz / CH) * NCH + xx / CH] = 1
@@ -4449,6 +4451,7 @@ func cat_mesh(m: int, floors: int, lod: int) -> ArrayMesh:
 	var md: Dictionary = cat_models[m]
 	mb_begin()
 	if md["near_only"] and lod != LOD_NEAR:
+		md["chim"] = md.get("chim", [])
 		var empty := ArrayMesh.new()
 		cat_cache[key] = empty
 		return empty
@@ -4501,7 +4504,7 @@ func emit_model(m: int, f: int, x: float, y: float, z: float, rot: float, sc: fl
 	if cur_chunk >= 0 and md["fam"] in ["edificio", "especial"] and cust.x < 0.5:
 		if not md.has("chim"):
 			cat_mesh(m, f, LOD_FAR)
-		for q in md["chim"]:
+		for q in md.get("chim", []):
 			var lp: Vector3 = q
 			smoke_pts[cur_chunk].append(Vector3(c * lp.x + s * lp.z + x, sy * lp.y + y, -s * lp.x + c * lp.z + z))
 	if bcheck_on:
@@ -6556,6 +6559,8 @@ var smoke_n: int = 0
 var flash_t: float = 0.0
 var bolt_p := Vector3.ZERO
 var bolt_seed: int = 0
+var thunder_job: int = -1
+var thunder_wav: AudioStreamWAV = null
 var dyn_skip: int = 0
 func setup_agents() -> void:
 	dyn_nodes.clear()
@@ -7061,7 +7066,7 @@ func smoke_fx(dt: float) -> void:
 	# fuentes de las plazas: chorritos de agua
 	if weather != "Nieve":
 		for a in anchors:
-			if bld[a] != 30:
+			if bld[a] != 30 or burn[a] > 0.0 or parts.size() > 400:
 				continue
 			var fp := cell_pos(a) + Vector3(CELL * 0.5, 0.0, CELL * 0.5) * (DEF[30]["sz"] - 1)
 			if Vector2(fp.x - cam_target.x, fp.z - cam_target.z).length() > 150.0:
@@ -7074,6 +7079,15 @@ func storm_fx(delta: float) -> float:
 	if weather != "Tormenta" or not started:
 		flash_t = 0.0
 		return 0.0
+	# el trueno se arma en otro hilo antes del primer rayo (armarlo tarda y trabaría el juego)
+	if sounds.get("thunder") is Dictionary:
+		if thunder_job < 0:
+			var sd: Dictionary = sounds["thunder"]
+			thunder_job = WorkerThreadPool.add_task(func(): thunder_wav = build_sound(sd["d"], sd["f"]))
+		if not WorkerThreadPool.is_task_completed(thunder_job):
+			return 0.0
+		WorkerThreadPool.wait_for_task_completion(thunder_job)
+		sounds["thunder"] = thunder_wav
 	if flash_t <= 0.0 and randf() < delta * 0.1:
 		flash_t = 0.4
 		bolt_seed = randi()
@@ -8023,7 +8037,8 @@ func building_use(i: int) -> int:
 			return 4
 	return 0
 func special_use(id: int) -> int:
-	return USE_SPECIAL.get(id, 5)
+	# monumentos, estaciones y demás: sin escenas (solo luces comunes)
+	return USE_SPECIAL.get(id, 5 if id in [20, 21, 27, 28, 29, 41, 53, 54, 55, 56, 57, 66, 70, 73] else 0)
 # hora de ir o volver de la escuela (para los chicos con mochila)
 func life_school_rush(h: float, weekend: bool) -> bool:
 	return not weekend and ((h >= 7.0 and h < 8.3) or (h >= 12.0 and h < 13.3) or (h >= 16.8 and h < 17.8))
@@ -8044,6 +8059,7 @@ var lab_prim: float = 0.0
 var lab_dc_n: int = 0
 var lab_since: float = 0.0
 var lab_zoom_prev: float = 0.0
+var lab_sum: float = 0.0
 func lab_reset() -> void:
 	lab_hist.clear()
 	for p in LAB_PARTS.size():
@@ -8052,6 +8068,7 @@ func lab_reset() -> void:
 		lab_hist.append(a)
 	lab_frames.resize(LAB_N)
 	lab_frames.fill(0.0)
+	lab_sum = 0.0
 	lab_k = 0
 	lab_count = 0
 	lab_stutters.clear()
@@ -8080,11 +8097,13 @@ func lab_frame(delta: float) -> void:
 		lab_stutters.append({"ms": ms, "part": worst, "part_ms": lab_prev[worst], "zoom": zooming, "move": cam_moving_t > 0.0, "dist": cam_dist})
 	for p in LAB_PARTS.size():
 		lab_hist[p][lab_k] = lab_cur[p]
+	lab_sum += ms - lab_frames[lab_k]
 	lab_frames[lab_k] = ms
 	lab_k = (lab_k + 1) % LAB_N
 	lab_count += 1
-	lab_prev = lab_cur.duplicate()
-	lab_cur.fill(0.0)
+	for p in LAB_PARTS.size():
+		lab_prev[p] = lab_cur[p]
+		lab_cur[p] = 0.0
 	lab_zoom_prev = cam_dist
 	if Engine.get_process_frames() % 30 == 0:
 		lab_dc += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
@@ -8097,10 +8116,7 @@ func lab_avg_frame() -> float:
 	var n := lab_n()
 	if n == 0:
 		return 16.7
-	var s := 0.0
-	for k in n:
-		s += lab_frames[k]
-	return s / n
+	return lab_sum / n
 func lab_avg(p: int) -> float:
 	var n := lab_n()
 	if n == 0 or lab_hist.is_empty():
@@ -8451,10 +8467,14 @@ class Chart extends Control:
 		if money:
 			txt = str(int(last))
 		draw_string(font, Vector2(size.x - 160, fs + 4), txt, HORIZONTAL_ALIGNMENT_RIGHT, 150, fs, col)
-const COL_BG := Color(0.17, 0.12, 0.09, 0.92)
-const COL_BTN := Color(0.37, 0.27, 0.19, 0.96)
-const COL_ACC := Color(1.0, 0.78, 0.32)
-const COL_ACC_DK := Color(0.2, 0.12, 0.05)
+# paleta: vidrio oscuro grafito, bordes finos y un solo color de acento (ámbar)
+const COL_BG := Color(0.075, 0.09, 0.115, 0.86)
+const COL_BTN := Color(0.17, 0.2, 0.25, 0.94)
+const COL_ACC := Color(1.0, 0.76, 0.27)
+const COL_ACC_DK := Color(0.16, 0.11, 0.03)
+const COL_LINE := Color(1, 1, 1, 0.1)
+const COL_SUB := Color(0.72, 0.78, 0.86)
+var font_bold: Font = null
 func sbox(col: Color, radius: int = 14) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = col
@@ -8464,21 +8484,26 @@ func sbox(col: Color, radius: int = 14) -> StyleBoxFlat:
 	s.content_margin_top = 10
 	s.content_margin_bottom = 10
 	return s
-func sbtn(col: Color, border: Color = Color(1, 1, 1, 0.16)) -> StyleBoxFlat:
-	var s := sbox(col, 18)
-	s.set_border_width_all(2)
+func sbtn(col: Color, border: Color = COL_LINE) -> StyleBoxFlat:
+	var s := sbox(col, 14)
+	s.set_border_width_all(1)
 	s.border_color = border
-	s.shadow_color = Color(0, 0, 0, 0.4)
-	s.shadow_size = 6
-	s.shadow_offset = Vector2(0, 3)
+	s.shadow_color = Color(0, 0, 0, 0.28)
+	s.shadow_size = 8
+	s.shadow_offset = Vector2(0, 2)
+	s.anti_aliasing_size = 0.8
 	return s
-func ssel(col: Color = COL_ACC, radius: int = 18) -> StyleBoxFlat:
-	var s := sbtn(col, Color(1, 1, 1, 0.55))
+func ssel(col: Color = COL_ACC, radius: int = 14) -> StyleBoxFlat:
+	var s := sbtn(col, Color(1, 1, 1, 0.35))
 	s.set_corner_radius_all(radius)
-	s.shadow_color = Color(1.0, 0.78, 0.32, 0.45)
-	s.shadow_size = 10
+	s.shadow_color = Color(1.0, 0.76, 0.27, 0.3)
+	s.shadow_size = 8
 	s.shadow_offset = Vector2(0, 0)
 	return s
+# títulos y números importantes en negrita
+func bold(c: Control) -> void:
+	if font_bold != null:
+		c.add_theme_font_override("font", font_bold)
 func make_knob(r: int, col: Color) -> ImageTexture:
 	var img := Image.create(r * 2, r * 2, false, Image.FORMAT_RGBA8)
 	for y in r * 2:
@@ -8489,20 +8514,30 @@ func make_knob(r: int, col: Color) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 func make_theme() -> void:
 	var t := ui_theme
+	# letra Inter (licencia OFL); los emojis y símbolos salen de la letra de respaldo
+	var fr: Font = load("res://assets/fonts/Inter-Medium.ttf") if ResourceLoader.exists("res://assets/fonts/Inter-Medium.ttf") else null
+	var fb: Font = load("res://assets/fonts/Inter-Bold.ttf") if ResourceLoader.exists("res://assets/fonts/Inter-Bold.ttf") else null
+	if fr is FontFile:
+		(fr as FontFile).fallbacks = [ThemeDB.fallback_font]
+		t.default_font = fr
+	if fb is FontFile:
+		(fb as FontFile).fallbacks = [ThemeDB.fallback_font]
+		font_bold = fb
 	t.set_stylebox("normal", "Button", sbtn(COL_BTN))
 	t.set_stylebox("hover", "Button", sbtn(COL_BTN))
 	t.set_stylebox("pressed", "Button", sbtn(COL_ACC, Color(1, 1, 1, 0.5)))
 	t.set_stylebox("hover_pressed", "Button", sbtn(COL_ACC, Color(1, 1, 1, 0.5)))
-	t.set_stylebox("disabled", "Button", sbtn(Color(0.25, 0.19, 0.14, 0.6)))
+	t.set_stylebox("disabled", "Button", sbtn(Color(0.14, 0.16, 0.2, 0.6)))
 	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
-	t.set_color("font_color", "Button", Color(1.0, 0.97, 0.9))
+	t.set_color("font_color", "Button", Color(0.95, 0.96, 0.98))
 	t.set_color("font_hover_color", "Button", Color.WHITE)
 	t.set_color("font_pressed_color", "Button", COL_ACC_DK)
 	t.set_color("font_hover_pressed_color", "Button", COL_ACC_DK)
 	t.set_color("font_disabled_color", "Button", Color(1, 1, 1, 0.4))
-	t.set_stylebox("panel", "PanelContainer", sbox(COL_BG, 18))
-	t.set_stylebox("normal", "TextEdit", sbox(Color(0.1, 0.07, 0.05, 0.9), 10))
-	t.set_stylebox("focus", "TextEdit", sbox(Color(0.1, 0.07, 0.05, 0.9), 10))
+	t.set_stylebox("panel", "PanelContainer", sbox(COL_BG, 16))
+	t.set_stylebox("normal", "TextEdit", sbox(Color(0.04, 0.05, 0.07, 0.9), 10))
+	t.set_stylebox("focus", "TextEdit", sbox(Color(0.04, 0.05, 0.07, 0.9), 10))
+	t.set_color("font_color", "Label", Color(0.95, 0.96, 0.98))
 	t.set_stylebox("slider", "HSlider", sbox(Color(1, 1, 1, 0.16), 6))
 	var fill := sbox(COL_ACC, 6)
 	t.set_stylebox("grabber_area", "HSlider", fill)
@@ -8511,7 +8546,7 @@ func make_theme() -> void:
 		var sb: StyleBoxFlat = t.get_stylebox(st, "HSlider")
 		sb.content_margin_top = 6
 		sb.content_margin_bottom = 6
-	var kn := make_knob(22, Color(1, 0.95, 0.85))
+	var kn := make_knob(22, Color(0.96, 0.97, 1.0))
 	t.set_icon("grabber", "HSlider", kn)
 	t.set_icon("grabber_highlight", "HSlider", kn)
 	t.set_icon("grabber_disabled", "HSlider", kn)
@@ -8538,15 +8573,22 @@ func top_style() -> StyleBoxFlat:
 	return s
 func mk_panel(alpha: float = 0.82) -> PanelContainer:
 	var p := PanelContainer.new()
-	var s := sbox(Color(COL_BG.r, COL_BG.g, COL_BG.b, alpha), 18)
+	var s := sbox(Color(COL_BG.r, COL_BG.g, COL_BG.b, alpha), 16)
 	s.set_border_width_all(1)
-	s.border_color = Color(1, 1, 1, 0.12)
+	s.border_color = COL_LINE
+	s.shadow_color = Color(0, 0, 0, 0.3)
+	s.shadow_size = 10
+	s.shadow_offset = Vector2(0, 3)
+	s.content_margin_left = 16
+	s.content_margin_right = 16
+	s.content_margin_top = 12
+	s.content_margin_bottom = 12
 	p.add_theme_stylebox_override("panel", s)
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
 	return p
 func chip(l: Label) -> PanelContainer:
 	var p := PanelContainer.new()
-	var s := sbox(Color(1, 1, 1, 0.08), 14)
+	var s := sbox(Color(1, 1, 1, 0.06), 12)
 	s.content_margin_left = 12
 	s.content_margin_right = 12
 	s.content_margin_top = 6
@@ -8761,6 +8803,7 @@ func build_ui() -> void:
 	top_bar.add_child(mcol)
 	var mr := mk_row()
 	top_money = mk_label("$0", int(opts["text"]) + 12)
+	bold(top_money)
 	top_rate = mk_label("", int(opts["text"]) - 3, Color(0.55, 0.9, 0.55))
 	top_rate.size_flags_vertical = Control.SIZE_SHRINK_END
 	var sp := Control.new()
@@ -8838,7 +8881,7 @@ func build_ui() -> void:
 	top_stage_bar.add_theme_stylebox_override("background", sbox(Color(1, 1, 1, 0.12), 6))
 	top_stage_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cv2.add_child(top_stage_bar)
-	top_date = mk_label("Día 1", int(opts["text"]) - 1, Color(0.95, 0.89, 0.76))
+	top_date = mk_label("Día 1", int(opts["text"]) - 1, COL_SUB)
 	cv2.add_child(top_date)
 	top_weather = mk_label("☀")
 	cv2.add_child(top_weather)
@@ -8847,7 +8890,7 @@ func build_ui() -> void:
 	var ov := VBoxContainer.new()
 	ov.add_theme_constant_override("separation", 4)
 	obj_card.add_child(ov)
-	obj_head = mk_label("", int(opts["text"]) - 5, Color(0.86, 0.78, 0.64))
+	obj_head = mk_label("", int(opts["text"]) - 5, COL_SUB)
 	obj_text = mk_label("", 0, Color.WHITE)
 	obj_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	obj_text.custom_minimum_size = Vector2(300, 0)
@@ -8857,7 +8900,7 @@ func build_ui() -> void:
 	obj_bar.add_theme_stylebox_override("fill", sbox(Color(0.45, 0.85, 0.5), 5))
 	obj_bar.add_theme_stylebox_override("background", sbox(Color(1, 1, 1, 0.12), 5))
 	obj_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	obj_rew = mk_label("", int(opts["text"]) - 3, Color(0.86, 0.78, 0.64))
+	obj_rew = mk_label("", int(opts["text"]) - 3, COL_SUB)
 	ov.add_child(obj_head)
 	ov.add_child(obj_text)
 	ov.add_child(obj_bar)
@@ -8917,15 +8960,16 @@ func build_ui() -> void:
 	var nh := HBoxContainer.new()
 	nh.add_theme_constant_override("separation", 14)
 	nh.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	notif_icon = mk_ico("trophy", 64) as TextureRect
+	notif_icon = mk_ico("trophy", 40) as TextureRect
 	var nv := VBoxContainer.new()
 	nv.add_theme_constant_override("separation", 0)
 	nv.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	nv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	notif_title = mk_label("", int(opts["text"]) - 6, Color(0.95, 0.78, 0.35))
-	notif_text = mk_label("", 0, Color.WHITE)
+	notif_title = mk_label("", int(opts["text"]) - 7, COL_ACC)
+	bold(notif_title)
+	notif_text = mk_label("", int(opts["text"]) - 3, Color.WHITE)
 	notif_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	notif_text.custom_minimum_size = Vector2(300, 0)
+	notif_text.custom_minimum_size = Vector2(220, 0)
 	nv.add_child(notif_title)
 	nv.add_child(notif_text)
 	nh.add_child(notif_icon)
@@ -8963,11 +9007,12 @@ func build_ui() -> void:
 	build_btn = Button.new()
 	build_btn.focus_mode = Control.FOCUS_NONE
 	build_btn.custom_minimum_size = Vector2(240, 96)
-	var bs := sbtn(COL_ACC, Color(1, 1, 1, 0.6))
+	var bs := sbtn(COL_ACC, Color(1, 1, 1, 0.45))
 	bs.set_corner_radius_all(48)
-	bs.shadow_color = Color(1.0, 0.78, 0.32, 0.4)
+	bs.shadow_color = Color(0, 0, 0, 0.35)
 	bs.shadow_size = 12
-	var bp := sbtn(Color(0.85, 0.62, 0.2), Color(1, 1, 1, 0.6))
+	bs.shadow_offset = Vector2(0, 4)
+	var bp := sbtn(Color(0.88, 0.63, 0.18), Color(1, 1, 1, 0.45))
 	bp.set_corner_radius_all(48)
 	for st in ["normal", "hover"]:
 		build_btn.add_theme_stylebox_override(st, bs)
@@ -8980,6 +9025,7 @@ func build_ui() -> void:
 	bh.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bi := mk_ico("crane", 62)
 	var bl := mk_label("CONSTRUIR", int(opts["text"]) + 2, COL_ACC_DK)
+	bold(bl)
 	bh.add_child(bi)
 	bh.add_child(bl)
 	build_btn.add_child(bh)
@@ -9007,6 +9053,7 @@ func build_ui() -> void:
 	sheet_title = mk_label("", 0)
 	sheet_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sheet_title.add_theme_font_size_override("font_size", int(opts["text"]) + 6)
+	bold(sheet_title)
 	sh_head.add_child(sheet_title)
 	sh_head.add_child(mk_btn("✕", func(): close_sheet(), 64))
 	sv2.add_child(sh_head)
@@ -9082,7 +9129,7 @@ func build_ui() -> void:
 		cam_follow = null
 		hide_follow_card(), 0))
 	tut_panel = mk_panel(0.92)
-	tut_panel.add_theme_stylebox_override("panel", sbox(Color(0.15, 0.3, 0.55, 0.92)))
+	tut_panel.add_theme_stylebox_override("panel", sbox(Color(0.1, 0.24, 0.45, 0.94), 16))
 	tut_panel.visible = false
 	ui_root.add_child(tut_panel)
 	var tv := mk_row()
@@ -9095,15 +9142,18 @@ func build_ui() -> void:
 	card_panel.visible = false
 	ui_root.add_child(card_panel)
 	var cv := VBoxContainer.new()
-	cv.add_theme_constant_override("separation", 14)
+	cv.add_theme_constant_override("separation", 10)
 	card_panel.add_child(cv)
-	card_title = mk_label("", 0, Color(1, 0.9, 0.5))
-	card_title.add_theme_font_size_override("font_size", int(opts["text"]) + 10)
+	card_title = mk_label("", 0, COL_ACC)
+	card_title.add_theme_font_size_override("font_size", int(opts["text"]) + 4)
+	bold(card_title)
 	card_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cv.add_child(card_title)
 	card_text = mk_text("")
 	card_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	card_text.custom_minimum_size = Vector2(520, 0)
+	card_text.custom_minimum_size = Vector2(400, 0)
+	card_text.add_theme_font_size_override("font_size", int(opts["text"]) - 2)
+	card_text.add_theme_color_override("font_color", Color(0.86, 0.89, 0.94))
 	cv.add_child(card_text)
 	card_btns = mk_row()
 	card_btns.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -9281,9 +9331,21 @@ func fit_sheet() -> void:
 	var hh := minf(sheet_avail, sheet_body.get_combined_minimum_size().y + 110.0)
 	if absf(sheet.size.y - hh) > 2.0:
 		sheet.size = Vector2(sheet.size.x, hh)
+# en el celular la interfaz sigue al tamaño real de la pantalla (en pulgadas), no solo a los píxeles:
+# así no queda gigante en una tablet ni diminuta en un teléfono chico. Calibrado para que un teléfono
+# común (lado corto de ~2,8") quede como antes.
+func phys_factor() -> float:
+	if not OS.has_feature("mobile"):
+		return 1.0
+	var dpi := float(DisplayServer.screen_get_dpi())
+	var ss := Vector2(DisplayServer.screen_get_size())
+	if dpi < 60.0 or ss.x <= 0.0:
+		return 1.0
+	var short_in := minf(ss.x, ss.y) / dpi
+	return clampf(2.8 / short_in, 0.55, 1.2)
 func layout_ui() -> void:
 	var vs := get_viewport().get_visible_rect().size
-	ui_scale = clampf(minf(vs.x, vs.y) / 1000.0 * [1.0, 1.25, 1.5][clampi(int(opts["ui_size"]), 0, 2)], 0.5, 2.8)
+	ui_scale = clampf(minf(vs.x, vs.y) / 1000.0 * phys_factor() * [1.0, 1.25, 1.5][clampi(int(opts["ui_size"]), 0, 2)], 0.45, 2.8)
 	ui_layer.scale = Vector2(ui_scale, ui_scale)
 	var w := vs.x / ui_scale
 	var h := vs.y / ui_scale
@@ -9330,13 +9392,13 @@ func layout_ui() -> void:
 	var ih := info_body.get_combined_minimum_size().y + 40.0
 	info_panel.size = Vector2(iw, clampf(ih, 120.0, minf(avail - 100.0, 640.0)))
 	info_body.custom_minimum_size = Vector2(iw - 50, 0)
-	var cw := minf(620.0, w - 30.0)
+	var cw := minf(470.0, w - 30.0)
 	card_text.custom_minimum_size = Vector2(cw - 40, 0)
 	card_panel.size = Vector2(cw, 0)
 	card_panel.reset_size()
 	var cs := card_panel.get_combined_minimum_size()
 	card_panel.size = Vector2(cw, cs.y)
-	card_panel.position = Vector2((w - cw) * 0.5, maxf(tb_h + 20, (h - cs.y) * 0.42))
+	card_panel.position = Vector2((w - cw) * 0.5, maxf(tb_h + 20, (h - cs.y) * 0.45))
 	var mm2 := mode_bar.get_combined_minimum_size()
 	mode_bar.position = Vector2((w - mm2.x) * 0.5, tb_h + 74)
 	var dm := drive_bar.get_combined_minimum_size()
@@ -9371,20 +9433,29 @@ func notify_next() -> void:
 	notif_text.text = it[1]
 	if notif_icon != null and ico(it[2]) != null:
 		notif_icon.texture = ico(it[2])
+	# entre el panel del costado y los botones de arriba; si no entra, abajo de los botones
 	var w := ui_root.size.x
-	var nw := minf(560.0, w - 40.0)
-	notif_text.custom_minimum_size = Vector2(nw - 140.0, 0)
+	var lefty: bool = opts["lefty"]
+	var left := (hud_right.position.x + hud_right.size.x if lefty else hud_col.position.x + hud_col.size.x) + 12.0
+	var right := (hud_col.position.x if lefty else hud_right.position.x) - 12.0
+	var nw := minf(420.0, right - left)
+	var x := left + (right - left - nw) * 0.5
+	var ny := 14.0
+	if nw < 280.0:
+		nw = minf(400.0, w * 0.42)
+		x = 14.0 if lefty else w - nw - 14.0
+		ny = hud_right.position.y + hud_right.size.y + 10.0
+	notif_text.custom_minimum_size = Vector2(nw - 100.0, 0)
 	notif_panel.size = Vector2(nw, 0)
 	notif_panel.reset_size()
 	notif_panel.size.x = nw
 	notif_panel.pivot_offset = notif_panel.size * 0.5
-	var x := (w - nw) * 0.5
 	notif_panel.position = Vector2(x, -notif_panel.size.y - 20.0)
 	notif_panel.modulate.a = 1.0
 	notif_panel.visible = true
 	ui_root.move_child(notif_panel, -1)
 	var tw := notif_panel.create_tween()
-	tw.tween_property(notif_panel, "position:y", 16.0, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(notif_panel, "position:y", ny, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_interval(3.2)
 	tw.tween_property(notif_panel, "position:y", -notif_panel.size.y - 20.0, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.tween_callback(func():
@@ -9464,7 +9535,7 @@ func next_card() -> void:
 				return
 			card_busy = true
 			call_deferred("card_pick", kk), 150)
-		cbtn.custom_minimum_size = Vector2(150, 64)
+		cbtn.custom_minimum_size = Vector2(130, 52)
 		cbtn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		if k == 0:
 			mark_sel(cbtn, true)
@@ -10591,7 +10662,7 @@ var _ico_src: Dictionary = {}
 func lf(x: float, y: float, r: float, s: float = 1.0) -> String:
 	return '<g transform="translate(%s %s) rotate(%s) scale(%s)"><path d="M0 0C3-8 13-8 15 0C13 8 3 8 0 0Z" fill="#86a95a" stroke="#4d6b34" stroke-width="1.8"/><path d="M2 0H12" stroke="#4d6b34" stroke-width="1.2" fill="none"/></g>' % [x, y, r, s]
 func build_ico_src() -> void:
-	var G := '<g stroke="#5a3d28" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round">'
+	var G := '<g stroke="#12171d" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round">'
 	_ico_src = {
 		"roads": '<path d="M19 52L27 12H37L45 52Z" fill="#8f8b86"/><path d="M32 17V23M32 29V35M32 41V47" stroke="#f0c04a" stroke-width="3.2" fill="none"/>' + lf(46, 46, -35) + lf(18, 40, 215, 0.8),
 		"zones": '<path d="M10 32L32 13L54 32Z" fill="#c9573f"/><rect x="15" y="32" width="34" height="21" fill="#f0c9a0"/><rect x="28" y="40" width="9" height="13" fill="#9b6a45"/><rect x="19" y="36" width="7" height="7" fill="#9fcbe0"/>' + lf(50, 30, -50, 0.9),
@@ -10601,7 +10672,7 @@ func build_ico_src() -> void:
 		"fun": '<rect x="29" y="36" width="6" height="19" fill="#9b6a45"/><circle cx="32" cy="25" r="17" fill="#86a95a"/><circle cx="25" cy="30" r="3" fill="#e9a1a1" stroke="none"/><circle cx="38" cy="22" r="3" fill="#e9a1a1" stroke="none"/><circle cx="33" cy="32" r="2.4" fill="#f0c04a" stroke="none"/>',
 		"quit": '<path d="M17 23H47L44 55H20Z" fill="#a8a39a"/><rect x="13" y="16" width="38" height="7" rx="3" fill="#c9c4ba"/><path d="M27 11H37V16H27Z" fill="#a8a39a"/><path d="M26 29V49M32 29V49M38 29V49" fill="none"/>' + lf(48, 52, -30, 0.8),
 		"rotate": '<path d="M46 22A18 18 0 1 0 50 36" fill="none" stroke-width="7"/><path d="M46 22A18 18 0 1 0 50 36" fill="none" stroke="#6fa3c9" stroke-width="3.4"/><path d="M38 12L54 22L40 32Z" fill="#6fa3c9"/>',
-		"tilt": '<path d="M13 52V12L52 52Z" fill="#f0c04a"/><path d="M22 43V29L36 43Z" fill="#f2e3c4"/>' + lf(46, 50, -20, 0.8),
+		"tilt": '<path d="M13 52V12L52 52Z" fill="#f0c04a"/><path d="M22 43V29L36 43Z" fill="#1f252d"/>' + lf(46, 50, -20, 0.8),
 		"zoomin": '<circle cx="27" cy="27" r="16" fill="#cfe6f0"/><path d="M39 39L54 54" stroke-width="7" fill="none"/><path d="M19 27H35M27 19V35" stroke="#56763a" stroke-width="3.6" fill="none"/>',
 		"zoomout": '<circle cx="27" cy="27" r="16" fill="#cfe6f0"/><path d="M39 39L54 54" stroke-width="7" fill="none"/><path d="M19 27H35" stroke="#c9573f" stroke-width="3.6" fill="none"/>',
 		"eye": '<path d="M5 32C15 15 49 15 59 32C49 49 15 49 5 32Z" fill="#f7f1e2"/><circle cx="32" cy="32" r="10.5" fill="#6fa3c9"/><circle cx="32" cy="32" r="4.5" fill="#5a3d28"/>' + lf(52, 18, -50, 0.8),
@@ -10630,7 +10701,7 @@ func ico(n: String) -> ImageTexture:
 		build_ico_src()
 	var tex: ImageTexture = null
 	if _ico_src.has(n):
-		var svg: String = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="1" y="1" width="62" height="62" rx="16" fill="#f2e3c4"/>' + _ico_src[n] + "</svg>"
+		var svg: String = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' + _ico_src[n] + "</svg>"
 		var img := Image.new()
 		if img.load_svg_from_string(svg, 2.0) == OK:
 			img.generate_mipmaps()
@@ -10734,7 +10805,7 @@ func setup_audio() -> void:
 				v += (sin(TAU * (330.0 + k * 50.0) * t) + sin(TAU * (415.0 + k * 50.0) * t)) * 0.07 * e
 		return v)
 	# trueno: ruido grave que retumba y se apaga
-	sounds["thunder"] = make_sound(2.6, func(t: float) -> float:
+	sounds["thunder"] = make_sound(1.8, func(t: float) -> float:
 		var e := minf(t * 30.0, 1.0) * exp(-t * 1.6) * (0.7 + 0.3 * sin(TAU * 3.0 * t))
 		return soft.call(0.03) * e * 2.2)
 	sounds["cheer"] = make_sound(1.5, func(t: float) -> float:
@@ -10913,6 +10984,8 @@ func reset_state() -> void:
 	boats = []
 	planes = []
 	parts = []
+	smoke_n = 0
+	smoke_pts.clear()
 	anim_cells = {}
 	car_paths = []
 	drive = null
@@ -12938,6 +13011,10 @@ func fx2_check() -> void:
 	var rot_ok: bool = kinds.get(45, 0) == 1 and kinds.get(36, 0) == 2 and kinds.get(34, 0) == 3
 	bt(rot_ok, "FX2_CHECK partes que giran " + ("ok" if rot_ok else "FALLA %s" % str(kinds)))
 	weather = "Tormenta"
+	var t0 := Time.get_ticks_msec()
+	while sounds.get("thunder") is Dictionary and Time.get_ticks_msec() - t0 < 10000:
+		storm_fx(0.0)
+		OS.delay_msec(20)
 	flash_t = 0.4
 	var fl := storm_fx(0.01)
 	bt(fl > 0.0, "FX2_CHECK rayo ilumina " + ("ok" if fl > 0.0 else "FALLA"))

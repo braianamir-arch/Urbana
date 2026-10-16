@@ -79,6 +79,8 @@ func reset_state() -> void:
 	boats = []
 	planes = []
 	parts = []
+	smoke_n = 0
+	smoke_pts.clear()
 	anim_cells = {}
 	car_paths = []
 	drive = null

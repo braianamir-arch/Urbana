@@ -257,6 +257,7 @@ func cat_mesh(m: int, floors: int, lod: int) -> ArrayMesh:
 	var md: Dictionary = cat_models[m]
 	mb_begin()
 	if md["near_only"] and lod != LOD_NEAR:
+		md["chim"] = md.get("chim", [])
 		var empty := ArrayMesh.new()
 		cat_cache[key] = empty
 		return empty
@@ -309,7 +310,7 @@ func emit_model(m: int, f: int, x: float, y: float, z: float, rot: float, sc: fl
 	if cur_chunk >= 0 and md["fam"] in ["edificio", "especial"] and cust.x < 0.5:
 		if not md.has("chim"):
 			cat_mesh(m, f, LOD_FAR)
-		for q in md["chim"]:
+		for q in md.get("chim", []):
 			var lp: Vector3 = q
 			smoke_pts[cur_chunk].append(Vector3(c * lp.x + s * lp.z + x, sy * lp.y + y, -s * lp.x + c * lp.z + z))
 	if bcheck_on:

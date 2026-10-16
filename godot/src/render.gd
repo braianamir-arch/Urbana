@@ -407,6 +407,7 @@ func set_city_tex(on: bool) -> void:
 		city_tex_loaded = false
 	for m in [building_mat, building_lite_mat, city_mat]:
 		m.set_shader_parameter("tex_on", 1.0 if on else 0.0)
+	city_mat.set_shader_parameter("marks_on", 1.0 if int(opts["quality"]) >= 1 else 0.0)
 func use_tex_terrain() -> bool:
 	return int(opts["quality"]) >= 1 and bool(opts["g_detail"])
 func build_terrain() -> void:
@@ -830,7 +831,8 @@ func build_outer(grass: Color) -> void:
 func mark_dirty(i: int) -> void:
 	var x := cx(i)
 	var z := cz(i)
-	for o in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+	# también en diagonal: las marcas del asfalto miran calles a dos celdas
+	for o in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1)]:
 		var xx: int = clampi(x + o.x * 2, 0, N - 1)
 		var zz: int = clampi(z + o.y * 2, 0, N - 1)
 		chunk_dirty[(zz / CH) * NCH + xx / CH] = 1

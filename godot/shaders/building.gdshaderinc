@@ -239,7 +239,7 @@ void fragment() {
 		}
 #ifndef LITE
 		// lo que hace la gente adentro: tele, cocina, oficina, clase, negocio, hospital
-		if (u > 0 && (int(vtm + 0.5) & 15) != 3 && hw < occp) {
+		if (u > 0 && (int(vtm + 0.5) & 15) != 3 && hw < occp && cust.x < 0.5) {
 			float act = hash(id + 2.2);
 			float sil = 0.0;
 			float furn = 0.0;
@@ -278,8 +278,8 @@ void fragment() {
 					sil = person(wf, 0.72 + 0.12 * sin(tt * 4.0), 0.0, 1.1);
 				} else {
 					// chicos en sus bancos
-					for (int k = 0; k < 3; k++) {
-						float fk = float(k);
+					for (int kk = 0; kk < 3; kk++) {
+						float fk = float(kk);
 						sil = max(sil, person(wf, 0.2 + 0.3 * fk, 0.12 + 0.02 * sin(TIME * 1.3 + fk + act * 9.0), 0.6));
 					}
 					furn = rectm(wf, vec4(0.0, 0.0, 1.0, 0.16));

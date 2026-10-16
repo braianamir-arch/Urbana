@@ -1635,6 +1635,10 @@ func fx2_check() -> void:
 	var rot_ok: bool = kinds.get(45, 0) == 1 and kinds.get(36, 0) == 2 and kinds.get(34, 0) == 3
 	bt(rot_ok, "FX2_CHECK partes que giran " + ("ok" if rot_ok else "FALLA %s" % str(kinds)))
 	weather = "Tormenta"
+	var t0 := Time.get_ticks_msec()
+	while sounds.get("thunder") is Dictionary and Time.get_ticks_msec() - t0 < 10000:
+		storm_fx(0.0)
+		OS.delay_msec(20)
 	flash_t = 0.4
 	var fl := storm_fx(0.01)
 	bt(fl > 0.0, "FX2_CHECK rayo ilumina " + ("ok" if fl > 0.0 else "FALLA"))

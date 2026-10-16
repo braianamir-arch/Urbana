@@ -60,7 +60,8 @@ func building_use(i: int) -> int:
 			return 4
 	return 0
 func special_use(id: int) -> int:
-	return USE_SPECIAL.get(id, 5)
+	# monumentos, estaciones y demás: sin escenas (solo luces comunes)
+	return USE_SPECIAL.get(id, 5 if id in [20, 21, 27, 28, 29, 41, 53, 54, 55, 56, 57, 66, 70, 73] else 0)
 # hora de ir o volver de la escuela (para los chicos con mochila)
 func life_school_rush(h: float, weekend: bool) -> bool:
 	return not weekend and ((h >= 7.0 and h < 8.3) or (h >= 12.0 and h < 13.3) or (h >= 16.8 and h < 17.8))

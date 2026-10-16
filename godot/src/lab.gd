@@ -14,6 +14,7 @@ var lab_prim: float = 0.0
 var lab_dc_n: int = 0
 var lab_since: float = 0.0
 var lab_zoom_prev: float = 0.0
+var lab_sum: float = 0.0
 func lab_reset() -> void:
 	lab_hist.clear()
 	for p in LAB_PARTS.size():
@@ -22,6 +23,7 @@ func lab_reset() -> void:
 		lab_hist.append(a)
 	lab_frames.resize(LAB_N)
 	lab_frames.fill(0.0)
+	lab_sum = 0.0
 	lab_k = 0
 	lab_count = 0
 	lab_stutters.clear()
@@ -50,11 +52,13 @@ func lab_frame(delta: float) -> void:
 		lab_stutters.append({"ms": ms, "part": worst, "part_ms": lab_prev[worst], "zoom": zooming, "move": cam_moving_t > 0.0, "dist": cam_dist})
 	for p in LAB_PARTS.size():
 		lab_hist[p][lab_k] = lab_cur[p]
+	lab_sum += ms - lab_frames[lab_k]
 	lab_frames[lab_k] = ms
 	lab_k = (lab_k + 1) % LAB_N
 	lab_count += 1
-	lab_prev = lab_cur.duplicate()
-	lab_cur.fill(0.0)
+	for p in LAB_PARTS.size():
+		lab_prev[p] = lab_cur[p]
+		lab_cur[p] = 0.0
 	lab_zoom_prev = cam_dist
 	if Engine.get_process_frames() % 30 == 0:
 		lab_dc += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
@@ -67,10 +71,7 @@ func lab_avg_frame() -> float:
 	var n := lab_n()
 	if n == 0:
 		return 16.7
-	var s := 0.0
-	for k in n:
-		s += lab_frames[k]
-	return s / n
+	return lab_sum / n
 func lab_avg(p: int) -> float:
 	var n := lab_n()
 	if n == 0 or lab_hist.is_empty():

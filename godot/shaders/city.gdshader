@@ -12,6 +12,7 @@ uniform float det = 0.0;
 uniform float cshadow = 0.0;
 // etapa 2: asfalto (cust.w = -20) y vereda (-21) con las texturas de la ciudad
 uniform float tex_on = 0.0;
+uniform float marks_on = 1.0;   // 0 en calidad Baja: sin marcas pintadas
 uniform sampler2DArray alb_arr : filter_linear_mipmap, repeat_enable;
 uniform sampler2DArray nrm_arr : hint_normal, filter_linear_mipmap, repeat_enable;
 varying vec3 wpos;
@@ -19,6 +20,8 @@ varying vec3 wnrm;
 varying vec4 cust;
 // posición dentro de la celda (las calles van sin rotar): para pintar las marcas del asfalto
 varying vec2 rloc;
+// centro de la celda, plano: si se interpola, el azar de parches y alcantarillas titila de un píxel a otro
+varying flat vec2 rorg;
 void vertex() {
 	if (INSTANCE_CUSTOM.w >= 2.0 && wind > 0.0) {
 		vec3 org = MODEL_MATRIX[3].xyz;
@@ -33,6 +36,7 @@ void vertex() {
 	wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	cust = INSTANCE_CUSTOM;
 	rloc = wpos.xz - MODEL_MATRIX[3].xz;
+	rorg = MODEL_MATRIX[3].xz;
 }
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 // banda suave de medio ancho hw alrededor de c
@@ -48,7 +52,7 @@ vec3 road_marks(vec3 col, vec2 p, vec3 org, int code, int rt) {
 	bool horiz = (m & 3) != 0 && (m & 12) == 0;
 	bool vert = (m & 12) != 0 && (m & 3) == 0;
 	// parches y una tapa de alcantarilla en algunas celdas
-	float hp = hash(floor((org.xz + p) / 1.7) + org.xz * 0.013);
+	float hp = hash(floor((org.xz + p) / 1.7));
 	col *= hp > 0.86 ? 0.88 : 1.0;
 	if (hash(org.xz * 0.37 + 1.3) < 0.22) {
 		vec2 mc = vec2(hash(org.xz + 4.1) - 0.5, hash(org.xz + 7.7) - 0.5) * 1.6;
@@ -70,7 +74,7 @@ vec3 road_marks(vec3 col, vec2 p, vec3 org, int code, int rt) {
 		if ((xm & (1 << d)) == 0) {
 			continue;
 		}
-		vec2 dv = d == 0 ? vec2(1.0, 0.0) : d == 1 ? vec2(-1.0, 0.0) : d == 2 ? vec2(0.0, 1.0) : vec2(0.0, -1.0);
+		vec2 dv = d == 0 ? vec2(1.0, 0.0) : (d == 1 ? vec2(-1.0, 0.0) : (d == 2 ? vec2(0.0, 1.0) : vec2(0.0, -1.0)));
 		float s = dot(p, dv);
 		float bb = dot(p, vec2(-dv.y, dv.x));
 		near_x = max(near_x, step(0.55, s));
@@ -78,6 +82,9 @@ vec3 road_marks(vec3 col, vec2 p, vec3 org, int code, int rt) {
 		float zeb = step(0.9, s) * step(s, 1.85) * step(abs(bb), 1.42) * step(fract(bb / 0.5 + 0.25), 0.5);
 		float stop = band(s, 0.68, 0.08) * step(0.0, bb) * step(bb, 1.42);
 		paint = max(paint, max(zeb, stop));
+	}
+	if (marks_on < 0.5) {
+		return col;
 	}
 	if (rt == 2) {
 		paint = max(paint, band(b, 0.0, 0.055) * step(fract(a / 2.0 + 0.25), 0.5) * (1.0 - near_x));
@@ -170,7 +177,7 @@ void fragment() {
 				col *= 1.0 - (asph ? 0.3 : 0.38) * wet;
 			}
 			if (mi == 20 && cust.y < -0.5 && wnrm.y > 0.7) {
-				col = road_marks(col, rloc, vec3(wpos.x - rloc.x, 0.0, wpos.z - rloc.y), int(-cust.y + 0.5) - 1, int(-cust.z + 0.5));
+				col = road_marks(col, rloc, vec3(rorg.x, 0.0, rorg.y), int(-cust.y + 0.5) - 1, int(-cust.z + 0.5));
 			}
 		} else if (mi == 7) {
 			vec2 sc = vec2(mu.x / 1.1 + mod(floor(mu.y / 0.55), 2.0) * 0.5, mu.y / 0.55);
