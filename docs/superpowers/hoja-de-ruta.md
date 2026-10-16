@@ -6,12 +6,23 @@
 | 1 | Luz, cielo, terreno y agua | hecha |
 | 2a+2b | Materiales reales y edificios con volumen | hecha, falta la aprobación del autor |
 | 2c+2d+2e | Árboles, objetos de calle y los 51 edificios especiales | hecha, falta la aprobación del autor |
-| Próxima | Sala de computación (medir el rendimiento en el celular y armar pedidos para Claude Code) | pendiente |
-| 3 | Calles con curvas (splines) e intersecciones | pendiente |
-| 4 | Tránsito y gente animada | pendiente |
-| 5 | Físicas y efectos | pendiente |
+| Sala | Sala de computación (medir el rendimiento en el celular y armar pedidos para Claude Code) | hecha, falta probarla en el celular |
+| 3 | Calles: marcas pintadas, sendas peatonales, líneas de pare, desgaste | hecha, falta la aprobación del autor |
+| 4 | Gente con horario, tránsito según la hora y vida detrás de las ventanas | hecha, falta la aprobación del autor |
+| 5 | Efectos: humo, partes que giran, fuentes, rayos y truenos | hecha, falta la aprobación del autor |
 
-## Ideas anotadas para la etapa 4 (pedidas por el autor)
+Las cuatro se hicieron juntas a pedido del autor ("mete todas juntas"); el diseño está en
+`docs/superpowers/specs/2026-10-16-urbana-godot-todo-junto-design.md`.
+
+## Lo que quedó para más adelante
+
+- Calles libres con curvas de verdad (no en cuadrícula): obliga a rehacer la simulación, los caminos de
+  los autos y las partidas guardadas.
+- Cada habitante con su casa y su trabajo propios, seguido de punta a punta: hoy el horario es por
+  porcentajes de toda la ciudad (nadie está en dos lugares, pero no se sigue a cada persona).
+- Físicas de choques y derrumbes.
+
+## Ideas anotadas para la etapa 4 (pedidas por el autor, hechas en "todo junto")
 
 - **Gente con rutina y lugar propio:** cada habitante tiene casa, y trabajo o escuela, y un horario
   (duerme de noche, estudia de mañana, trabaja, vuelve). Nadie está en dos lugares a la vez y nadie

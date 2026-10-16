@@ -36,6 +36,19 @@ estaciones y se mueven con el viento; en la calle, faroles, semáforos, autos es
 vereda, postes con cables, y —con la cámara acercada— bancos, tachos, canteros, paradas, carteles y
 bolardos. Los 51 edificios especiales tienen su propio modelo.
 
+Las calles tienen las marcas pintadas: línea del medio, bordes en avenidas, sendas peatonales y línea
+de pare al llegar a cada cruce, parches y tapas de alcantarilla.
+
+La ciudad tiene horario: de madrugada casi todos duermen y hay poca gente y pocos autos; a la mañana
+salen a trabajar y los chicos van a la escuela con mochila. Acercando la cámara se ve qué hace la gente
+detrás de las ventanas: mirando tele, cocinando, en la oficina frente a la compu, chicos en clase con el
+maestro, el que atiende el negocio. Hay humo en las chimeneas, el molino, la vuelta al mundo y la
+calesita giran, las fuentes tiran agua y con tormenta caen rayos.
+
+**Sala de computación** (Menú → 🖥 Sala de computación): mide en el celular cuánto tarda cada parte del
+juego y dónde se traba, y arma pedidos de mejora listos para pegar en Claude Code (botón "Copiar").
+Conviene usar la ciudad un minuto (moverse, hacer zoom, acelerar) antes de abrirla.
+
 Los edificios tienen tres versiones según la distancia. La más detallada (balcones, rejas, marcos)
 aparece cuando acercás la cámara; desde la vista normal se ven las fachadas con las ventanas pintadas,
 que es mucho más liviano para el celular.
@@ -47,7 +60,8 @@ todo lo pesado de una vez.
 ## Cómo está organizado el código
 
 - `src/` tiene el código **separado por tema**: `world.gd` (mapa), `sim.gd` (simulación),
-  `build.gd` (construir), `render.gd` (cómo se dibuja), `agents.gd` (autos, gente, cine),
+  `build.gd` (construir), `render.gd` (cómo se dibuja), `agents.gd` (autos, gente, cine, humo, rayos),
+  `life.gd` (horario de la ciudad y vida en las ventanas), `lab.gd` (sala de computación),
   `camera.gd`, `ui.gd`, `audio.gd`, `save.gd`, `tests.gd`, `main.gd` y `state.gd` (lo compartido).
 - `scripts/main.gd` es **el único script que usa Godot**. Se arma juntando los archivos de `src/` con
   `python3 tools/godot_modules.py build`. Por eso **no conviene editarlo a mano**: el próximo armado lo

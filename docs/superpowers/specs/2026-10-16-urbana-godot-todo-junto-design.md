@@ -53,7 +53,8 @@ instancias nuevas: todo se pinta en el shader del asfalto con datos que viajan e
 - Partes que giran en los especiales que tienen: aspas de molino o eólicos, vuelta al mundo, calesita.
 - Rayos y relámpagos con tormenta.
 - Agua de fuentes saltando.
-- Todo con el sistema de cosas dinámicas que ya existe y solo cerca de la cámara.
+- El humo, el agua y el rayo usan el sistema de cosas dinámicas que ya existe y solo cerca de la cámara.
+  Las partes que giran no cuestan nada en el procesador: el modelo las marca y el shader las hace girar.
 - Prueba: FX2_CHECK.
 
 ## E. Arreglos chicos pendientes
