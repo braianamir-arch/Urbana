@@ -65,11 +65,11 @@ func mb_frond(base: Vector3, ang: float, L: float, wd: float, droop: float) -> v
 # receta común: kind = especie, v = forma (0..2), f = 0 llena / 1 rala (invierno en las de hoja caduca)
 func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 	var sd := kind * 10 + v
-	var seg: int = [8, 6, 4][lod]
-	var bseg: int = [8, 6, 5][lod]
-	var brings: int = [6, 4, 3][lod]
+	var seg: int = [8, 5, 4][lod]
+	var bseg: int = [8, 5, 5][lod]
+	var brings: int = [6, 3, 3][lod]
 	var bare := f == 1 and kind in [1, 2, 3, 7]
-	var nb: int = [10, 4, 1][lod]
+	var nb: int = [10, 2, 1][lod]
 	var jit := func(k: int, q: int) -> float: return hsh(sd * 7 + k, q) - 0.5
 	match kind:
 		4:
@@ -113,7 +113,7 @@ func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 	else:
 		mb_limb(Vector3.ZERO, Vector3(0, th, 0), tr, tr * 0.75, seg)
 	# ramas principales hacia la copa
-	var nbr: int = [5, 3, 0][lod]
+	var nbr: int = [5, 0, 0][lod]
 	for k in nbr:
 		var a: float = TAU * k / nbr + jit.call(k, 8)
 		var tip: Vector3 = Vector3(cos(a) * cr.x * 0.6, cy + jit.call(k, 9) * 0.4, sin(a) * cr.z * 0.6)
