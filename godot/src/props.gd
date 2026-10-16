@@ -16,6 +16,8 @@ func prop_register() -> void:
 func rc_farol(lod: int, _f: int, _w: float) -> void:
 	if lod == LOD_FAR:
 		mb_box(Vector3.ZERO, Vector3(0.1, 2.9, 0.1), BM_PAINTED, 0, 63 - 8)
+		# la luz se ve de lejos y en calidad Baja
+		mb_box(Vector3(0.6, 2.6, 0), Vector3(0.5, 0.18, 0.3), BM_EMIT, 0)
 		return
 	mb_cyl(Vector3.ZERO, 0.09, 0.35, 6, BM_PAINTED, 0)
 	mb_cyl(Vector3.ZERO, 0.05, 2.9, 6 if lod == LOD_NEAR else 4, BM_PAINTED, 0)
@@ -45,10 +47,10 @@ func car_body(lod: int, L: float, W: float, h0: float, h1: float, cab0: float, c
 	var x1 := cab1 * L - L * 0.5
 	var w2 := W * 0.46
 	var ins := 0.12
-	mb_quad(Vector3(x0, y0, w2), Vector3(x1, y0, w2), Vector3(x1 - ins, y0 + hc, w2 - 0.04), Vector3(x0 + ins, y0 + hc, w2 - 0.04), BM_GLASS, 0, Vector2(0, 50), Vector2(1, 51))
-	mb_quad(Vector3(x1, y0, -w2), Vector3(x0, y0, -w2), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), BM_GLASS, 0, Vector2(1, 50), Vector2(2, 51))
-	mb_quad(Vector3(x1, y0, w2), Vector3(x1, y0, -w2), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), Vector3(x1 - ins, y0 + hc, w2 - 0.04), BM_GLASS, 0, Vector2(2, 50), Vector2(3, 51))
-	mb_quad(Vector3(x0, y0, -w2), Vector3(x0, y0, w2), Vector3(x0 + ins, y0 + hc, w2 - 0.04), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), BM_GLASS, 0, Vector2(3, 50), Vector2(4, 51))
+	mb_quad(Vector3(x0, y0, w2), Vector3(x1, y0, w2), Vector3(x1 - ins, y0 + hc, w2 - 0.04), Vector3(x0 + ins, y0 + hc, w2 - 0.04), BM_GLASS, 3, Vector2(0, 50), Vector2(1, 51))
+	mb_quad(Vector3(x1, y0, -w2), Vector3(x0, y0, -w2), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), BM_GLASS, 3, Vector2(1, 50), Vector2(2, 51))
+	mb_quad(Vector3(x1, y0, w2), Vector3(x1, y0, -w2), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), Vector3(x1 - ins, y0 + hc, w2 - 0.04), BM_GLASS, 3, Vector2(2, 50), Vector2(3, 51))
+	mb_quad(Vector3(x0, y0, -w2), Vector3(x0, y0, w2), Vector3(x0 + ins, y0 + hc, w2 - 0.04), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), BM_GLASS, 3, Vector2(3, 50), Vector2(4, 51))
 	mb_quad(Vector3(x0 + ins, y0 + hc, w2 - 0.04), Vector3(x1 - ins, y0 + hc, w2 - 0.04), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), BM_PAINTED if roof_tm == 1 else BM_PLAIN, roof_tm)
 	if lod == LOD_NEAR:
 		# ruedas
@@ -118,8 +120,8 @@ func rc_parada(_lod: int, _f: int, _w: float) -> void:
 	mb_box(Vector3(0, 1.15, 0), Vector3(1.4, 0.05, 0.6), BM_PAINTED, 2)
 	for x in [-0.66, 0.66]:
 		mb_box(Vector3(x, 0, -0.25), Vector3(0.05, 1.15, 0.05), BM_PAINTED, 0, 63 - 8)
-	mb_quad(Vector3(0.66, 0.15, -0.27), Vector3(-0.66, 0.15, -0.27), Vector3(-0.66, 1.1, -0.27), Vector3(0.66, 1.1, -0.27), BM_GLASS, 0, Vector2(0, 60), Vector2(1, 61))
-	mb_quad(Vector3(-0.66, 0.15, -0.27), Vector3(0.66, 0.15, -0.27), Vector3(0.66, 1.1, -0.27), Vector3(-0.66, 1.1, -0.27), BM_GLASS, 0, Vector2(0, 60), Vector2(1, 61))
+	mb_quad(Vector3(0.66, 0.15, -0.27), Vector3(-0.66, 0.15, -0.27), Vector3(-0.66, 1.1, -0.27), Vector3(0.66, 1.1, -0.27), BM_GLASS, 3, Vector2(0, 60), Vector2(1, 61))
+	mb_quad(Vector3(-0.66, 0.15, -0.27), Vector3(0.66, 0.15, -0.27), Vector3(0.66, 1.1, -0.27), Vector3(-0.66, 1.1, -0.27), BM_GLASS, 3, Vector2(0, 60), Vector2(1, 61))
 	mb_box(Vector3(0, 0.25, -0.15), Vector3(1.0, 0.05, 0.22), BM_WOOD, 0)
 func rc_cartel_calle(_lod: int, _f: int, _w: float) -> void:
 	mb_box(Vector3.ZERO, Vector3(0.05, 1.9, 0.05), BM_PAINTED, 0, 63 - 8)
@@ -169,7 +171,7 @@ func emit_street_furniture(i: int, p: Vector3, y: float, t: int, horiz: bool) ->
 			var tc := tree_colors(kind)
 			var x := bx + along.x * CELL * 0.22
 			var z := bz + along.y * CELL * 0.22
-			emit_model(tm[int(hsh(i, side + 32) * 3.0) % 3], 1 if float(tc[1]) < 0.6 else 0, x, y, z, hsh(i, side + 33) * TAU, 0.6, tc[0], Vector4(0, 0, hsh(i, side + 34), 0))
+			emit_model(tm[int(hsh(i, side + 32) * 3.0) % 3], 1 if float(tc[1]) < 0.6 else 0, x, y, z, hsh(i, side + 33) * TAU, 0.6, tc[0], Vector4(0, 0, hsh(i, side + 34), 0), 0.6)
 		if zone[j] == Z_C and lvl[j] >= 1:
 			var h := hsh(i, side + 35)
 			if h < 0.25:

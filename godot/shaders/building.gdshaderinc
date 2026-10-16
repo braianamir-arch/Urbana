@@ -173,7 +173,8 @@ void fragment() {
 		col = mix(inside, refl, k);
 		rough = 0.06;
 		float litp = 0.55 * (1.0 - 0.45 * late);
-		float lit = step(hash(id + 1.3), litp);
+		// máscara 3: vidrio que no es ventana (autos, refugios) o agua: refleja pero no se prende de noche
+		float lit = int(vtm + 0.5) == 3 ? 0.0 : step(hash(id + 1.3), litp);
 		if (h > 0.55 && wf.y > 0.5) {
 			lit *= 0.5;
 		}

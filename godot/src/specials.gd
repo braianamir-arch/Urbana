@@ -52,7 +52,7 @@ func emit_special(i: int, p: Vector3) -> bool:
 		var tc := tree_colors(kind)
 		var tx: float = x + c * t[0] + s * t[1]
 		var tz: float = z - s * t[0] + c * t[1]
-		emit_model(tree_models[kind][int(hsh(i, int(t[0] * 10.0)) * 3.0) % 3], 1 if float(tc[1]) < 0.6 else 0, tx, ground_y(tx, tz) - 0.05, tz, hsh(i, int(t[1] * 10.0)) * TAU, t[3], tc[0], Vector4(0, 0, hsh(i, 50), 0))
+		emit_model(tree_models[kind][int(hsh(i, int(t[0] * 10.0)) * 3.0) % 3], 1 if float(tc[1]) < 0.6 else 0, tx, ground_y(tx, tz) - 0.05, tz, hsh(i, int(t[1] * 10.0)) * TAU, t[3], tc[0], Vector4(0, 0, hsh(i, 50), 0), t[3])
 	return true
 # --- piezas comunes de los especiales
 func sp_ground(w: float, mat: int) -> void:
@@ -190,7 +190,7 @@ func rc_sp_30(lod: int, _f: int, w: float) -> void:
 	mb_box(Vector3(0, 0.08, 0), Vector3(w * 0.95, 0.02, 0.7), BM_SIDEWALK, 0, 4)
 	mb_box(Vector3(0, 0.08, 0), Vector3(0.7, 0.02, w * 0.95), BM_SIDEWALK, 0, 4)
 	mb_cyl(Vector3(0, 0.08, 0), 0.6, 0.3, 12, BM_CONCRETE, 0)
-	mb_cyl(Vector3(0, 0.38, 0), 0.5, 0.005, 12, BM_MIRROR, 0)
+	mb_cyl(Vector3(0, 0.38, 0), 0.5, 0.005, 12, BM_MIRROR, 3)
 	mb_cyl(Vector3(0, 0.38, 0), 0.08, 0.6, 6, BM_CONCRETE, 0)
 	if lod == LOD_NEAR:
 		for k in 4:
@@ -201,7 +201,7 @@ func rc_sp_31(lod: int, _f: int, w: float) -> void:
 	sp_ground(w, BM_TURF)
 	mb_box(Vector3(0, 0.08, 0.5), Vector3(w * 0.95, 0.02, 0.6), BM_SIDEWALK, 0, 4)
 	mb_box(Vector3(-0.5, 0.08, 0), Vector3(0.6, 0.02, w * 0.95), BM_SIDEWALK, 0, 4)
-	mb_cyl(Vector3(1.8, 0.07, -1.6), 1.4, 0.03, 16, BM_MIRROR, 0)
+	mb_cyl(Vector3(1.8, 0.07, -1.6), 1.4, 0.03, 16, BM_MIRROR, 3)
 	if lod == LOD_NEAR:
 		for k in 3:
 			sp_embed(rc_banco, lod, Vector3(-2.0 + k * 1.8, 0.08, 1.1), PI)
@@ -287,7 +287,7 @@ func rc_sp_37(lod: int, _f: int, w: float) -> void:
 		mb_cone(Vector3(sx * 2.4, t, 2.3), 0.85, 2.4, 8, BM_SHEET, 0)
 	mb_box(Vector3(0, 0.08, 2.5), Vector3(3.4, 4.6, 0.3), BM_PLASTER, 1, 63 - 8)
 	mb_gable(Vector3(0, 4.68, 2.5), 3.4, 0.3, 1.3, BM_PLASTER, 1, true)
-	mb_cyl(Vector3(0, 3.4, 2.66), 0.6, 0.02, 12, BM_GLASS, 0)
+	mb_cyl(Vector3(0, 3.4, 2.66), 0.6, 0.02, 12, BM_GLASS, 3)
 	mb_cyl(Vector3(0, top, -2.5), 1.1, 1.0, 12, BM_PLASTER, 1)
 	mb_blob(Vector3(0, top + 1.0, -2.5), Vector3(1.1, 1.0, 1.1), [10, 8, 6][lod], [5, 4, 3][lod], 37, BM_SHEET, 0, false)
 func rc_sp_38(lod: int, _f: int, w: float) -> void:
@@ -375,7 +375,7 @@ func rc_sp_44(lod: int, _f: int, w: float) -> void:
 	var rows := 6
 	for r in rows:
 		var z := -3.2 + r * 1.2
-		mb_quad(Vector3(-3.4, 0.5, z + 0.4), Vector3(3.0, 0.5, z + 0.4), Vector3(3.0, 1.1, z - 0.3), Vector3(-3.4, 1.1, z - 0.3), BM_GLASS, 0, Vector2(r, 70), Vector2(r + 1, 71))
+		mb_quad(Vector3(-3.4, 0.5, z + 0.4), Vector3(3.0, 0.5, z + 0.4), Vector3(3.0, 1.1, z - 0.3), Vector3(-3.4, 1.1, z - 0.3), BM_GLASS, 3, Vector2(r, 70), Vector2(r + 1, 71))
 		if lod != LOD_FAR:
 			mb_quad(Vector3(3.0, 0.5, z + 0.4), Vector3(-3.4, 0.5, z + 0.4), Vector3(-3.4, 1.1, z - 0.3), Vector3(3.0, 1.1, z - 0.3), BM_PAINTED, 0)
 		if lod == LOD_NEAR:
@@ -399,7 +399,7 @@ func rc_sp_45(lod: int, _f: int, w: float) -> void:
 func rc_sp_46(lod: int, _f: int, w: float) -> void:
 	# represa: muro de hormigón con escalones del vertedero, lago detrás y casa de máquinas abajo
 	sp_ground(w, BM_CONCRETE)
-	mb_box(Vector3(0, 0.08, -1.8), Vector3(7.6, 0.05, 4.0), BM_MIRROR, 0, 4)
+	mb_box(Vector3(0, 0.08, -1.8), Vector3(7.6, 0.05, 4.0), BM_MIRROR, 3, 4)
 	mb_box(Vector3(0, -0.2, -2.0), Vector3(7.6, 3.0, 3.6), BM_DARK, 0, 4)
 	mb_box(Vector3(0, 0.08, 0.6), Vector3(7.6, 3.2, 1.0), BM_CONCRETE, 0, 63 - 8)
 	for k in 4:
@@ -435,10 +435,10 @@ func rc_sp_49(lod: int, _f: int, w: float) -> void:
 	var seg: int = [16, 10, 8][lod]
 	for c in [Vector3(-2.2, 0, -2.2), Vector3(0.8, 0, -2.2)]:
 		mb_cyl(c + Vector3(0, 0.08, 0), 1.3, 0.5, seg, BM_CONCRETE, 0)
-		mb_cyl(c + Vector3(0, 0.56, 0), 1.2, 0.01, seg, BM_MIRROR, 0)
+		mb_cyl(c + Vector3(0, 0.56, 0), 1.2, 0.01, seg, BM_MIRROR, 3)
 	for k in 3:
 		mb_box(Vector3(-2.6 + k * 1.3, 0.08, 1.2), Vector3(1.1, 0.4, 1.8), BM_CONCRETE, 0, 63 - 8 - 4)
-		mb_box(Vector3(-2.6 + k * 1.3, 0.4, 1.2), Vector3(1.0, 0.02, 1.7), BM_MIRROR, 0, 4)
+		mb_box(Vector3(-2.6 + k * 1.3, 0.4, 1.2), Vector3(1.0, 0.02, 1.7), BM_MIRROR, 3, 4)
 	sp_block(1.6, 0.0, 3.6, 3.4, 0.08, 2, lod, BM_PLASTER, 1, {"gf": 1.6, "door": 0}, 1.0)
 func rc_sp_50(lod: int, _f: int, w: float) -> void:
 	# relleno sanitario: lomas de tierra, montones de basura, topadora y cerco
@@ -449,7 +449,7 @@ func rc_sp_50(lod: int, _f: int, w: float) -> void:
 			var p := Vector3(-2.5 + k * 1.3, 0.08, 2.4 + hsh(k, 50) * 0.6)
 			mb_blob(p, Vector3(0.5, 0.35, 0.5), 6, 3, 51 + k, BM_PAINTED, 2, true)
 		mb_box(Vector3(2.6, 0.08, -2.4), Vector3(1.0, 0.6, 0.6), BM_PAINTED, 2)
-		mb_box(Vector3(2.6, 0.68, -2.5), Vector3(0.5, 0.4, 0.4), BM_GLASS, 0)
+		mb_box(Vector3(2.6, 0.68, -2.5), Vector3(0.5, 0.4, 0.4), BM_GLASS, 3)
 		mb_box(Vector3(0, 0.08, 3.85), Vector3(7.6, 1.0, 0.04), BM_PAINTED, 0)
 func rc_sp_51(lod: int, _f: int, w: float) -> void:
 	# planta de reciclaje: galpón de chapa, fardos de colores y cinta transportadora
@@ -531,7 +531,7 @@ func rc_sp_56(lod: int, _f: int, w: float) -> void:
 	var top := sp_block(-4.6, 2.6, 4.6, 5.6, 0.08, 2, lod, BM_PAINTED, 1, {"gf": 2.0, "curtain": true, "glass": BM_MIRROR}, 0.8, 0.2)
 	mb_box(Vector3(0, top, 4.1), Vector3(9.4, 0.15, 3.2), BM_PAINTED, 0)
 	mb_limb(Vector3(5.0, 0.08, 4.6), Vector3(5.0, 9.0, 4.6), 0.4, 0.35, [10, 8, 6][lod])
-	mb_cyl(Vector3(5.0, 9.0, 4.6), 0.9, 1.0, [12, 8, 6][lod], BM_GLASS, 0)
+	mb_cyl(Vector3(5.0, 9.0, 4.6), 0.9, 1.0, [12, 8, 6][lod], BM_GLASS, 3)
 	mb_cyl(Vector3(5.0, 10.0, 4.6), 1.0, 0.2, [12, 8, 6][lod], BM_PAINTED, 0)
 	# avión: fuselaje, alas y cola
 	var keep := mb_xf
@@ -576,7 +576,7 @@ func rc_sp_60(lod: int, _f: int, w: float) -> void:
 	# gran hotel: basamento con pileta en la terraza y torre de lujo
 	sp_ground(w, BM_SIDEWALK)
 	var t0 := sp_block(-3.6, -3.6, 3.6, 3.0, 0.08, 2, lod, BM_CONCRETE, 1, {"gf": 2.2, "door": 3, "shop": true}, 1.2)
-	mb_box(Vector3(1.8, t0, 1.2), Vector3(2.8, 0.05, 1.6), BM_MIRROR, 0, 4)
+	mb_box(Vector3(1.8, t0, 1.2), Vector3(2.8, 0.05, 1.6), BM_MIRROR, 3, 4)
 	var top := sp_block(-3.2, -3.2, 0.4, 0.4, t0, 14, lod, BM_PAINTED, 1, {"curtain": true, "glass": BM_MIRROR}, 0.7, 0.3)
 	sp_sign(-1.4, top + 0.3, 0.3, 2.8, 0.7)
 	mb_box(Vector3(0, 1.8, 3.4), Vector3(3.0, 0.1, 0.9), BM_PAINTED, 2)
@@ -595,7 +595,7 @@ func rc_sp_62(lod: int, _f: int, w: float) -> void:
 	mb_box(Vector3(0, 0.08, 0), Vector3(1.0, 0.02, w * 0.95), BM_ASPHALT, 0, 4)
 	for c in [Vector3(-2.0, 0, -2.0), Vector3(2.0, 0, -2.0), Vector3(-2.0, 0, 2.0), Vector3(2.0, 0, 2.0)]:
 		sp_embed(rc_chalet, lod, c + Vector3(0, 0.08, 0), (PI * 0.5 if c.x < 0 else -PI * 0.5), 0.55)
-		mb_box(Vector3(c.x * 1.55, 0.09, c.z), Vector3(0.6, 0.02, 0.9), BM_MIRROR, 0, 4)
+		mb_box(Vector3(c.x * 1.55, 0.09, c.z), Vector3(0.6, 0.02, 0.9), BM_MIRROR, 3, 4)
 	if lod != LOD_FAR:
 		for side in [[0, -3.85, 7.6, 0.1], [3.85, 0, 0.1, 7.6], [-3.85, 0, 0.1, 7.6], [-2.3, 3.85, 3.0, 0.1], [2.3, 3.85, 3.0, 0.1]]:
 			mb_box(Vector3(side[0], 0.08, side[1]), Vector3(side[2], 1.0, side[3]), BM_PLASTER, 1)
@@ -633,7 +633,7 @@ func rc_sp_70(lod: int, _f: int, w: float) -> void:
 	sp_ground(w, BM_SIDEWALK)
 	sp_block(-2.4, -2.4, 2.4, 2.4, 0.08, 1, lod, BM_PAINTED, 1, {"gf": 2.4, "shop": true, "door": 2}, 1.2, 0.0)
 	mb_limb(Vector3(0, 2.4, 0), Vector3(0, 32.0, 0), 1.3, 0.9, [12, 10, 8][lod])
-	mb_cyl(Vector3(0, 32.0, 0), 2.4, 2.4, [16, 12, 8][lod], BM_MIRROR, 0)
+	mb_cyl(Vector3(0, 32.0, 0), 2.4, 2.4, [16, 12, 8][lod], BM_MIRROR, 3)
 	mb_cyl(Vector3(0, 34.4, 0), 2.6, 0.3, [16, 12, 8][lod], BM_PAINTED, 1)
 	mb_limb(Vector3(0, 34.7, 0), Vector3(0, 42.0, 0), 0.2, 0.05, 6)
 func rc_sp_71(lod: int, _f: int, w: float) -> void:
@@ -641,7 +641,7 @@ func rc_sp_71(lod: int, _f: int, w: float) -> void:
 	sp_ground(w, BM_TURF)
 	mb_box(Vector3(0, 0.08, 0), Vector3(w * 0.95, 0.02, 0.8), BM_SIDEWALK, 0, 4)
 	mb_box(Vector3(0, 0.08, 0), Vector3(0.8, 0.02, w * 0.95), BM_SIDEWALK, 0, 4)
-	mb_cyl(Vector3(3.0, 0.07, 2.8), 2.4, 0.03, [20, 14, 10][lod], BM_MIRROR, 0)
+	mb_cyl(Vector3(3.0, 0.07, 2.8), 2.4, 0.03, [20, 14, 10][lod], BM_MIRROR, 3)
 	mb_box(Vector3(0, 0.08, 0), Vector3(1.6, 0.4, 1.6), BM_CONCRETE, 0, 63 - 8)
 	mb_limb(Vector3(0, 0.48, 0), Vector3(0, 9.0, 0), 0.5, 0.35, 4)
 	mb_cone(Vector3(0, 9.0, 0), 0.5, 0.8, 4, BM_CONCRETE, 0)

@@ -1087,6 +1087,20 @@ func catalog_check() -> void:
 						if (mt == BM_TILES or mt == BM_SHEET) and ns[vi].y > 0.52 and ns[vi].y < SNOW_NY:
 							why += " techo sin nieve (normal.y %.2f < %.2f)" % [ns[vi].y, SNOW_NY]
 							break
+					# vidrios que no son ventanas (autos, refugios) y agua (vidrio/espejo horizontal): sin luces de noche (máscara 3)
+					for vi in u2.size():
+						var mt2 := int(u2[vi].x + 0.5)
+						if (mt2 == BM_GLASS or mt2 == BM_MIRROR) and int(u2[vi].y + 0.5) != 3 and (md["fam"] == "objeto" or ns[vi].y > 0.9):
+							why += " vidrio que se prendería de noche (normal.y %.2f)" % ns[vi].y
+							break
+					# el farol tiene su luz en las tres versiones
+					if md["id"] == "farol":
+						var has_emit := false
+						for vi in u2.size():
+							if int(u2[vi].x + 0.5) == BM_EMIT:
+								has_emit = true
+						if not has_emit:
+							why += " farol sin luz"
 					if lod == 2 and nv[0] > 0 and vs.size() >= nv[0] and not md["near_only"]:
 						why += " la versión lejos no es más liviana (%d >= %d)" % [vs.size(), nv[0]]
 					bt(why == "", tag + ("ok" if why == "" else "FALLA" + why))
@@ -1289,6 +1303,15 @@ func tree_check() -> void:
 				why += " árbol de más en %d" % i
 	if n == 0:
 		why += " no hay celdas con árbol"
+	# los árboles se escalan parejo (alto y ancho), no solo en planta
+	for cn in bnodes:
+		for k in cn:
+			if cat_models[k / 192]["fam"] == "arbol" and cn[k].multimesh.instance_count > 0:
+				var b: PackedFloat32Array = cn[k].multimesh.buffer
+				var sxz := Vector2(b[0], b[2]).length()
+				if absf(b[5] - sxz) > 0.01:
+					why += " árbol deformado (alto %.2f, ancho %.2f)" % [b[5], sxz]
+					break
 	bt(why == "", "TREE_CHECK (%d celdas) " % n + ("ok" if why == "" else "FALLA" + why))
 # toma de cerca sobre la celda con árbol más cercana al centro, en un día dado (estación) y clima
 func album_trees(d: int, w: String) -> void:

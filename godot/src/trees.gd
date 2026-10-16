@@ -155,6 +155,6 @@ func emit_trees(i: int, p: Vector3) -> void:
 	for k in nt:
 		var x := p.x + (hsh(i, k * 3 + 2) - 0.5) * CELL * 0.6
 		var z := p.z + (hsh(i, k * 3 + 3) - 0.5) * CELL * 0.6
-		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.6
+		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.4
 		var m: int = models[int(hsh(i, k * 3 + 5) * 3.0) % models.size()]
-		emit_model(m, f, x, ground_y(x, z) - 0.05, z, hsh(i, k * 3 + 6) * TAU, sc, crown, Vector4(0, 0, hsh(i, k + 20), 0))
+		emit_model(m, f, x, ground_y(x, z) - 0.05, z, hsh(i, k * 3 + 6) * TAU, sc, crown, Vector4(0, 0, hsh(i, k + 20), 0), sc)

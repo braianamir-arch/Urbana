@@ -4440,16 +4440,17 @@ func emit_building(i: int, x: float, y: float, z: float, rot: float, wall: Color
 			bcheck_log[i]["n"] += 1
 		else:
 			bcheck_log[i] = {"m": pk.x, "n": 1, "dark": dark}
-# una instancia del modelo m (pisos/variante f) en el bloque que se está armando; escala uniforme en
-# planta (sc) y rotación sobre Y. cust = (quemado, segundo color, semilla, dato del modelo)
-func emit_model(m: int, f: int, x: float, y: float, z: float, rot: float, sc: float, col: Color, cust: Vector4) -> void:
+# una instancia del modelo m (pisos/variante f) en el bloque que se está armando; escala en planta (sc),
+# escala en alto (sy: los árboles la usan igual a sc) y rotación sobre Y.
+# cust = (quemado, segundo color, semilla, dato del modelo)
+func emit_model(m: int, f: int, x: float, y: float, z: float, rot: float, sc: float, col: Color, cust: Vector4, sy := 1.0) -> void:
 	var key := m * 64 + f
 	if not _binst.has(key):
 		_binst[key] = PackedFloat32Array()
 	var b: PackedFloat32Array = _binst[key]
 	var c := cos(rot) * sc
 	var s := sin(rot) * sc
-	b.append_array([c, 0.0, s, x, 0.0, 1.0, 0.0, y, -s, 0.0, c, z, col.r, col.g, col.b, col.a, cust.x, cust.y, cust.z, cust.w])
+	b.append_array([c, 0.0, s, x, 0.0, sy, 0.0, y, -s, 0.0, c, z, col.r, col.g, col.b, col.a, cust.x, cust.y, cust.z, cust.w])
 	_binst[key] = b
 	if bcheck_on:
 		mcheck_log.append([world_to_cell(Vector3(x, 0, z)), m])
@@ -5282,9 +5283,9 @@ func emit_trees(i: int, p: Vector3) -> void:
 	for k in nt:
 		var x := p.x + (hsh(i, k * 3 + 2) - 0.5) * CELL * 0.6
 		var z := p.z + (hsh(i, k * 3 + 3) - 0.5) * CELL * 0.6
-		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.6
+		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.4
 		var m: int = models[int(hsh(i, k * 3 + 5) * 3.0) % models.size()]
-		emit_model(m, f, x, ground_y(x, z) - 0.05, z, hsh(i, k * 3 + 6) * TAU, sc, crown, Vector4(0, 0, hsh(i, k + 20), 0))
+		emit_model(m, f, x, ground_y(x, z) - 0.05, z, hsh(i, k * 3 + 6) * TAU, sc, crown, Vector4(0, 0, hsh(i, k + 20), 0), sc)
 # ================================================================ src/props.gd
 # Objetos de calle de la etapa 2d: faroles, semáforos, autos, mobiliario, postes y carteles.
 var prop_ids: Dictionary = {}
@@ -5304,6 +5305,8 @@ func prop_register() -> void:
 func rc_farol(lod: int, _f: int, _w: float) -> void:
 	if lod == LOD_FAR:
 		mb_box(Vector3.ZERO, Vector3(0.1, 2.9, 0.1), BM_PAINTED, 0, 63 - 8)
+		# la luz se ve de lejos y en calidad Baja
+		mb_box(Vector3(0.6, 2.6, 0), Vector3(0.5, 0.18, 0.3), BM_EMIT, 0)
 		return
 	mb_cyl(Vector3.ZERO, 0.09, 0.35, 6, BM_PAINTED, 0)
 	mb_cyl(Vector3.ZERO, 0.05, 2.9, 6 if lod == LOD_NEAR else 4, BM_PAINTED, 0)
@@ -5333,10 +5336,10 @@ func car_body(lod: int, L: float, W: float, h0: float, h1: float, cab0: float, c
 	var x1 := cab1 * L - L * 0.5
 	var w2 := W * 0.46
 	var ins := 0.12
-	mb_quad(Vector3(x0, y0, w2), Vector3(x1, y0, w2), Vector3(x1 - ins, y0 + hc, w2 - 0.04), Vector3(x0 + ins, y0 + hc, w2 - 0.04), BM_GLASS, 0, Vector2(0, 50), Vector2(1, 51))
-	mb_quad(Vector3(x1, y0, -w2), Vector3(x0, y0, -w2), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), BM_GLASS, 0, Vector2(1, 50), Vector2(2, 51))
-	mb_quad(Vector3(x1, y0, w2), Vector3(x1, y0, -w2), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), Vector3(x1 - ins, y0 + hc, w2 - 0.04), BM_GLASS, 0, Vector2(2, 50), Vector2(3, 51))
-	mb_quad(Vector3(x0, y0, -w2), Vector3(x0, y0, w2), Vector3(x0 + ins, y0 + hc, w2 - 0.04), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), BM_GLASS, 0, Vector2(3, 50), Vector2(4, 51))
+	mb_quad(Vector3(x0, y0, w2), Vector3(x1, y0, w2), Vector3(x1 - ins, y0 + hc, w2 - 0.04), Vector3(x0 + ins, y0 + hc, w2 - 0.04), BM_GLASS, 3, Vector2(0, 50), Vector2(1, 51))
+	mb_quad(Vector3(x1, y0, -w2), Vector3(x0, y0, -w2), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), BM_GLASS, 3, Vector2(1, 50), Vector2(2, 51))
+	mb_quad(Vector3(x1, y0, w2), Vector3(x1, y0, -w2), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), Vector3(x1 - ins, y0 + hc, w2 - 0.04), BM_GLASS, 3, Vector2(2, 50), Vector2(3, 51))
+	mb_quad(Vector3(x0, y0, -w2), Vector3(x0, y0, w2), Vector3(x0 + ins, y0 + hc, w2 - 0.04), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), BM_GLASS, 3, Vector2(3, 50), Vector2(4, 51))
 	mb_quad(Vector3(x0 + ins, y0 + hc, w2 - 0.04), Vector3(x1 - ins, y0 + hc, w2 - 0.04), Vector3(x1 - ins, y0 + hc, -w2 + 0.04), Vector3(x0 + ins, y0 + hc, -w2 + 0.04), BM_PAINTED if roof_tm == 1 else BM_PLAIN, roof_tm)
 	if lod == LOD_NEAR:
 		# ruedas
@@ -5406,8 +5409,8 @@ func rc_parada(_lod: int, _f: int, _w: float) -> void:
 	mb_box(Vector3(0, 1.15, 0), Vector3(1.4, 0.05, 0.6), BM_PAINTED, 2)
 	for x in [-0.66, 0.66]:
 		mb_box(Vector3(x, 0, -0.25), Vector3(0.05, 1.15, 0.05), BM_PAINTED, 0, 63 - 8)
-	mb_quad(Vector3(0.66, 0.15, -0.27), Vector3(-0.66, 0.15, -0.27), Vector3(-0.66, 1.1, -0.27), Vector3(0.66, 1.1, -0.27), BM_GLASS, 0, Vector2(0, 60), Vector2(1, 61))
-	mb_quad(Vector3(-0.66, 0.15, -0.27), Vector3(0.66, 0.15, -0.27), Vector3(0.66, 1.1, -0.27), Vector3(-0.66, 1.1, -0.27), BM_GLASS, 0, Vector2(0, 60), Vector2(1, 61))
+	mb_quad(Vector3(0.66, 0.15, -0.27), Vector3(-0.66, 0.15, -0.27), Vector3(-0.66, 1.1, -0.27), Vector3(0.66, 1.1, -0.27), BM_GLASS, 3, Vector2(0, 60), Vector2(1, 61))
+	mb_quad(Vector3(-0.66, 0.15, -0.27), Vector3(0.66, 0.15, -0.27), Vector3(0.66, 1.1, -0.27), Vector3(-0.66, 1.1, -0.27), BM_GLASS, 3, Vector2(0, 60), Vector2(1, 61))
 	mb_box(Vector3(0, 0.25, -0.15), Vector3(1.0, 0.05, 0.22), BM_WOOD, 0)
 func rc_cartel_calle(_lod: int, _f: int, _w: float) -> void:
 	mb_box(Vector3.ZERO, Vector3(0.05, 1.9, 0.05), BM_PAINTED, 0, 63 - 8)
@@ -5457,7 +5460,7 @@ func emit_street_furniture(i: int, p: Vector3, y: float, t: int, horiz: bool) ->
 			var tc := tree_colors(kind)
 			var x := bx + along.x * CELL * 0.22
 			var z := bz + along.y * CELL * 0.22
-			emit_model(tm[int(hsh(i, side + 32) * 3.0) % 3], 1 if float(tc[1]) < 0.6 else 0, x, y, z, hsh(i, side + 33) * TAU, 0.6, tc[0], Vector4(0, 0, hsh(i, side + 34), 0))
+			emit_model(tm[int(hsh(i, side + 32) * 3.0) % 3], 1 if float(tc[1]) < 0.6 else 0, x, y, z, hsh(i, side + 33) * TAU, 0.6, tc[0], Vector4(0, 0, hsh(i, side + 34), 0), 0.6)
 		if zone[j] == Z_C and lvl[j] >= 1:
 			var h := hsh(i, side + 35)
 			if h < 0.25:
@@ -5541,7 +5544,7 @@ func emit_special(i: int, p: Vector3) -> bool:
 		var tc := tree_colors(kind)
 		var tx: float = x + c * t[0] + s * t[1]
 		var tz: float = z - s * t[0] + c * t[1]
-		emit_model(tree_models[kind][int(hsh(i, int(t[0] * 10.0)) * 3.0) % 3], 1 if float(tc[1]) < 0.6 else 0, tx, ground_y(tx, tz) - 0.05, tz, hsh(i, int(t[1] * 10.0)) * TAU, t[3], tc[0], Vector4(0, 0, hsh(i, 50), 0))
+		emit_model(tree_models[kind][int(hsh(i, int(t[0] * 10.0)) * 3.0) % 3], 1 if float(tc[1]) < 0.6 else 0, tx, ground_y(tx, tz) - 0.05, tz, hsh(i, int(t[1] * 10.0)) * TAU, t[3], tc[0], Vector4(0, 0, hsh(i, 50), 0), t[3])
 	return true
 # --- piezas comunes de los especiales
 func sp_ground(w: float, mat: int) -> void:
@@ -5679,7 +5682,7 @@ func rc_sp_30(lod: int, _f: int, w: float) -> void:
 	mb_box(Vector3(0, 0.08, 0), Vector3(w * 0.95, 0.02, 0.7), BM_SIDEWALK, 0, 4)
 	mb_box(Vector3(0, 0.08, 0), Vector3(0.7, 0.02, w * 0.95), BM_SIDEWALK, 0, 4)
 	mb_cyl(Vector3(0, 0.08, 0), 0.6, 0.3, 12, BM_CONCRETE, 0)
-	mb_cyl(Vector3(0, 0.38, 0), 0.5, 0.005, 12, BM_MIRROR, 0)
+	mb_cyl(Vector3(0, 0.38, 0), 0.5, 0.005, 12, BM_MIRROR, 3)
 	mb_cyl(Vector3(0, 0.38, 0), 0.08, 0.6, 6, BM_CONCRETE, 0)
 	if lod == LOD_NEAR:
 		for k in 4:
@@ -5690,7 +5693,7 @@ func rc_sp_31(lod: int, _f: int, w: float) -> void:
 	sp_ground(w, BM_TURF)
 	mb_box(Vector3(0, 0.08, 0.5), Vector3(w * 0.95, 0.02, 0.6), BM_SIDEWALK, 0, 4)
 	mb_box(Vector3(-0.5, 0.08, 0), Vector3(0.6, 0.02, w * 0.95), BM_SIDEWALK, 0, 4)
-	mb_cyl(Vector3(1.8, 0.07, -1.6), 1.4, 0.03, 16, BM_MIRROR, 0)
+	mb_cyl(Vector3(1.8, 0.07, -1.6), 1.4, 0.03, 16, BM_MIRROR, 3)
 	if lod == LOD_NEAR:
 		for k in 3:
 			sp_embed(rc_banco, lod, Vector3(-2.0 + k * 1.8, 0.08, 1.1), PI)
@@ -5776,7 +5779,7 @@ func rc_sp_37(lod: int, _f: int, w: float) -> void:
 		mb_cone(Vector3(sx * 2.4, t, 2.3), 0.85, 2.4, 8, BM_SHEET, 0)
 	mb_box(Vector3(0, 0.08, 2.5), Vector3(3.4, 4.6, 0.3), BM_PLASTER, 1, 63 - 8)
 	mb_gable(Vector3(0, 4.68, 2.5), 3.4, 0.3, 1.3, BM_PLASTER, 1, true)
-	mb_cyl(Vector3(0, 3.4, 2.66), 0.6, 0.02, 12, BM_GLASS, 0)
+	mb_cyl(Vector3(0, 3.4, 2.66), 0.6, 0.02, 12, BM_GLASS, 3)
 	mb_cyl(Vector3(0, top, -2.5), 1.1, 1.0, 12, BM_PLASTER, 1)
 	mb_blob(Vector3(0, top + 1.0, -2.5), Vector3(1.1, 1.0, 1.1), [10, 8, 6][lod], [5, 4, 3][lod], 37, BM_SHEET, 0, false)
 func rc_sp_38(lod: int, _f: int, w: float) -> void:
@@ -5864,7 +5867,7 @@ func rc_sp_44(lod: int, _f: int, w: float) -> void:
 	var rows := 6
 	for r in rows:
 		var z := -3.2 + r * 1.2
-		mb_quad(Vector3(-3.4, 0.5, z + 0.4), Vector3(3.0, 0.5, z + 0.4), Vector3(3.0, 1.1, z - 0.3), Vector3(-3.4, 1.1, z - 0.3), BM_GLASS, 0, Vector2(r, 70), Vector2(r + 1, 71))
+		mb_quad(Vector3(-3.4, 0.5, z + 0.4), Vector3(3.0, 0.5, z + 0.4), Vector3(3.0, 1.1, z - 0.3), Vector3(-3.4, 1.1, z - 0.3), BM_GLASS, 3, Vector2(r, 70), Vector2(r + 1, 71))
 		if lod != LOD_FAR:
 			mb_quad(Vector3(3.0, 0.5, z + 0.4), Vector3(-3.4, 0.5, z + 0.4), Vector3(-3.4, 1.1, z - 0.3), Vector3(3.0, 1.1, z - 0.3), BM_PAINTED, 0)
 		if lod == LOD_NEAR:
@@ -5888,7 +5891,7 @@ func rc_sp_45(lod: int, _f: int, w: float) -> void:
 func rc_sp_46(lod: int, _f: int, w: float) -> void:
 	# represa: muro de hormigón con escalones del vertedero, lago detrás y casa de máquinas abajo
 	sp_ground(w, BM_CONCRETE)
-	mb_box(Vector3(0, 0.08, -1.8), Vector3(7.6, 0.05, 4.0), BM_MIRROR, 0, 4)
+	mb_box(Vector3(0, 0.08, -1.8), Vector3(7.6, 0.05, 4.0), BM_MIRROR, 3, 4)
 	mb_box(Vector3(0, -0.2, -2.0), Vector3(7.6, 3.0, 3.6), BM_DARK, 0, 4)
 	mb_box(Vector3(0, 0.08, 0.6), Vector3(7.6, 3.2, 1.0), BM_CONCRETE, 0, 63 - 8)
 	for k in 4:
@@ -5924,10 +5927,10 @@ func rc_sp_49(lod: int, _f: int, w: float) -> void:
 	var seg: int = [16, 10, 8][lod]
 	for c in [Vector3(-2.2, 0, -2.2), Vector3(0.8, 0, -2.2)]:
 		mb_cyl(c + Vector3(0, 0.08, 0), 1.3, 0.5, seg, BM_CONCRETE, 0)
-		mb_cyl(c + Vector3(0, 0.56, 0), 1.2, 0.01, seg, BM_MIRROR, 0)
+		mb_cyl(c + Vector3(0, 0.56, 0), 1.2, 0.01, seg, BM_MIRROR, 3)
 	for k in 3:
 		mb_box(Vector3(-2.6 + k * 1.3, 0.08, 1.2), Vector3(1.1, 0.4, 1.8), BM_CONCRETE, 0, 63 - 8 - 4)
-		mb_box(Vector3(-2.6 + k * 1.3, 0.4, 1.2), Vector3(1.0, 0.02, 1.7), BM_MIRROR, 0, 4)
+		mb_box(Vector3(-2.6 + k * 1.3, 0.4, 1.2), Vector3(1.0, 0.02, 1.7), BM_MIRROR, 3, 4)
 	sp_block(1.6, 0.0, 3.6, 3.4, 0.08, 2, lod, BM_PLASTER, 1, {"gf": 1.6, "door": 0}, 1.0)
 func rc_sp_50(lod: int, _f: int, w: float) -> void:
 	# relleno sanitario: lomas de tierra, montones de basura, topadora y cerco
@@ -5938,7 +5941,7 @@ func rc_sp_50(lod: int, _f: int, w: float) -> void:
 			var p := Vector3(-2.5 + k * 1.3, 0.08, 2.4 + hsh(k, 50) * 0.6)
 			mb_blob(p, Vector3(0.5, 0.35, 0.5), 6, 3, 51 + k, BM_PAINTED, 2, true)
 		mb_box(Vector3(2.6, 0.08, -2.4), Vector3(1.0, 0.6, 0.6), BM_PAINTED, 2)
-		mb_box(Vector3(2.6, 0.68, -2.5), Vector3(0.5, 0.4, 0.4), BM_GLASS, 0)
+		mb_box(Vector3(2.6, 0.68, -2.5), Vector3(0.5, 0.4, 0.4), BM_GLASS, 3)
 		mb_box(Vector3(0, 0.08, 3.85), Vector3(7.6, 1.0, 0.04), BM_PAINTED, 0)
 func rc_sp_51(lod: int, _f: int, w: float) -> void:
 	# planta de reciclaje: galpón de chapa, fardos de colores y cinta transportadora
@@ -6020,7 +6023,7 @@ func rc_sp_56(lod: int, _f: int, w: float) -> void:
 	var top := sp_block(-4.6, 2.6, 4.6, 5.6, 0.08, 2, lod, BM_PAINTED, 1, {"gf": 2.0, "curtain": true, "glass": BM_MIRROR}, 0.8, 0.2)
 	mb_box(Vector3(0, top, 4.1), Vector3(9.4, 0.15, 3.2), BM_PAINTED, 0)
 	mb_limb(Vector3(5.0, 0.08, 4.6), Vector3(5.0, 9.0, 4.6), 0.4, 0.35, [10, 8, 6][lod])
-	mb_cyl(Vector3(5.0, 9.0, 4.6), 0.9, 1.0, [12, 8, 6][lod], BM_GLASS, 0)
+	mb_cyl(Vector3(5.0, 9.0, 4.6), 0.9, 1.0, [12, 8, 6][lod], BM_GLASS, 3)
 	mb_cyl(Vector3(5.0, 10.0, 4.6), 1.0, 0.2, [12, 8, 6][lod], BM_PAINTED, 0)
 	# avión: fuselaje, alas y cola
 	var keep := mb_xf
@@ -6065,7 +6068,7 @@ func rc_sp_60(lod: int, _f: int, w: float) -> void:
 	# gran hotel: basamento con pileta en la terraza y torre de lujo
 	sp_ground(w, BM_SIDEWALK)
 	var t0 := sp_block(-3.6, -3.6, 3.6, 3.0, 0.08, 2, lod, BM_CONCRETE, 1, {"gf": 2.2, "door": 3, "shop": true}, 1.2)
-	mb_box(Vector3(1.8, t0, 1.2), Vector3(2.8, 0.05, 1.6), BM_MIRROR, 0, 4)
+	mb_box(Vector3(1.8, t0, 1.2), Vector3(2.8, 0.05, 1.6), BM_MIRROR, 3, 4)
 	var top := sp_block(-3.2, -3.2, 0.4, 0.4, t0, 14, lod, BM_PAINTED, 1, {"curtain": true, "glass": BM_MIRROR}, 0.7, 0.3)
 	sp_sign(-1.4, top + 0.3, 0.3, 2.8, 0.7)
 	mb_box(Vector3(0, 1.8, 3.4), Vector3(3.0, 0.1, 0.9), BM_PAINTED, 2)
@@ -6084,7 +6087,7 @@ func rc_sp_62(lod: int, _f: int, w: float) -> void:
 	mb_box(Vector3(0, 0.08, 0), Vector3(1.0, 0.02, w * 0.95), BM_ASPHALT, 0, 4)
 	for c in [Vector3(-2.0, 0, -2.0), Vector3(2.0, 0, -2.0), Vector3(-2.0, 0, 2.0), Vector3(2.0, 0, 2.0)]:
 		sp_embed(rc_chalet, lod, c + Vector3(0, 0.08, 0), (PI * 0.5 if c.x < 0 else -PI * 0.5), 0.55)
-		mb_box(Vector3(c.x * 1.55, 0.09, c.z), Vector3(0.6, 0.02, 0.9), BM_MIRROR, 0, 4)
+		mb_box(Vector3(c.x * 1.55, 0.09, c.z), Vector3(0.6, 0.02, 0.9), BM_MIRROR, 3, 4)
 	if lod != LOD_FAR:
 		for side in [[0, -3.85, 7.6, 0.1], [3.85, 0, 0.1, 7.6], [-3.85, 0, 0.1, 7.6], [-2.3, 3.85, 3.0, 0.1], [2.3, 3.85, 3.0, 0.1]]:
 			mb_box(Vector3(side[0], 0.08, side[1]), Vector3(side[2], 1.0, side[3]), BM_PLASTER, 1)
@@ -6122,7 +6125,7 @@ func rc_sp_70(lod: int, _f: int, w: float) -> void:
 	sp_ground(w, BM_SIDEWALK)
 	sp_block(-2.4, -2.4, 2.4, 2.4, 0.08, 1, lod, BM_PAINTED, 1, {"gf": 2.4, "shop": true, "door": 2}, 1.2, 0.0)
 	mb_limb(Vector3(0, 2.4, 0), Vector3(0, 32.0, 0), 1.3, 0.9, [12, 10, 8][lod])
-	mb_cyl(Vector3(0, 32.0, 0), 2.4, 2.4, [16, 12, 8][lod], BM_MIRROR, 0)
+	mb_cyl(Vector3(0, 32.0, 0), 2.4, 2.4, [16, 12, 8][lod], BM_MIRROR, 3)
 	mb_cyl(Vector3(0, 34.4, 0), 2.6, 0.3, [16, 12, 8][lod], BM_PAINTED, 1)
 	mb_limb(Vector3(0, 34.7, 0), Vector3(0, 42.0, 0), 0.2, 0.05, 6)
 func rc_sp_71(lod: int, _f: int, w: float) -> void:
@@ -6130,7 +6133,7 @@ func rc_sp_71(lod: int, _f: int, w: float) -> void:
 	sp_ground(w, BM_TURF)
 	mb_box(Vector3(0, 0.08, 0), Vector3(w * 0.95, 0.02, 0.8), BM_SIDEWALK, 0, 4)
 	mb_box(Vector3(0, 0.08, 0), Vector3(0.8, 0.02, w * 0.95), BM_SIDEWALK, 0, 4)
-	mb_cyl(Vector3(3.0, 0.07, 2.8), 2.4, 0.03, [20, 14, 10][lod], BM_MIRROR, 0)
+	mb_cyl(Vector3(3.0, 0.07, 2.8), 2.4, 0.03, [20, 14, 10][lod], BM_MIRROR, 3)
 	mb_box(Vector3(0, 0.08, 0), Vector3(1.6, 0.4, 1.6), BM_CONCRETE, 0, 63 - 8)
 	mb_limb(Vector3(0, 0.48, 0), Vector3(0, 9.0, 0), 0.5, 0.35, 4)
 	mb_cone(Vector3(0, 9.0, 0), 0.5, 0.8, 4, BM_CONCRETE, 0)
@@ -11926,6 +11929,20 @@ func catalog_check() -> void:
 						if (mt == BM_TILES or mt == BM_SHEET) and ns[vi].y > 0.52 and ns[vi].y < SNOW_NY:
 							why += " techo sin nieve (normal.y %.2f < %.2f)" % [ns[vi].y, SNOW_NY]
 							break
+					# vidrios que no son ventanas (autos, refugios) y agua (vidrio/espejo horizontal): sin luces de noche (máscara 3)
+					for vi in u2.size():
+						var mt2 := int(u2[vi].x + 0.5)
+						if (mt2 == BM_GLASS or mt2 == BM_MIRROR) and int(u2[vi].y + 0.5) != 3 and (md["fam"] == "objeto" or ns[vi].y > 0.9):
+							why += " vidrio que se prendería de noche (normal.y %.2f)" % ns[vi].y
+							break
+					# el farol tiene su luz en las tres versiones
+					if md["id"] == "farol":
+						var has_emit := false
+						for vi in u2.size():
+							if int(u2[vi].x + 0.5) == BM_EMIT:
+								has_emit = true
+						if not has_emit:
+							why += " farol sin luz"
 					if lod == 2 and nv[0] > 0 and vs.size() >= nv[0] and not md["near_only"]:
 						why += " la versión lejos no es más liviana (%d >= %d)" % [vs.size(), nv[0]]
 					bt(why == "", tag + ("ok" if why == "" else "FALLA" + why))
@@ -12128,6 +12145,15 @@ func tree_check() -> void:
 				why += " árbol de más en %d" % i
 	if n == 0:
 		why += " no hay celdas con árbol"
+	# los árboles se escalan parejo (alto y ancho), no solo en planta
+	for cn in bnodes:
+		for k in cn:
+			if cat_models[k / 192]["fam"] == "arbol" and cn[k].multimesh.instance_count > 0:
+				var b: PackedFloat32Array = cn[k].multimesh.buffer
+				var sxz := Vector2(b[0], b[2]).length()
+				if absf(b[5] - sxz) > 0.01:
+					why += " árbol deformado (alto %.2f, ancho %.2f)" % [b[5], sxz]
+					break
 	bt(why == "", "TREE_CHECK (%d celdas) " % n + ("ok" if why == "" else "FALLA" + why))
 # toma de cerca sobre la celda con árbol más cercana al centro, en un día dado (estación) y clima
 func album_trees(d: int, w: String) -> void:

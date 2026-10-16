@@ -275,16 +275,17 @@ func emit_building(i: int, x: float, y: float, z: float, rot: float, wall: Color
 			bcheck_log[i]["n"] += 1
 		else:
 			bcheck_log[i] = {"m": pk.x, "n": 1, "dark": dark}
-# una instancia del modelo m (pisos/variante f) en el bloque que se está armando; escala uniforme en
-# planta (sc) y rotación sobre Y. cust = (quemado, segundo color, semilla, dato del modelo)
-func emit_model(m: int, f: int, x: float, y: float, z: float, rot: float, sc: float, col: Color, cust: Vector4) -> void:
+# una instancia del modelo m (pisos/variante f) en el bloque que se está armando; escala en planta (sc),
+# escala en alto (sy: los árboles la usan igual a sc) y rotación sobre Y.
+# cust = (quemado, segundo color, semilla, dato del modelo)
+func emit_model(m: int, f: int, x: float, y: float, z: float, rot: float, sc: float, col: Color, cust: Vector4, sy := 1.0) -> void:
 	var key := m * 64 + f
 	if not _binst.has(key):
 		_binst[key] = PackedFloat32Array()
 	var b: PackedFloat32Array = _binst[key]
 	var c := cos(rot) * sc
 	var s := sin(rot) * sc
-	b.append_array([c, 0.0, s, x, 0.0, 1.0, 0.0, y, -s, 0.0, c, z, col.r, col.g, col.b, col.a, cust.x, cust.y, cust.z, cust.w])
+	b.append_array([c, 0.0, s, x, 0.0, sy, 0.0, y, -s, 0.0, c, z, col.r, col.g, col.b, col.a, cust.x, cust.y, cust.z, cust.w])
 	_binst[key] = b
 	if bcheck_on:
 		mcheck_log.append([world_to_cell(Vector3(x, 0, z)), m])
