@@ -16,7 +16,7 @@ var lab_since: float = 0.0
 var lab_zoom_prev: float = 0.0
 var lab_sum: float = 0.0
 # qué paso de la simulación corrió en este cuadro (para decir cuál traba)
-const LAB_STEPS := ["listas", "luz: redes", "luz: consumo", "luz: reparto", "agua: redes", "agua: consumo", "agua: reparto", "cobertura de servicios", "contaminación", "ambiente (1/2)", "ambiente (2/2)", "tránsito: caminos", "tránsito: preparar", "tránsito: viajes 1", "tránsito: viajes 2", "tránsito: viajes 3", "tránsito: viajes 4", "tránsito: viajes 5", "felicidad", "crecimiento", "estadísticas e incendios", "progreso", "día: empieza", "día: economía", "día: producción", "día: basura", "día: turismo", "día: eventos y clima", "día: cine", "día: política", "día: cambio de estación", "día: historial y logros", "día: guardado"]
+var LAB_STEPS: Array = SIM_STEP_NAMES + ["día: empieza", "día: economía", "día: producción", "día: basura", "día: turismo", "día: eventos y clima", "día: cine", "día: política", "día: cambio de estación", "día: historial y logros", "día: guardado"]
 var lab_step: int = -1
 var lab_prev_step: int = -1
 var lab_st_total: int = 0

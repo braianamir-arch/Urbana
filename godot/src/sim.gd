@@ -25,14 +25,14 @@ func sim_process(delta: float) -> void:
 	if sim_stage < 0 and sim_acc >= 1.0:
 		sim_acc = 0.0
 		sim_stage = 0
-	# a la velocidad más rápida van dos pasos por cuadro, así la ciudad crece al mismo ritmo que antes
-	for rep_k in (2 if m >= 4.0 else 1):
+	# a velocidad x2 y x4 van 2 y 4 pasos por cuadro, así la ciudad crece al mismo ritmo que antes
+	for rep_k in int(m):
 		if sim_stage < 0:
 			break
 		lab_step = sim_stage
 		run_sim_step(sim_stage)
 		sim_stage += 1
-		if sim_stage > 21:
+		if sim_stage >= SIM_STEP_NAMES.size():
 			sim_stage = -1
 			sim_cycle += 1
 	if day_timer >= DAY_SECONDS:
@@ -43,59 +43,65 @@ func sim_process(delta: float) -> void:
 				new_day_part(p)
 		day_queue = DAY_PARTS.duplicate()
 	if not day_queue.is_empty():
-		lab_step = 22 + DAY_PARTS.find(day_queue[0])
+		lab_step = SIM_STEP_NAMES.size() + DAY_PARTS.find(day_queue[0])
 		new_day_part(day_queue.pop_front())
 # en el juego las etapas pesadas se reparten en más cuadros (mismo trabajo, en el mismo orden que
 # run_sim_stage, que es lo que usan las pruebas y la carga de partidas)
 var net_on: bool = false
 var tr_on: bool = false
+const SIM_STEP_NAMES := ["listas", "luz: redes", "luz: consumo 1", "luz: consumo 2", "luz: reparto", "agua: redes", "agua: consumo 1", "agua: consumo 2", "agua: reparto", "cobertura de servicios", "contaminación", "ambiente 1/4", "ambiente 2/4", "ambiente 3/4", "ambiente 4/4", "tránsito: caminos", "tránsito: preparar", "tránsito: viajes 1", "tránsito: viajes 2", "tránsito: viajes 3", "tránsito: viajes 4", "tránsito: viajes 5", "felicidad", "crecimiento 1/4", "crecimiento 2/4", "crecimiento 3/4", "crecimiento 4/4", "estadísticas e incendios", "progreso"]
 func run_sim_step(k: int) -> void:
 	match k:
 		0:
 			collect_lists()
 			net_on = sim_dirty or sim_cycle % 5 == 0
-		1, 2, 3, 4, 5, 6:
+		1, 2, 3, 4, 5, 6, 7, 8:
 			if net_on:
-				var ps := (k - 1) / 3
-				match (k - 1) % 3:
+				var ps := (k - 1) / 4
+				match (k - 1) % 4:
 					0:
 						net_a(ps)
 					1:
-						net_b(ps)
+						net_b_part(ps, 0, 2)
 					2:
+						net_b_part(ps, 1, 2)
+					3:
 						net_c(ps)
 						if ps == 1:
 							net_finish()
-		7:
-			compute_coverage()
-		8:
-			env_a()
 		9:
-			env_b_part(0, 2)
+			compute_coverage()
 		10:
-			env_b_part(1, 2)
-		11:
+			env_a()
+		11, 12, 13, 14:
+			env_b_part(k - 11, 4)
+		15:
 			tr_on = sim_dirty or sim_cycle % 3 == 0
 			if tr_on:
 				traffic_a()
-		12:
+		16:
 			if tr_on:
 				tb_start()
-		13, 14, 15, 16:
+		17, 18, 19, 20:
 			if tr_on:
 				tb_trips(65)
-		17:
+		21:
 			if tr_on:
 				tb_trips(tb_sample)
 				tb_end()
-		18:
+		22:
 			compute_happiness()
-		19:
-			grow_zones()
-		20:
+		23:
+			gz_n = mini(zone_list.size(), 500)
+			grow_part(0, 125)
+		24, 25:
+			grow_part((k - 23) * 125, (k - 22) * 125)
+		26:
+			grow_part(375, gz_n)
+		27:
 			compute_stats()
 			fire_tick()
-		21:
+		28:
 			sim_dirty = false
 			check_progress()
 func run_sim_stage(s: int) -> void:
@@ -201,16 +207,23 @@ func net_a(pass_i: int) -> void:
 	nt_ncomp = ncomp
 # 2) cuánto consume y produce cada red
 func net_b(pass_i: int) -> void:
+	net_b_part(pass_i, 0, 2)
+	net_b_part(pass_i, 1, 2)
+# el consumo se suma por pedazos del mapa, en el mismo orden (la parte 0 arma antes qué red le toca a cada edificio)
+func net_b_part(pass_i: int, k: int, parts: int) -> void:
 	var water := pass_i == 1
 	var sup: Array = nt_sup
 	var use: Array = nt_use
-	var bcid := {}
-	for i in N * N:
-		if bld[i] > 0 and (part[i] < 0 or part[i] == i):
-			var rc := near_road_cell(i, DEF[bld[i]]["sz"])
-			if rc >= 0 and comp[rc] >= 0:
-				bcid[i] = comp[rc]
-	for i in N * N:
+	var bcid: Dictionary = nt_bcid
+	if k == 0:
+		bcid = {}
+		for i in N * N:
+			if bld[i] > 0 and (part[i] < 0 or part[i] == i):
+				var rc := near_road_cell(i, DEF[bld[i]]["sz"])
+				if rc >= 0 and comp[rc] >= 0:
+					bcid[i] = comp[rc]
+		nt_bcid = bcid
+	for i in range(N * N * k / parts, N * N * (k + 1) / parts):
 		var cid := comp[i]
 		if bld[i] > 0:
 			cid = bcid.get(anchor_of(i), cid)
@@ -239,7 +252,6 @@ func net_b(pass_i: int) -> void:
 				sup[cid] += float(d[key]) * eff
 			else:
 				use[cid] += 3.0 + float(d["upk"]) * 0.05
-	nt_bcid = bcid
 # 3) a quién le llega
 func net_c(pass_i: int) -> void:
 	var water := pass_i == 1
@@ -696,11 +708,15 @@ func compute_happiness() -> void:
 	avg_happy = sum_h / cnt if cnt > 0 else 0.65
 	class_mult = cls_tax / cnt if cnt > 0 else 1.0
 func grow_zones() -> void:
+	gz_n = mini(zone_list.size(), 500)
+	grow_part(0, gz_n)
+var gz_n: int = 0
+# hasta 500 lotes al azar; en el juego van en tandas, en el mismo orden
+func grow_part(a: int, b: int) -> void:
 	if zone_list.is_empty():
 		return
-	var n := mini(zone_list.size(), 500)
 	var pk: PackedFloat32Array = cov[CV_TRANSIT]
-	for s in n:
+	for s in range(a, mini(b, gz_n)):
 		var i: int = zone_list[randi() % zone_list.size()]
 		if part[i] >= 0 and part[i] != i:
 			continue
