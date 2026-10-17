@@ -4431,15 +4431,20 @@ func show_preview() -> void:
 	if _counts[M_BOX] > 0:
 		mm.buffer = _bufs[M_BOX].slice(0, _counts[M_BOX] * 20)
 	set_cost_hint(("Costo: " + fmt_money(cost)) if cost > 0 else "")
-# sube a la placa las instancias de cosas que se mueven. El arreglo se manda entero (sin copiarlo a uno
-# nuevo en cada cuadro): la capacidad del nodo sigue al tamaño del arreglo.
+# sube a la placa las instancias de cosas que se mueven: solo las que hay (redondeado hacia arriba para no
+# cambiar el tamaño en cada cuadro). Los arreglos pueden ser mucho más grandes porque los comparte el armado
+# de la ciudad: mandarlos enteros eran varios megas por cuadro en el celular.
 func flush_mm(mm: MultiMesh, count: int, buf: PackedFloat32Array) -> void:
+	var cap := 64
+	while cap < count:
+		cap *= 2
 	if count > 0:
-		if buf.size() % 20 != 0:
-			buf.resize((buf.size() / 20 + 1) * 20)
-		if mm.instance_count != buf.size() / 20:
-			mm.instance_count = buf.size() / 20
-		mm.buffer = buf
+		if cap != mm.instance_count:
+			mm.instance_count = cap
+		var pb := buf.slice(0, cap * 20)
+		if pb.size() < cap * 20:
+			pb.resize(cap * 20)
+		mm.buffer = pb
 	mm.visible_instance_count = count
 # ================================================================ src/buildings.gd
 # Edificios de la etapa 2: constructor de mallas, recetas y catálogo.
@@ -12596,6 +12601,23 @@ func run_sim() -> void:
 	for k in 300:
 		agents_process(1.0 / 60.0)
 	print("BENCH agents_full_ms=%d cars=%d peds=%d" % [(Time.get_ticks_usec() - t0) / 1000, cars.size(), peds.size()])
+	if OS.get_environment("URB_PROF") != "":
+		cam_dist = 143.0
+		for k in 3000:
+			spawn_agents(0.016)
+		night = 0.0
+		var t9 := Time.get_ticks_usec()
+		for k in 200:
+			agents_process(1.0 / 60.0)
+		print("PROFAG total %.2f ms/cuadro autos=%d gente=%d" % [(Time.get_ticks_usec() - t9) / 200000.0, cars.size(), peds.size()])
+		var tot := 0
+		for b in _bufs:
+			tot += b.size()
+		var up := 0
+		for nd in dyn_nodes:
+			up += nd.multimesh.instance_count
+		print("PROFAG floats en _bufs=%d instancias subidas por cuadro=%d" % [tot, up])
+
 	if OS.get_environment("URB_PROF") != "":
 		var fns := {"spawn": func(): spawn_agents(1.0 / 60.0), "cars": func(): move_cars(1.0 / 60.0), "peds": func(): move_peds(1.0 / 60.0), "svc": func(): move_svc(1.0 / 60.0), "lines": func(): move_lines(1.0 / 60.0), "boats": func(): move_boats(1.0 / 60.0), "stars": func(): move_stars(1.0 / 60.0), "parts": func(): move_parts(1.0 / 60.0), "draw": func(): draw_dynamic()}
 		for nm in fns:

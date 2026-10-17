@@ -688,6 +688,23 @@ func run_sim() -> void:
 		agents_process(1.0 / 60.0)
 	print("BENCH agents_full_ms=%d cars=%d peds=%d" % [(Time.get_ticks_usec() - t0) / 1000, cars.size(), peds.size()])
 	if OS.get_environment("URB_PROF") != "":
+		cam_dist = 143.0
+		for k in 3000:
+			spawn_agents(0.016)
+		night = 0.0
+		var t9 := Time.get_ticks_usec()
+		for k in 200:
+			agents_process(1.0 / 60.0)
+		print("PROFAG total %.2f ms/cuadro autos=%d gente=%d" % [(Time.get_ticks_usec() - t9) / 200000.0, cars.size(), peds.size()])
+		var tot := 0
+		for b in _bufs:
+			tot += b.size()
+		var up := 0
+		for nd in dyn_nodes:
+			up += nd.multimesh.instance_count
+		print("PROFAG floats en _bufs=%d instancias subidas por cuadro=%d" % [tot, up])
+
+	if OS.get_environment("URB_PROF") != "":
 		var fns := {"spawn": func(): spawn_agents(1.0 / 60.0), "cars": func(): move_cars(1.0 / 60.0), "peds": func(): move_peds(1.0 / 60.0), "svc": func(): move_svc(1.0 / 60.0), "lines": func(): move_lines(1.0 / 60.0), "boats": func(): move_boats(1.0 / 60.0), "stars": func(): move_stars(1.0 / 60.0), "parts": func(): move_parts(1.0 / 60.0), "draw": func(): draw_dynamic()}
 		for nm in fns:
 			var t1 := Time.get_ticks_usec()
