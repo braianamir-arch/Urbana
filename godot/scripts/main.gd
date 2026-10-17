@@ -788,7 +788,9 @@ func sim_process(delta: float) -> void:
 	if sim_stage < 0 and sim_acc >= 1.0:
 		sim_acc = 0.0
 		sim_stage = 0
-	# a velocidad x2 y x4 van 2 y 4 pasos por cuadro, así la ciudad crece al mismo ritmo que antes
+	# a x2 y x4 pueden ir hasta 2 y 4 pasos por cuadro, pero nunca más de ~2,5 ms de simulación por cuadro
+	# (si no, se juntaban y cortaban el movimiento); lo que no entra sigue en el cuadro siguiente
+	var t_sim := Time.get_ticks_usec()
 	for rep_k in int(m):
 		if sim_stage < 0:
 			break
@@ -798,6 +800,8 @@ func sim_process(delta: float) -> void:
 		if sim_stage >= SIM_STEP_NAMES.size():
 			sim_stage = -1
 			sim_cycle += 1
+		if Time.get_ticks_usec() - t_sim > 2500:
+			break
 	if day_timer >= DAY_SECONDS:
 		day_timer -= DAY_SECONDS
 		if not day_queue.is_empty():
