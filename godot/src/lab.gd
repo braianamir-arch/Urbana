@@ -145,7 +145,7 @@ func lab_report() -> Dictionary:
 		"dist": lab_dist_sum / maxi(lab_count, 1), "near": 100.0 * lab_near_frames / maxi(lab_count, 1),
 	}
 func lab_head(r: Dictionary) -> String:
-	return "Proyecto URBANA en Godot 4.7 (carpeta godot/, el código se edita en godot/src/*.gd y se arma con python3 tools/godot_modules.py build). Medido con la Sala de computación en mi celular (%s, %s), calidad %s, pantalla %s, ciudad de %d vecinos, %d autos y %d personas en la calle, durante %d s. Cámara a %.0f m de promedio, %.0f %% del tiempo acercada (edificios con todo el detalle)." % [r["model"], r["os"], r["quality"], r["res"], r["pop"], r["cars"], r["peds"], int(r["secs"]), r["dist"], r["near"]]
+	return "Proyecto URBANA en Godot 4.7 (carpeta godot/, el código se edita en godot/src/*.gd y se arma con python3 tools/godot_modules.py build). Medido con la Sala de computación en mi celular (%s, %s, placa %s, dibujo %s), calidad %s, pantalla %s, ciudad de %d vecinos, %d autos y %d personas en la calle, durante %d s. Cámara a %.0f m de promedio, %.0f %% del tiempo acercada (edificios con todo el detalle)." % [r["model"], r["os"], RenderingServer.get_video_adapter_name(), RenderingServer.get_current_rendering_method(), r["quality"], r["res"], r["pop"], r["cars"], r["peds"], int(r["secs"]), r["dist"], r["near"]]
 func lab_parts_text(r: Dictionary) -> String:
 	var t := "Cuadro promedio %.1f ms (%.0f fps, el 1 %% más lento a %.0f fps). Por parte, promedio y peor cuadro:" % [r["frame"], r["fps"], r["low1"]]
 	for k in r["parts"]:

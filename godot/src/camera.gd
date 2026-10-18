@@ -40,8 +40,14 @@ func place_camera() -> void:
 	cam.position = cam_target + off
 	cam.look_at(cam_target, Vector3.UP)
 	update_building_lod()
-	if sun and not OS.has_feature("android"):
-		sun.directional_shadow_max_distance = clampf(cam_dist * 2.2, 80.0, 420.0)
+	if sun:
+		# la sombra cubre lo que se ve: acercado, menos distancia = sombras más nítidas y menos cosas que
+		# dibujar en la sombra (en el celular quedaba fija en 170 m). De a 10 m para que no titile al hacer zoom.
+		# alejado, en el celular sigue el tope de antes (170 m)
+		# con la cámara baja se ve más lejos: la sombra llega más allá (nunca menos de 110 m)
+		var sd := snappedf(clampf(cam_dist * 2.2 + (1.32 - cam_pitch) * 50.0, 110.0, 170.0 if OS.has_feature("android") else 420.0), 10.0)
+		if absf(sd - sun.directional_shadow_max_distance) >= 10.0:
+			sun.directional_shadow_max_distance = sd
 func start_intro(full: bool) -> void:
 	intro_full = full
 	intro_t = 0.0

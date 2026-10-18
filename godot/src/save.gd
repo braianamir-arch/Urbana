@@ -24,6 +24,7 @@ func free_slot() -> int:
 			ot = t
 	return oldest
 func reset_state() -> void:
+	save_wait()
 	test_city = false
 	money = 30000.0
 	debt = 0.0
@@ -194,22 +195,35 @@ func snapshot() -> Dictionary:
 		"terr": b64(terr), "hgt": b64(hgt), "road": b64(road), "zone": b64(zone), "bld": b64(bld), "lvl": b64(lvl), "part": b64(part),
 		"occ": b64(occ), "vari": b64(vari), "tree": b64(tree), "wire": b64(wire), "garbp": b64(garbp), "owned": b64(owned), "district": b64(district),
 	}
-# guardado automático: la foto de la partida se saca acá (rápido) y el texto y el archivo se arman en otro
-# hilo con una copia propia de los datos, así no se traba el juego cada dos días
-var save_job: int = -1
+# guardado automático: la foto de la partida se saca acá (rápido) y el texto se arma de a pedazos en los
+# cuadros siguientes (como mucho ~2 ms por cuadro), así no se traba el juego cada dos días. Antes se armaba
+# en otro hilo y eso rompía la memoria del juego (se cerraba solo); ahora todo pasa en el hilo principal.
+var save_q: Dictionary = {}
 func save_game_bg(s: int) -> void:
-	if test_city:
+	if test_city or not save_q.is_empty():
 		return
-	if save_job >= 0:
-		if not WorkerThreadPool.is_task_completed(save_job):
-			return
-		WorkerThreadPool.wait_for_task_completion(save_job)
-		save_job = -1
 	var d: Dictionary = snapshot().duplicate(true)
-	var path := slot_path(s)
-	var bpath := slot_path(s, true)
-	save_job = WorkerThreadPool.add_task(func(): write_save(path, bpath, d))
-func write_save(path: String, bpath: String, d: Dictionary) -> void:
+	save_q = {"path": slot_path(s), "bpath": slot_path(s, true), "d": d, "keys": d.keys(), "k": 0, "parts": PackedStringArray()}
+# arma el texto de unas cuantas claves de la partida; budget_us < 0 = todo de una
+func save_step(budget_us: int = 2000) -> void:
+	if save_q.is_empty():
+		return
+	var t0 := Time.get_ticks_usec()
+	var keys: Array = save_q["keys"]
+	var d: Dictionary = save_q["d"]
+	var parts: PackedStringArray = save_q["parts"]
+	var k: int = save_q["k"]
+	while k < keys.size():
+		parts.append(JSON.stringify(str(keys[k])) + ":" + JSON.stringify(d[keys[k]]))
+		k += 1
+		if budget_us >= 0 and Time.get_ticks_usec() - t0 > budget_us:
+			break
+	save_q["k"] = k
+	save_q["parts"] = parts
+	if k >= keys.size():
+		write_save(save_q["path"], save_q["bpath"], "{" + ",".join(parts) + "}")
+		save_q = {}
+func write_save(path: String, bpath: String, text: String) -> void:
 	if FileAccess.file_exists(path):
 		var old := FileAccess.get_file_as_string(path)
 		if old.length() > 100:
@@ -218,11 +232,10 @@ func write_save(path: String, bpath: String, d: Dictionary) -> void:
 				fb.store_string(old)
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify(d))
+		f.store_string(text)
+# termina ya un guardado automático a medias (antes de guardar, cargar o empezar otra partida)
 func save_wait() -> void:
-	if save_job >= 0:
-		WorkerThreadPool.wait_for_task_completion(save_job)
-		save_job = -1
+	save_step(-1)
 func save_game(s: int) -> void:
 	if test_city:
 		return
@@ -246,6 +259,7 @@ func save_info(s: int) -> String:
 		return "dañada"
 	return "%s · día %d, %s vecinos" % [str(d.get("city", "Mi ciudad")), int(d.get("day", 1)), fmt_int(int(d.get("pop", 0)))]
 func load_game(s: int, backup: bool = false) -> bool:
+	save_wait()
 	var path := slot_path(s, backup)
 	if not FileAccess.file_exists(path):
 		return false

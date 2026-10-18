@@ -15,6 +15,8 @@ var terrain_hsub := PackedFloat32Array()
 var dtex: ImageTexture
 var ctex: ImageTexture
 var terrain_node: MeshInstance3D
+var terrain_shadow_node: MeshInstance3D
+var water_shadow_node: MeshInstance3D
 var water_node: MeshInstance3D
 var chunk_nodes: Array = []
 var overlay_node: MultiMeshInstance3D
@@ -150,12 +152,28 @@ func setup_render() -> void:
 	water_node.material_override = water_mat
 	water_node.position = Vector3(0, WATER_Y, 0)
 	add_child(water_node)
+	# sombras del suelo y del agua con copias simples (misma sombra, muchos menos triángulos): el terreno
+	# fino tiene 4 veces más triángulos y el agua 90 x 90 cuadraditos que solo hacen falta para las olas
+	water_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	water_shadow_node = MeshInstance3D.new()
+	var wsp := PlaneMesh.new()
+	wsp.size = wp.size
+	water_shadow_node.mesh = wsp
+	water_shadow_node.position = water_node.position
+	water_shadow_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	add_child(water_shadow_node)
+	terrain_shadow_node = MeshInstance3D.new()
+	terrain_shadow_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	terrain_shadow_node.visible = false
+	add_child(terrain_shadow_node)
 	overlay_node = new_mm_node(meshes[M_BOX], overlay_mat)
 	preview_node = new_mm_node(meshes[M_BOX], overlay_mat)
 	chunk_nodes.clear()
 	bnodes.clear()
+	bshadow.clear()
 	for c in NCH * NCH:
 		bnodes.append({})
+		bshadow.append({})
 	bnear_ok.resize(NCH * NCH)
 	bnear_ok.fill(0)
 	chunk_dirty.resize(NCH * NCH)
@@ -417,6 +435,8 @@ func build_terrain() -> void:
 		build_terrain_tex()
 		return
 	terrain_node.material_override = terrain_simple_mat
+	terrain_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	terrain_shadow_node.visible = false
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var s := season()
@@ -646,8 +666,41 @@ func build_terrain_tex() -> void:
 	var am := ArrayMesh.new()
 	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	terrain_node.mesh = am
+	terrain_shadow_mesh(hsub, M, half)
 	var grass: Color = [Color(0.42, 0.62, 0.28), Color(0.58, 0.55, 0.28), Color(0.62, 0.66, 0.6), Color(0.45, 0.68, 0.32)][s]
 	build_outer(grass)
+# copia del terreno con un vértice por esquina de celda (la cuarta parte de los triángulos) que solo
+# proyecta sombra. Va 0,25 m más abajo: donde el terreno fino está suavizado queda siempre por debajo y no
+# ensucia el suelo con sombras propias; las lomas y cerros siguen tirando su sombra igual.
+func terrain_shadow_mesh(hsub: PackedFloat32Array, M: int, half: float) -> void:
+	var G := N + 1
+	var verts := PackedVector3Array()
+	verts.resize(G * G)
+	for v in G:
+		for u in G:
+			verts[v * G + u] = Vector3(u * CELL - half, hsub[(2 * v) * M + 2 * u] - 0.25, v * CELL - half)
+	var ids := PackedInt32Array()
+	ids.resize(N * N * 6)
+	var n := 0
+	for v in N:
+		for u in N:
+			var a := v * G + u
+			ids[n] = a
+			ids[n + 1] = a + 1
+			ids[n + 2] = a + G + 1
+			ids[n + 3] = a
+			ids[n + 4] = a + G + 1
+			ids[n + 5] = a + G
+			n += 6
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_INDEX] = ids
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	terrain_shadow_node.mesh = am
+	terrain_shadow_node.visible = true
+	terrain_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 func terrain_color(i: int, grass: Color) -> Color:
 	var c: Color
 	match terr[i]:

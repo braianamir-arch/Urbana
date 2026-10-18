@@ -1848,6 +1848,12 @@ func open_options() -> void:
 		layout_ui()
 		save_opts()))
 	b.add_child(mk_label("Si el juego se cierra solo, probá apagar estas cosas:"))
+	b.add_child(mk_check("Dibujo compatible (OpenGL, para celulares que se cierran; se aplica al reiniciar)", draw_compat() if draw_cfg_kind() != "prueba" else false, func(on: bool):
+		if on:
+			draw_cfg_write("elegido")
+			draw_guard_on = false
+		else:
+			draw_cfg_remove()))
 	b.add_child(mk_check("Sombras", opts["g_shadow"], func(on: bool):
 		opts["g_shadow"] = on
 		apply_quality()
@@ -2208,7 +2214,11 @@ func show_start() -> void:
 	r.add_child(b2)
 	r.add_child(b3)
 	start_body.add_child(r)
-	if prev_crumb != "" and not prev_crumb.contains("cierre limpio"):
+	if draw_note != "":
+		var dn := mk_text(draw_note)
+		dn.modulate = Color(0.75, 0.9, 1.0)
+		start_body.add_child(dn)
+	elif prev_crumb != "" and not prev_crumb.contains("cierre limpio"):
 		var cl := mk_text("La vez anterior el juego se cerró solo. Último paso anotado:\n" + prev_crumb)
 		cl.modulate = Color(1, 0.8, 0.5)
 		start_body.add_child(cl)

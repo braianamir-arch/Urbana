@@ -21,7 +21,7 @@ OUT = ROOT / "godot" / "scripts" / "main.gd"
 SHADER_DIR = ROOT / "godot" / "shaders"
 
 # orden en que se juntan; state va primero porque tiene el 'extends' y lo compartido
-ORDER = ["state", "world", "sim", "build", "render", "buildings", "trees", "props", "specials", "camera", "agents", "crowd", "life", "lab", "ui", "audio", "save", "tests", "main"]
+ORDER = ["state", "world", "sim", "build", "render", "buildings", "trees", "props", "specials", "camera", "agents", "crowd", "life", "lab", "guard", "ui", "audio", "save", "tests", "main"]
 ABOUT = {
     "state": "Estado compartido y constantes (lo usan varios módulos)",
     "world": "El mapa: celdas, terreno, generación y utilidades",
@@ -37,6 +37,7 @@ ABOUT = {
     "crowd": "Gente y autos de una sola pieza (el shader pinta las partes y mueve piernas y brazos)",
     "life": "Etapa 4: horario de la ciudad y uso de cada edificio para la vida en las ventanas",
     "lab": "Sala de computación: mide el juego en el celular y arma pedidos de mejora para Claude Code",
+    "guard": "Dibujo compatible automático para los celulares cuyo driver de Vulkan cierra el juego",
     "ui": "Interfaz: HUD, abanico, bandejas, hojas, tarjetas, tutorial e íconos",
     "audio": "Sonidos y música generados",
     "save": "Partidas: nueva, guardar, cargar, códigos y migración",

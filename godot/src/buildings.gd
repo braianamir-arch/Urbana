@@ -22,6 +22,7 @@ const BM_FARWIN := 30
 const LOD_NEAR := 0
 const LOD_MID := 1
 const LOD_FAR := 2
+const LOD_SHADOW := 3   # solo árboles: copia liviana de la versión cerca que tira la sombra
 const FLOOR_H := 1.3
 # las caras con normal.y mayor que esto se cubren de nieve (mismo valor en building.gdshaderinc)
 const SNOW_NY := 0.5
@@ -55,6 +56,7 @@ func bmat_param(n: String, v: Variant) -> void:
 	building_mat.set_shader_parameter(n, v)
 	building_lite_mat.set_shader_parameter(n, v)
 var bnodes: Array = []
+var bshadow: Array = []   # por bloque: modelo de árbol -> nodo que solo tira sombra
 var _binst: Dictionary = {}
 var bq_last: int = -1
 var b_near_on: bool = false
@@ -325,6 +327,10 @@ func flush_buildings(ch: int) -> void:
 	# la versión cerca se arma solo en los bloques cerca de la cámara acercada (armarla cuesta y no se ve)
 	var near_ok: bool = q > 0 and b_near_on and chunk_close(ch)
 	bnear_ok[ch] = 1 if near_ok else 0
+	var sh: Dictionary = bshadow[ch]
+	for k in sh:
+		if not _binst.has(k) or not near_ok:
+			sh[k].multimesh.instance_count = 0
 	for key in _binst:
 		var buf: PackedFloat32Array = _binst[key]
 		var cnt := buf.size() / 20
@@ -340,12 +346,24 @@ func flush_buildings(ch: int) -> void:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if lod != LOD_FAR or q == 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			node.multimesh.instance_count = cnt
 			node.multimesh.buffer = buf
+			# árboles de cerca: la sombra la tira la copia liviana (la mitad de triángulos, misma forma)
+			if lod == LOD_NEAR and cat_models[key / 64]["fam"] == "arbol":
+				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				var sn: MultiMeshInstance3D = sh.get(key)
+				if sn == null:
+					sn = new_mm_node(tree_shadow_mesh(key / 64, key % 64), building_mat)
+					sn.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+					sh[key] = sn
+				sn.multimesh.instance_count = cnt
+				sn.multimesh.buffer = buf
 		if q == 0:
 			for lod in [LOD_NEAR, LOD_MID]:
 				if nodes.has(key * 3 + lod):
 					nodes[key * 3 + lod].multimesh.instance_count = 0
 	for k in nodes:
 		lod_ranges(nodes[k], k % 3, q, near_ok)
+	for k in sh:
+		lod_ranges(sh[k], LOD_NEAR, q, near_ok)
 # el centro del bloque está a menos de 200 m (en planta) del punto que mira la cámara
 func chunk_close(ch: int) -> bool:
 	var half := N * CELL * 0.5
@@ -376,6 +394,8 @@ func update_building_lod() -> void:
 			var ok: bool = want and bnear_ok[c] == 1
 			for k in bnodes[c]:
 				lod_ranges(bnodes[c][k], k % 3, q, ok)
+			for k in bshadow[c]:
+				lod_ranges(bshadow[c][k], LOD_NEAR, q, ok)
 	if b_near_on and q > 0:
 		# solo los bloques cercanos que todavía no tienen su versión cerca (se rehacen de a uno por cuadro)
 		for c in bnodes.size():

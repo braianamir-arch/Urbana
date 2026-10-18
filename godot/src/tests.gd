@@ -126,6 +126,9 @@ func run_test() -> void:
 	if test_mode.begins_with("vida="):
 		run_vida(test_mode.substr(5))
 		return
+	if test_mode.begins_with("dibujo="):
+		run_dibujo(test_mode.substr(7))
+		return
 	if test_mode == "scroll":
 		run_scroll()
 		return
@@ -733,6 +736,7 @@ func run_sim() -> void:
 	for k in 3:
 		build_terrain()
 	print("BENCH terrain_ms=%d" % ((Time.get_ticks_usec() - t0) / 1000))
+	save_bg_check()
 	print("SIM OK")
 	get_tree().quit()
 # --- pruebas de compatibilidad y casos de borde (etapa 0)
@@ -1787,3 +1791,143 @@ func lab_check(dir: String) -> void:
 	bt(txt.length() > 300 and txt.contains("bloques de la ciudad"), "LAB_CHECK copiar todo " + ("ok (%d letras)" % txt.length() if txt.length() > 300 else "FALLA"))
 	open_lab()
 	bt(sheet.visible and sheet_name == "lab", "LAB_CHECK panel abierto " + ("ok" if sheet.visible else "FALLA"))
+# Cuánto se dibuja (--test=dibujo=<carpeta>): ciudad poblada en calidad Alta, con la cámara a 49 m (como en el
+# celular) y a 150 m. Separa la imagen de las sombras: draw calls, objetos y triángulos.
+var dib_t: int = 0
+var dib_ms: Array = []
+func run_dibujo(dir: String) -> void:
+	test_frame += 1
+	var f := test_frame
+	if f == 5:
+		opts["quality"] = 2
+		new_test_city()
+		enter_game(false)
+		skip_intro()
+		card_queue.clear()
+		card_panel.visible = false
+		set_speed(1)
+		apply_quality()
+		pop = 2600
+		for k in 2000:
+			spawn_agents(0.016)
+		dib_cam(49.0)
+	elif f == 90:
+		# experimentos para medir (URB_EXP=sombras,arboles,glow,msaa,terreno)
+		var ex := OS.get_environment("URB_EXP")
+		if ex.contains("sombras"):
+			sun.shadow_enabled = false
+		if ex.contains("glow"):
+			env.glow_enabled = false
+		if ex.contains("msaa"):
+			get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+		if ex.contains("terreno"):
+			terrain_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if ex.contains("arboles"):
+			for c in bnodes:
+				for k in c:
+					if cat_models[k / 3 / 64]["fam"] == "arbol" and k % 3 == LOD_NEAR:
+						c[k].cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	elif f == 160:
+		dib_stats(dir, "cerca")
+		dib_groups = dib_make_groups()
+		dib_gk = 0
+	elif f > 160 and f < 250 and dib_gk < dib_groups.size():
+		# se apaga un grupo por vez (3 cuadros) para ver cuánto dibuja cada uno
+		var ph := (f - 161) % 3
+		var g: Array = dib_groups[dib_gk]
+		if ph == 0:
+			dib_base = dib_info()
+			for nd in g[1]:
+				nd.set_meta("dv", nd.visible)
+				nd.visible = false
+		elif ph == 2:
+			var now := dib_info()
+			print("BENCH grupo %s nodos=%d imagen dc=%d tri=%d sombras dc=%d tri=%d" % [g[0], g[1].size(), dib_base[0] - now[0], dib_base[1] - now[1], dib_base[2] - now[2], dib_base[3] - now[3]])
+			for nd in g[1]:
+				nd.visible = nd.get_meta("dv")
+			dib_gk += 1
+	elif f == 250:
+		dib_cam(150.0)
+		dib_t = 0
+	elif f == 320:
+		dib_stats(dir, "lejos")
+		print("DIBUJO OK")
+		get_tree().quit()
+	if f > 100 and f <= 160 or f > 270 and f <= 320:
+		var now := Time.get_ticks_usec()
+		if dib_t > 0:
+			dib_ms.append(now - dib_t)
+		dib_t = now
+func dib_cam(d: float) -> void:
+	var best: int = road_list[road_list.size() / 2]
+	for c in road_list:
+		if road[c] >= 2 and Vector2(cx(c) - N / 2, cz(c) - N / 2).length() < 12.0:
+			best = c
+			break
+	cam_target = cell_pos(best)
+	cam_goal = cam_target
+	cam_dist = d
+	cam_dist_goal = d
+	cam_pitch = 0.6
+	cam_yaw = 0.5
+	day_timer = DAY_SECONDS * 0.3
+	weather = "Soleado"
+	dib_ms.clear()
+	dib_t = 0
+func dib_stats(dir: String, name: String) -> void:
+	var vp := get_viewport()
+	var tot := 0.0
+	for v in dib_ms:
+		tot += v
+	var vis := [vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_OBJECTS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME)]
+	var sha := [vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_OBJECTS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME)]
+	print("BENCH dibujo_%s frame_ms=%.2f imagen dc=%d obj=%d tri=%d sombras dc=%d obj=%d tri=%d autos=%d gente=%d" % [name, tot / maxf(dib_ms.size(), 1) / 1000.0, vis[0], vis[1], vis[2], sha[0], sha[1], sha[2], cars.size(), peds.size()])
+	shot_to(dir, "dibujo_" + name)
+var dib_groups: Array = []
+var dib_gk: int = 0
+var dib_base: Array = []
+func dib_info() -> Array:
+	var vp := get_viewport()
+	return [vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME)]
+func dib_make_groups() -> Array:
+	var gs := {}
+	for c in bnodes:
+		for k in c:
+			var md: Dictionary = cat_models[k / 3 / 64]
+			var gname: String = "%s_%s" % [md["fam"], ["cerca", "media", "lejos"][k % 3]]
+			if not gs.has(gname):
+				gs[gname] = []
+			gs[gname].append(c[k])
+	var out: Array = []
+	for gname in gs:
+		out.append([gname, gs[gname]])
+	var prim: Array = []
+	for arr in chunk_nodes:
+		prim.append_array(arr)
+	out.append(["primitivas", prim])
+	out.append(["gente_autos", crowd_nodes + car_mid_nodes])
+	out.append(["terreno", [terrain_node]])
+	out.append(["agua", [water_node]])
+	out.append(["dinamicos", dyn_nodes + [glow_node, rails_node]])
+	if outer_nodes.size() > 0:
+		out.append(["horizonte", outer_nodes])
+	return out
+# el guardado automático de a pedazos (sin hilos) deja el mismo archivo que el guardado de una vez
+func save_bg_check() -> void:
+	save_wait()
+	save_game_bg(3)
+	var steps := 0
+	while not save_q.is_empty() and steps < 10000:
+		save_step(300)
+		steps += 1
+	var got = JSON.parse_string(FileAccess.get_file_as_string(slot_path(3)))
+	var want = JSON.parse_string(JSON.stringify(snapshot()))
+	var ok: bool = steps > 1 and typeof(got) == TYPE_DICTIONARY and JSON.stringify(got, "", true) == JSON.stringify(want, "", true)
+	print("SAVE_BG_CHECK %s (%d pasos)" % ["ok" if ok else "FALLA", steps])

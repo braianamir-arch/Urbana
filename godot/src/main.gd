@@ -26,6 +26,7 @@ func _notification(what: int) -> void:
 		if started:
 			save_game(slot)
 		crumb("cierre limpio")
+		draw_guard_end()
 var first_chunks: bool = true
 func _ready() -> void:
 	if FileAccess.file_exists("user://ultimo_paso.txt"):
@@ -38,6 +39,7 @@ func _ready() -> void:
 			test_mode = a.substr(7) if a.length() > 7 else "run"
 	if test_mode != "":
 		seed(20261012)
+	draw_guard_start()
 	setup_render()
 	setup_camera()
 	setup_agents()
@@ -92,6 +94,8 @@ func _process(delta: float) -> void:
 	ui_process(delta)
 	lab_add(4, lt)
 	lab_frame(delta)
+	draw_guard_step(delta)
+	save_step()
 	crumb("dibujando el cuadro")
 	if opts["idle30"] and not OS.has_feature("android"):
 		idle_t += delta

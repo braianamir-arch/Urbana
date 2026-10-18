@@ -25,7 +25,8 @@ run() {
 	timeout 600 xvfb-run -a -s "-screen 0 1280x720x24" "$GODOT" --path "$ROOT/godot" \
 		--rendering-method gl_compatibility --rendering-driver opengl3 \
 		--fixed-fps 60 --resolution 1280x720 --audio-driver Dummy -- "--test=$mode" > "$OUT/$name.log" 2>&1
-	if grep -q "SCRIPT ERROR" "$OUT/$name.log" || ! grep -q "$ok" "$OUT/$name.log"; then
+	# memoria rota al cerrar (double free, corrupted size...): el juego se cerraría solo en el celular
+	if grep -q "SCRIPT ERROR" "$OUT/$name.log" || ! grep -q "$ok" "$OUT/$name.log" || grep -qE "double free|corrupted (size|double)|free\(\): invalid|malloc\(\)" "$OUT/$name.log"; then
 		echo "FALLA $name (ver $OUT/$name.log)"; fail=1
 	else
 		echo "ok    $name"

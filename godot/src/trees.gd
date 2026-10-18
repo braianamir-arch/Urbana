@@ -62,20 +62,22 @@ func mb_frond(base: Vector3, ang: float, L: float, wd: float, droop: float) -> v
 		var w1 := 1.0 - (s + 1) / 3.0 * 0.7
 		mb_quad(a - side * w0, a + side * w0, b + side * w1, b - side * w1, BM_LEAF, 1)
 		mb_quad(a + side * w0, a - side * w0, b - side * w1, b + side * w1, BM_LEAF, 1)
+# lod LOD_SHADOW: la misma copa que la de cerca (mismos bultos en el mismo lugar) con menos caras, solo para
+# la sombra. Los bultos quedan apenas adentro de los de cerca, así no se ensombrecen a sí mismos.
 # receta común: kind = especie, v = forma (0..2), f = 0 llena / 1 rala (invierno en las de hoja caduca)
 func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 	var sd := kind * 10 + v
-	var seg: int = [8, 5, 4][lod]
-	var bseg: int = [8, 5, 5][lod]
-	var brings: int = [6, 3, 3][lod]
+	var seg: int = [8, 5, 4, 6][lod]
+	var bseg: int = [8, 5, 5, 6][lod]
+	var brings: int = [6, 3, 3, 4][lod]
 	var bare := f == 1 and kind in [1, 2, 3]
-	var nb: int = [10, 2, 1][lod]
+	var nb: int = [10, 2, 1, 10][lod]
 	var jit := func(k: int, q: int) -> float: return hsh(sd * 7 + k, q) - 0.5
 	match kind:
 		4:
 			# pino: capas de conos verde oscuro
 			mb_limb(Vector3.ZERO, Vector3(0, 1.0, 0), 0.16, 0.12, seg)
-			var tiers: int = [4, 3, 1][lod]
+			var tiers: int = [4, 3, 1, 4][lod]
 			for t in tiers:
 				var k: float = float(t) / maxf(tiers - 1, 1)
 				var y0: float = 0.8 + t * (3.6 / tiers)
@@ -86,7 +88,7 @@ func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 			# palmera: tronco alto con anillos y penacho de hojas
 			var h := 4.6 + v * 0.4
 			var lean: Vector3 = Vector3(jit.call(1, 1) * 0.6, 0, jit.call(2, 1) * 0.6)
-			var rings: int = [6, 3, 1][lod]
+			var rings: int = [6, 3, 1, 3][lod]
 			for r in rings:
 				var a: Vector3 = lean * (float(r) / rings) + Vector3(0, h * r / rings, 0)
 				var b: Vector3 = lean * (float(r + 1) / rings) + Vector3(0, h * (r + 1) / rings, 0)
@@ -95,7 +97,7 @@ func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 			if lod == LOD_FAR:
 				mb_blob(top, Vector3(1.2, 0.45, 1.2), bseg, brings, sd)
 				return
-			var nf: int = [10, 6, 0][lod]
+			var nf: int = [10, 6, 0, 10][lod]
 			for k in nf:
 				mb_frond(top, TAU * k / nf + jit.call(k, 4), 1.6 + jit.call(k, 5) * 0.4, 0.22, 0.9 + jit.call(k, 6) * 0.4)
 			mb_blob(top + Vector3(0, 0.1, 0), Vector3(0.3, 0.25, 0.3), bseg, brings, sd)
@@ -113,7 +115,7 @@ func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 	else:
 		mb_limb(Vector3.ZERO, Vector3(0, th, 0), tr, tr * 0.75, seg)
 	# ramas principales hacia la copa
-	var nbr: int = [5, 0, 0][lod]
+	var nbr: int = [5, 0, 0, 5][lod]
 	for k in nbr:
 		var a: float = TAU * k / nbr + jit.call(k, 8)
 		var tip: Vector3 = Vector3(cos(a) * cr.x * 0.6, cy + jit.call(k, 9) * 0.4, sin(a) * cr.z * 0.6)
@@ -158,3 +160,14 @@ func emit_trees(i: int, p: Vector3) -> void:
 		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.4
 		var m: int = models[int(hsh(i, k * 3 + 5) * 3.0) % models.size()]
 		emit_model(m, f, x, ground_y(x, z) - 0.05, z, hsh(i, k * 3 + 6) * TAU, sc, crown, Vector4(0, 0, hsh(i, k + 20), 0), sc)
+var tree_shadow_cache: Dictionary = {}
+func tree_shadow_mesh(m: int, floors: int) -> ArrayMesh:
+	var key := m * 64 + floors
+	if tree_shadow_cache.has(key):
+		return tree_shadow_cache[key]
+	var md: Dictionary = cat_models[m]
+	mb_begin()
+	md["recipe"].call(LOD_SHADOW, floors, md.get("w", CELL * 0.82))
+	var mesh := mb_end()
+	tree_shadow_cache[key] = mesh
+	return mesh

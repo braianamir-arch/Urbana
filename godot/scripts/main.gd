@@ -3037,6 +3037,8 @@ var terrain_hsub := PackedFloat32Array()
 var dtex: ImageTexture
 var ctex: ImageTexture
 var terrain_node: MeshInstance3D
+var terrain_shadow_node: MeshInstance3D
+var water_shadow_node: MeshInstance3D
 var water_node: MeshInstance3D
 var chunk_nodes: Array = []
 var overlay_node: MultiMeshInstance3D
@@ -3172,12 +3174,28 @@ func setup_render() -> void:
 	water_node.material_override = water_mat
 	water_node.position = Vector3(0, WATER_Y, 0)
 	add_child(water_node)
+	# sombras del suelo y del agua con copias simples (misma sombra, muchos menos triángulos): el terreno
+	# fino tiene 4 veces más triángulos y el agua 90 x 90 cuadraditos que solo hacen falta para las olas
+	water_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	water_shadow_node = MeshInstance3D.new()
+	var wsp := PlaneMesh.new()
+	wsp.size = wp.size
+	water_shadow_node.mesh = wsp
+	water_shadow_node.position = water_node.position
+	water_shadow_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	add_child(water_shadow_node)
+	terrain_shadow_node = MeshInstance3D.new()
+	terrain_shadow_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	terrain_shadow_node.visible = false
+	add_child(terrain_shadow_node)
 	overlay_node = new_mm_node(meshes[M_BOX], overlay_mat)
 	preview_node = new_mm_node(meshes[M_BOX], overlay_mat)
 	chunk_nodes.clear()
 	bnodes.clear()
+	bshadow.clear()
 	for c in NCH * NCH:
 		bnodes.append({})
+		bshadow.append({})
 	bnear_ok.resize(NCH * NCH)
 	bnear_ok.fill(0)
 	chunk_dirty.resize(NCH * NCH)
@@ -3439,6 +3457,8 @@ func build_terrain() -> void:
 		build_terrain_tex()
 		return
 	terrain_node.material_override = terrain_simple_mat
+	terrain_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	terrain_shadow_node.visible = false
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var s := season()
@@ -3668,8 +3688,41 @@ func build_terrain_tex() -> void:
 	var am := ArrayMesh.new()
 	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	terrain_node.mesh = am
+	terrain_shadow_mesh(hsub, M, half)
 	var grass: Color = [Color(0.42, 0.62, 0.28), Color(0.58, 0.55, 0.28), Color(0.62, 0.66, 0.6), Color(0.45, 0.68, 0.32)][s]
 	build_outer(grass)
+# copia del terreno con un vértice por esquina de celda (la cuarta parte de los triángulos) que solo
+# proyecta sombra. Va 0,25 m más abajo: donde el terreno fino está suavizado queda siempre por debajo y no
+# ensucia el suelo con sombras propias; las lomas y cerros siguen tirando su sombra igual.
+func terrain_shadow_mesh(hsub: PackedFloat32Array, M: int, half: float) -> void:
+	var G := N + 1
+	var verts := PackedVector3Array()
+	verts.resize(G * G)
+	for v in G:
+		for u in G:
+			verts[v * G + u] = Vector3(u * CELL - half, hsub[(2 * v) * M + 2 * u] - 0.25, v * CELL - half)
+	var ids := PackedInt32Array()
+	ids.resize(N * N * 6)
+	var n := 0
+	for v in N:
+		for u in N:
+			var a := v * G + u
+			ids[n] = a
+			ids[n + 1] = a + 1
+			ids[n + 2] = a + G + 1
+			ids[n + 3] = a
+			ids[n + 4] = a + G + 1
+			ids[n + 5] = a + G
+			n += 6
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_INDEX] = ids
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	terrain_shadow_node.mesh = am
+	terrain_shadow_node.visible = true
+	terrain_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 func terrain_color(i: int, grass: Color) -> Color:
 	var c: Color
 	match terr[i]:
@@ -4491,6 +4544,7 @@ const BM_FARWIN := 30
 const LOD_NEAR := 0
 const LOD_MID := 1
 const LOD_FAR := 2
+const LOD_SHADOW := 3   # solo árboles: copia liviana de la versión cerca que tira la sombra
 const FLOOR_H := 1.3
 # las caras con normal.y mayor que esto se cubren de nieve (mismo valor en building.gdshaderinc)
 const SNOW_NY := 0.5
@@ -4524,6 +4578,7 @@ func bmat_param(n: String, v: Variant) -> void:
 	building_mat.set_shader_parameter(n, v)
 	building_lite_mat.set_shader_parameter(n, v)
 var bnodes: Array = []
+var bshadow: Array = []   # por bloque: modelo de árbol -> nodo que solo tira sombra
 var _binst: Dictionary = {}
 var bq_last: int = -1
 var b_near_on: bool = false
@@ -4794,6 +4849,10 @@ func flush_buildings(ch: int) -> void:
 	# la versión cerca se arma solo en los bloques cerca de la cámara acercada (armarla cuesta y no se ve)
 	var near_ok: bool = q > 0 and b_near_on and chunk_close(ch)
 	bnear_ok[ch] = 1 if near_ok else 0
+	var sh: Dictionary = bshadow[ch]
+	for k in sh:
+		if not _binst.has(k) or not near_ok:
+			sh[k].multimesh.instance_count = 0
 	for key in _binst:
 		var buf: PackedFloat32Array = _binst[key]
 		var cnt := buf.size() / 20
@@ -4809,12 +4868,24 @@ func flush_buildings(ch: int) -> void:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if lod != LOD_FAR or q == 2 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			node.multimesh.instance_count = cnt
 			node.multimesh.buffer = buf
+			# árboles de cerca: la sombra la tira la copia liviana (la mitad de triángulos, misma forma)
+			if lod == LOD_NEAR and cat_models[key / 64]["fam"] == "arbol":
+				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				var sn: MultiMeshInstance3D = sh.get(key)
+				if sn == null:
+					sn = new_mm_node(tree_shadow_mesh(key / 64, key % 64), building_mat)
+					sn.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+					sh[key] = sn
+				sn.multimesh.instance_count = cnt
+				sn.multimesh.buffer = buf
 		if q == 0:
 			for lod in [LOD_NEAR, LOD_MID]:
 				if nodes.has(key * 3 + lod):
 					nodes[key * 3 + lod].multimesh.instance_count = 0
 	for k in nodes:
 		lod_ranges(nodes[k], k % 3, q, near_ok)
+	for k in sh:
+		lod_ranges(sh[k], LOD_NEAR, q, near_ok)
 # el centro del bloque está a menos de 200 m (en planta) del punto que mira la cámara
 func chunk_close(ch: int) -> bool:
 	var half := N * CELL * 0.5
@@ -4845,6 +4916,8 @@ func update_building_lod() -> void:
 			var ok: bool = want and bnear_ok[c] == 1
 			for k in bnodes[c]:
 				lod_ranges(bnodes[c][k], k % 3, q, ok)
+			for k in bshadow[c]:
+				lod_ranges(bshadow[c][k], LOD_NEAR, q, ok)
 	if b_near_on and q > 0:
 		# solo los bloques cercanos que todavía no tienen su versión cerca (se rehacen de a uno por cuadro)
 		for c in bnodes.size():
@@ -5521,20 +5594,22 @@ func mb_frond(base: Vector3, ang: float, L: float, wd: float, droop: float) -> v
 		var w1 := 1.0 - (s + 1) / 3.0 * 0.7
 		mb_quad(a - side * w0, a + side * w0, b + side * w1, b - side * w1, BM_LEAF, 1)
 		mb_quad(a + side * w0, a - side * w0, b - side * w1, b + side * w1, BM_LEAF, 1)
+# lod LOD_SHADOW: la misma copa que la de cerca (mismos bultos en el mismo lugar) con menos caras, solo para
+# la sombra. Los bultos quedan apenas adentro de los de cerca, así no se ensombrecen a sí mismos.
 # receta común: kind = especie, v = forma (0..2), f = 0 llena / 1 rala (invierno en las de hoja caduca)
 func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 	var sd := kind * 10 + v
-	var seg: int = [8, 5, 4][lod]
-	var bseg: int = [8, 5, 5][lod]
-	var brings: int = [6, 3, 3][lod]
+	var seg: int = [8, 5, 4, 6][lod]
+	var bseg: int = [8, 5, 5, 6][lod]
+	var brings: int = [6, 3, 3, 4][lod]
 	var bare := f == 1 and kind in [1, 2, 3]
-	var nb: int = [10, 2, 1][lod]
+	var nb: int = [10, 2, 1, 10][lod]
 	var jit := func(k: int, q: int) -> float: return hsh(sd * 7 + k, q) - 0.5
 	match kind:
 		4:
 			# pino: capas de conos verde oscuro
 			mb_limb(Vector3.ZERO, Vector3(0, 1.0, 0), 0.16, 0.12, seg)
-			var tiers: int = [4, 3, 1][lod]
+			var tiers: int = [4, 3, 1, 4][lod]
 			for t in tiers:
 				var k: float = float(t) / maxf(tiers - 1, 1)
 				var y0: float = 0.8 + t * (3.6 / tiers)
@@ -5545,7 +5620,7 @@ func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 			# palmera: tronco alto con anillos y penacho de hojas
 			var h := 4.6 + v * 0.4
 			var lean: Vector3 = Vector3(jit.call(1, 1) * 0.6, 0, jit.call(2, 1) * 0.6)
-			var rings: int = [6, 3, 1][lod]
+			var rings: int = [6, 3, 1, 3][lod]
 			for r in rings:
 				var a: Vector3 = lean * (float(r) / rings) + Vector3(0, h * r / rings, 0)
 				var b: Vector3 = lean * (float(r + 1) / rings) + Vector3(0, h * (r + 1) / rings, 0)
@@ -5554,7 +5629,7 @@ func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 			if lod == LOD_FAR:
 				mb_blob(top, Vector3(1.2, 0.45, 1.2), bseg, brings, sd)
 				return
-			var nf: int = [10, 6, 0][lod]
+			var nf: int = [10, 6, 0, 10][lod]
 			for k in nf:
 				mb_frond(top, TAU * k / nf + jit.call(k, 4), 1.6 + jit.call(k, 5) * 0.4, 0.22, 0.9 + jit.call(k, 6) * 0.4)
 			mb_blob(top + Vector3(0, 0.1, 0), Vector3(0.3, 0.25, 0.3), bseg, brings, sd)
@@ -5572,7 +5647,7 @@ func rc_tree(lod: int, f: int, _w: float, kind: int, v: int) -> void:
 	else:
 		mb_limb(Vector3.ZERO, Vector3(0, th, 0), tr, tr * 0.75, seg)
 	# ramas principales hacia la copa
-	var nbr: int = [5, 0, 0][lod]
+	var nbr: int = [5, 0, 0, 5][lod]
 	for k in nbr:
 		var a: float = TAU * k / nbr + jit.call(k, 8)
 		var tip: Vector3 = Vector3(cos(a) * cr.x * 0.6, cy + jit.call(k, 9) * 0.4, sin(a) * cr.z * 0.6)
@@ -5617,6 +5692,17 @@ func emit_trees(i: int, p: Vector3) -> void:
 		var sc := 0.8 + hsh(i, k * 3 + 4) * 0.4
 		var m: int = models[int(hsh(i, k * 3 + 5) * 3.0) % models.size()]
 		emit_model(m, f, x, ground_y(x, z) - 0.05, z, hsh(i, k * 3 + 6) * TAU, sc, crown, Vector4(0, 0, hsh(i, k + 20), 0), sc)
+var tree_shadow_cache: Dictionary = {}
+func tree_shadow_mesh(m: int, floors: int) -> ArrayMesh:
+	var key := m * 64 + floors
+	if tree_shadow_cache.has(key):
+		return tree_shadow_cache[key]
+	var md: Dictionary = cat_models[m]
+	mb_begin()
+	md["recipe"].call(LOD_SHADOW, floors, md.get("w", CELL * 0.82))
+	var mesh := mb_end()
+	tree_shadow_cache[key] = mesh
+	return mesh
 # ================================================================ src/props.gd
 # Objetos de calle de la etapa 2d: faroles, semáforos, autos, mobiliario, postes y carteles.
 var prop_ids: Dictionary = {}
@@ -6572,8 +6658,14 @@ func place_camera() -> void:
 	cam.position = cam_target + off
 	cam.look_at(cam_target, Vector3.UP)
 	update_building_lod()
-	if sun and not OS.has_feature("android"):
-		sun.directional_shadow_max_distance = clampf(cam_dist * 2.2, 80.0, 420.0)
+	if sun:
+		# la sombra cubre lo que se ve: acercado, menos distancia = sombras más nítidas y menos cosas que
+		# dibujar en la sombra (en el celular quedaba fija en 170 m). De a 10 m para que no titile al hacer zoom.
+		# alejado, en el celular sigue el tope de antes (170 m)
+		# con la cámara baja se ve más lejos: la sombra llega más allá (nunca menos de 110 m)
+		var sd := snappedf(clampf(cam_dist * 2.2 + (1.32 - cam_pitch) * 50.0, 110.0, 170.0 if OS.has_feature("android") else 420.0), 10.0)
+		if absf(sd - sun.directional_shadow_max_distance) >= 10.0:
+			sun.directional_shadow_max_distance = sd
 func start_intro(full: bool) -> void:
 	intro_full = full
 	intro_t = 0.0
@@ -8675,7 +8767,7 @@ func lab_report() -> Dictionary:
 		"dist": lab_dist_sum / maxi(lab_count, 1), "near": 100.0 * lab_near_frames / maxi(lab_count, 1),
 	}
 func lab_head(r: Dictionary) -> String:
-	return "Proyecto URBANA en Godot 4.7 (carpeta godot/, el código se edita en godot/src/*.gd y se arma con python3 tools/godot_modules.py build). Medido con la Sala de computación en mi celular (%s, %s), calidad %s, pantalla %s, ciudad de %d vecinos, %d autos y %d personas en la calle, durante %d s. Cámara a %.0f m de promedio, %.0f %% del tiempo acercada (edificios con todo el detalle)." % [r["model"], r["os"], r["quality"], r["res"], r["pop"], r["cars"], r["peds"], int(r["secs"]), r["dist"], r["near"]]
+	return "Proyecto URBANA en Godot 4.7 (carpeta godot/, el código se edita en godot/src/*.gd y se arma con python3 tools/godot_modules.py build). Medido con la Sala de computación en mi celular (%s, %s, placa %s, dibujo %s), calidad %s, pantalla %s, ciudad de %d vecinos, %d autos y %d personas en la calle, durante %d s. Cámara a %.0f m de promedio, %.0f %% del tiempo acercada (edificios con todo el detalle)." % [r["model"], r["os"], RenderingServer.get_video_adapter_name(), RenderingServer.get_current_rendering_method(), r["quality"], r["res"], r["pop"], r["cars"], r["peds"], int(r["secs"]), r["dist"], r["near"]]
 func lab_parts_text(r: Dictionary) -> String:
 	var t := "Cuadro promedio %.1f ms (%.0f fps, el 1 %% más lento a %.0f fps). Por parte, promedio y peor cuadro:" % [r["frame"], r["fps"], r["low1"]]
 	for k in r["parts"]:
@@ -8811,6 +8903,67 @@ class LabRoom extends Control:
 			var hand := sin(t * 14.0 + k) * 2.0
 			draw_line(Vector2(px - 6, by - 26 + bob), Vector2(cx + 6, by - 12 + hand), Color(0.9, 0.72, 0.58), 3.0)
 			draw_string(ThemeDB.fallback_font, Vector2(cx - w * 0.115, h * 0.97), TASKS[k], HORIZONTAL_ALIGNMENT_CENTER, w * 0.23, 13, Color(1, 1, 1, 0.85))
+# ================================================================ src/guard.gd
+# Dibujo compatible automático: algunos celulares (por ejemplo un Galaxy S25) cierran el juego dentro del
+# driver de Vulkan apenas empieza a dibujar. Al arrancar con Vulkan se deja escrito un archivo que hace que
+# el próximo arranque use el dibujo compatible (OpenGL); si el juego anda un minuto o se cierra bien, se
+# borra. Así, si el driver lo cierra, la vez siguiente ya arranca con el otro dibujo, sin hacer nada.
+# Godot lee el archivo al arrancar (application/config/project_settings_override en project.godot).
+const DRAW_CFG := "user://dibujo.cfg"
+var draw_guard_on: bool = false
+var draw_guard_t: float = 0.0
+var draw_note: String = ""
+func draw_compat() -> bool:
+	return RenderingServer.get_current_rendering_method() == "gl_compatibility"
+func draw_cfg_kind() -> String:
+	if not FileAccess.file_exists(DRAW_CFG):
+		return ""
+	var t := FileAccess.get_file_as_string(DRAW_CFG)
+	for k in ["prueba", "automatico", "elegido"]:
+		if t.contains("; " + k):
+			return k
+	return "elegido"
+func draw_cfg_write(kind: String) -> void:
+	var f := FileAccess.open(DRAW_CFG, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string("; %s\n[rendering]\n\nrenderer/rendering_method=\"gl_compatibility\"\nrenderer/rendering_method.mobile=\"gl_compatibility\"\n" % kind)
+	f.close()
+func draw_cfg_remove() -> void:
+	if FileAccess.file_exists(DRAW_CFG):
+		DirAccess.remove_absolute(DRAW_CFG)
+# al arrancar (después de leer el último paso anotado)
+func draw_guard_start() -> void:
+	if test_mode != "" or not OS.has_feature("android"):
+		return
+	var crashed := prev_crumb != "" and not prev_crumb.contains("cierre limpio")
+	var kind := draw_cfg_kind()
+	if draw_compat():
+		if kind == "prueba":
+			# la vez anterior Vulkan cerró el juego antes del minuto: queda el dibujo compatible
+			draw_cfg_write("automatico")
+			draw_note = "La vez anterior el juego se cerró mientras dibujaba. Ahora usa el dibujo compatible, que anda en más celulares. Si querés volver al otro: Opciones → Dibujo compatible."
+		elif crashed:
+			# también se cerró con el dibujo compatible: se apagan las gotas de lluvia (partículas)
+			opts["g_rain"] = false
+			save_opts()
+		return
+	if kind != "":
+		return
+	draw_cfg_write("prueba")
+	draw_guard_on = true
+	draw_guard_t = 0.0
+# cada cuadro: después de un minuto dibujando sin problemas, se borra la prueba
+func draw_guard_step(delta: float) -> void:
+	if not draw_guard_on:
+		return
+	draw_guard_t += delta
+	if draw_guard_t > 60.0:
+		draw_guard_end()
+func draw_guard_end() -> void:
+	if draw_guard_on and draw_cfg_kind() == "prueba":
+		draw_cfg_remove()
+	draw_guard_on = false
 # ================================================================ src/ui.gd
 # Interfaz: HUD, abanico, bandejas, hojas, tarjetas, tutorial e íconos.
 const ROAD_NAMES := ["", "Tierra", "Calle", "Avenida", "Autopista"]
@@ -10662,6 +10815,12 @@ func open_options() -> void:
 		layout_ui()
 		save_opts()))
 	b.add_child(mk_label("Si el juego se cierra solo, probá apagar estas cosas:"))
+	b.add_child(mk_check("Dibujo compatible (OpenGL, para celulares que se cierran; se aplica al reiniciar)", draw_compat() if draw_cfg_kind() != "prueba" else false, func(on: bool):
+		if on:
+			draw_cfg_write("elegido")
+			draw_guard_on = false
+		else:
+			draw_cfg_remove()))
 	b.add_child(mk_check("Sombras", opts["g_shadow"], func(on: bool):
 		opts["g_shadow"] = on
 		apply_quality()
@@ -11022,7 +11181,11 @@ func show_start() -> void:
 	r.add_child(b2)
 	r.add_child(b3)
 	start_body.add_child(r)
-	if prev_crumb != "" and not prev_crumb.contains("cierre limpio"):
+	if draw_note != "":
+		var dn := mk_text(draw_note)
+		dn.modulate = Color(0.75, 0.9, 1.0)
+		start_body.add_child(dn)
+	elif prev_crumb != "" and not prev_crumb.contains("cierre limpio"):
 		var cl := mk_text("La vez anterior el juego se cerró solo. Último paso anotado:\n" + prev_crumb)
 		cl.modulate = Color(1, 0.8, 0.5)
 		start_body.add_child(cl)
@@ -11457,6 +11620,7 @@ func free_slot() -> int:
 			ot = t
 	return oldest
 func reset_state() -> void:
+	save_wait()
 	test_city = false
 	money = 30000.0
 	debt = 0.0
@@ -11627,22 +11791,35 @@ func snapshot() -> Dictionary:
 		"terr": b64(terr), "hgt": b64(hgt), "road": b64(road), "zone": b64(zone), "bld": b64(bld), "lvl": b64(lvl), "part": b64(part),
 		"occ": b64(occ), "vari": b64(vari), "tree": b64(tree), "wire": b64(wire), "garbp": b64(garbp), "owned": b64(owned), "district": b64(district),
 	}
-# guardado automático: la foto de la partida se saca acá (rápido) y el texto y el archivo se arman en otro
-# hilo con una copia propia de los datos, así no se traba el juego cada dos días
-var save_job: int = -1
+# guardado automático: la foto de la partida se saca acá (rápido) y el texto se arma de a pedazos en los
+# cuadros siguientes (como mucho ~2 ms por cuadro), así no se traba el juego cada dos días. Antes se armaba
+# en otro hilo y eso rompía la memoria del juego (se cerraba solo); ahora todo pasa en el hilo principal.
+var save_q: Dictionary = {}
 func save_game_bg(s: int) -> void:
-	if test_city:
+	if test_city or not save_q.is_empty():
 		return
-	if save_job >= 0:
-		if not WorkerThreadPool.is_task_completed(save_job):
-			return
-		WorkerThreadPool.wait_for_task_completion(save_job)
-		save_job = -1
 	var d: Dictionary = snapshot().duplicate(true)
-	var path := slot_path(s)
-	var bpath := slot_path(s, true)
-	save_job = WorkerThreadPool.add_task(func(): write_save(path, bpath, d))
-func write_save(path: String, bpath: String, d: Dictionary) -> void:
+	save_q = {"path": slot_path(s), "bpath": slot_path(s, true), "d": d, "keys": d.keys(), "k": 0, "parts": PackedStringArray()}
+# arma el texto de unas cuantas claves de la partida; budget_us < 0 = todo de una
+func save_step(budget_us: int = 2000) -> void:
+	if save_q.is_empty():
+		return
+	var t0 := Time.get_ticks_usec()
+	var keys: Array = save_q["keys"]
+	var d: Dictionary = save_q["d"]
+	var parts: PackedStringArray = save_q["parts"]
+	var k: int = save_q["k"]
+	while k < keys.size():
+		parts.append(JSON.stringify(str(keys[k])) + ":" + JSON.stringify(d[keys[k]]))
+		k += 1
+		if budget_us >= 0 and Time.get_ticks_usec() - t0 > budget_us:
+			break
+	save_q["k"] = k
+	save_q["parts"] = parts
+	if k >= keys.size():
+		write_save(save_q["path"], save_q["bpath"], "{" + ",".join(parts) + "}")
+		save_q = {}
+func write_save(path: String, bpath: String, text: String) -> void:
 	if FileAccess.file_exists(path):
 		var old := FileAccess.get_file_as_string(path)
 		if old.length() > 100:
@@ -11651,11 +11828,10 @@ func write_save(path: String, bpath: String, d: Dictionary) -> void:
 				fb.store_string(old)
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify(d))
+		f.store_string(text)
+# termina ya un guardado automático a medias (antes de guardar, cargar o empezar otra partida)
 func save_wait() -> void:
-	if save_job >= 0:
-		WorkerThreadPool.wait_for_task_completion(save_job)
-		save_job = -1
+	save_step(-1)
 func save_game(s: int) -> void:
 	if test_city:
 		return
@@ -11679,6 +11855,7 @@ func save_info(s: int) -> String:
 		return "dañada"
 	return "%s · día %d, %s vecinos" % [str(d.get("city", "Mi ciudad")), int(d.get("day", 1)), fmt_int(int(d.get("pop", 0)))]
 func load_game(s: int, backup: bool = false) -> bool:
+	save_wait()
 	var path := slot_path(s, backup)
 	if not FileAccess.file_exists(path):
 		return false
@@ -12059,6 +12236,9 @@ func run_test() -> void:
 		return
 	if test_mode.begins_with("vida="):
 		run_vida(test_mode.substr(5))
+		return
+	if test_mode.begins_with("dibujo="):
+		run_dibujo(test_mode.substr(7))
 		return
 	if test_mode == "scroll":
 		run_scroll()
@@ -12667,6 +12847,7 @@ func run_sim() -> void:
 	for k in 3:
 		build_terrain()
 	print("BENCH terrain_ms=%d" % ((Time.get_ticks_usec() - t0) / 1000))
+	save_bg_check()
 	print("SIM OK")
 	get_tree().quit()
 # --- pruebas de compatibilidad y casos de borde (etapa 0)
@@ -13721,6 +13902,146 @@ func lab_check(dir: String) -> void:
 	bt(txt.length() > 300 and txt.contains("bloques de la ciudad"), "LAB_CHECK copiar todo " + ("ok (%d letras)" % txt.length() if txt.length() > 300 else "FALLA"))
 	open_lab()
 	bt(sheet.visible and sheet_name == "lab", "LAB_CHECK panel abierto " + ("ok" if sheet.visible else "FALLA"))
+# Cuánto se dibuja (--test=dibujo=<carpeta>): ciudad poblada en calidad Alta, con la cámara a 49 m (como en el
+# celular) y a 150 m. Separa la imagen de las sombras: draw calls, objetos y triángulos.
+var dib_t: int = 0
+var dib_ms: Array = []
+func run_dibujo(dir: String) -> void:
+	test_frame += 1
+	var f := test_frame
+	if f == 5:
+		opts["quality"] = 2
+		new_test_city()
+		enter_game(false)
+		skip_intro()
+		card_queue.clear()
+		card_panel.visible = false
+		set_speed(1)
+		apply_quality()
+		pop = 2600
+		for k in 2000:
+			spawn_agents(0.016)
+		dib_cam(49.0)
+	elif f == 90:
+		# experimentos para medir (URB_EXP=sombras,arboles,glow,msaa,terreno)
+		var ex := OS.get_environment("URB_EXP")
+		if ex.contains("sombras"):
+			sun.shadow_enabled = false
+		if ex.contains("glow"):
+			env.glow_enabled = false
+		if ex.contains("msaa"):
+			get_viewport().msaa_3d = Viewport.MSAA_DISABLED
+		if ex.contains("terreno"):
+			terrain_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if ex.contains("arboles"):
+			for c in bnodes:
+				for k in c:
+					if cat_models[k / 3 / 64]["fam"] == "arbol" and k % 3 == LOD_NEAR:
+						c[k].cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	elif f == 160:
+		dib_stats(dir, "cerca")
+		dib_groups = dib_make_groups()
+		dib_gk = 0
+	elif f > 160 and f < 250 and dib_gk < dib_groups.size():
+		# se apaga un grupo por vez (3 cuadros) para ver cuánto dibuja cada uno
+		var ph := (f - 161) % 3
+		var g: Array = dib_groups[dib_gk]
+		if ph == 0:
+			dib_base = dib_info()
+			for nd in g[1]:
+				nd.set_meta("dv", nd.visible)
+				nd.visible = false
+		elif ph == 2:
+			var now := dib_info()
+			print("BENCH grupo %s nodos=%d imagen dc=%d tri=%d sombras dc=%d tri=%d" % [g[0], g[1].size(), dib_base[0] - now[0], dib_base[1] - now[1], dib_base[2] - now[2], dib_base[3] - now[3]])
+			for nd in g[1]:
+				nd.visible = nd.get_meta("dv")
+			dib_gk += 1
+	elif f == 250:
+		dib_cam(150.0)
+		dib_t = 0
+	elif f == 320:
+		dib_stats(dir, "lejos")
+		print("DIBUJO OK")
+		get_tree().quit()
+	if f > 100 and f <= 160 or f > 270 and f <= 320:
+		var now := Time.get_ticks_usec()
+		if dib_t > 0:
+			dib_ms.append(now - dib_t)
+		dib_t = now
+func dib_cam(d: float) -> void:
+	var best: int = road_list[road_list.size() / 2]
+	for c in road_list:
+		if road[c] >= 2 and Vector2(cx(c) - N / 2, cz(c) - N / 2).length() < 12.0:
+			best = c
+			break
+	cam_target = cell_pos(best)
+	cam_goal = cam_target
+	cam_dist = d
+	cam_dist_goal = d
+	cam_pitch = 0.6
+	cam_yaw = 0.5
+	day_timer = DAY_SECONDS * 0.3
+	weather = "Soleado"
+	dib_ms.clear()
+	dib_t = 0
+func dib_stats(dir: String, name: String) -> void:
+	var vp := get_viewport()
+	var tot := 0.0
+	for v in dib_ms:
+		tot += v
+	var vis := [vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_OBJECTS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME)]
+	var sha := [vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_OBJECTS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME)]
+	print("BENCH dibujo_%s frame_ms=%.2f imagen dc=%d obj=%d tri=%d sombras dc=%d obj=%d tri=%d autos=%d gente=%d" % [name, tot / maxf(dib_ms.size(), 1) / 1000.0, vis[0], vis[1], vis[2], sha[0], sha[1], sha[2], cars.size(), peds.size()])
+	shot_to(dir, "dibujo_" + name)
+var dib_groups: Array = []
+var dib_gk: int = 0
+var dib_base: Array = []
+func dib_info() -> Array:
+	var vp := get_viewport()
+	return [vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_VISIBLE, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_DRAW_CALLS_IN_FRAME),
+		vp.get_render_info(Viewport.RENDER_INFO_TYPE_SHADOW, Viewport.RENDER_INFO_PRIMITIVES_IN_FRAME)]
+func dib_make_groups() -> Array:
+	var gs := {}
+	for c in bnodes:
+		for k in c:
+			var md: Dictionary = cat_models[k / 3 / 64]
+			var gname: String = "%s_%s" % [md["fam"], ["cerca", "media", "lejos"][k % 3]]
+			if not gs.has(gname):
+				gs[gname] = []
+			gs[gname].append(c[k])
+	var out: Array = []
+	for gname in gs:
+		out.append([gname, gs[gname]])
+	var prim: Array = []
+	for arr in chunk_nodes:
+		prim.append_array(arr)
+	out.append(["primitivas", prim])
+	out.append(["gente_autos", crowd_nodes + car_mid_nodes])
+	out.append(["terreno", [terrain_node]])
+	out.append(["agua", [water_node]])
+	out.append(["dinamicos", dyn_nodes + [glow_node, rails_node]])
+	if outer_nodes.size() > 0:
+		out.append(["horizonte", outer_nodes])
+	return out
+# el guardado automático de a pedazos (sin hilos) deja el mismo archivo que el guardado de una vez
+func save_bg_check() -> void:
+	save_wait()
+	save_game_bg(3)
+	var steps := 0
+	while not save_q.is_empty() and steps < 10000:
+		save_step(300)
+		steps += 1
+	var got = JSON.parse_string(FileAccess.get_file_as_string(slot_path(3)))
+	var want = JSON.parse_string(JSON.stringify(snapshot()))
+	var ok: bool = steps > 1 and typeof(got) == TYPE_DICTIONARY and JSON.stringify(got, "", true) == JSON.stringify(want, "", true)
+	print("SAVE_BG_CHECK %s (%d pasos)" % ["ok" if ok else "FALLA", steps])
 # ================================================================ src/main.gd
 # Arranque y bucle principal de Godot.
 func _unhandled_input(event: InputEvent) -> void:
@@ -13750,6 +14071,7 @@ func _notification(what: int) -> void:
 		if started:
 			save_game(slot)
 		crumb("cierre limpio")
+		draw_guard_end()
 var first_chunks: bool = true
 func _ready() -> void:
 	if FileAccess.file_exists("user://ultimo_paso.txt"):
@@ -13762,6 +14084,7 @@ func _ready() -> void:
 			test_mode = a.substr(7) if a.length() > 7 else "run"
 	if test_mode != "":
 		seed(20261012)
+	draw_guard_start()
 	setup_render()
 	setup_camera()
 	setup_agents()
@@ -13816,6 +14139,8 @@ func _process(delta: float) -> void:
 	ui_process(delta)
 	lab_add(4, lt)
 	lab_frame(delta)
+	draw_guard_step(delta)
+	save_step()
 	crumb("dibujando el cuadro")
 	if opts["idle30"] and not OS.has_feature("android"):
 		idle_t += delta
