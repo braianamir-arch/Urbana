@@ -21,6 +21,9 @@ s = open(p).read()
 a = 'func run_test() -> void:\n'
 s = s.replace(a, a + '\tif test_mode in ["compat_save", "compat_load", "fresh", "pause", "seam"]:\n\t\trun_extra()\n\t\treturn\n', 1)
 s += new["compat_line"] + new["run_extra"] + new["seam_check"]
+# seam_check usa los vértices guardados del terreno (no existen en el original; ahí no se corre)
+if "var terrain_verts" not in s:
+    s += "var terrain_verts := PackedVector3Array()\n"
 open(p, "w").write(s)
 PY
 "$GODOT" --headless --path "$OUT/orig" --import > /dev/null 2>&1
