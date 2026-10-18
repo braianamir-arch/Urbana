@@ -1008,8 +1008,7 @@ func seam_check() -> int:
 		for v in vs:
 			if absf(absf(v.x) - half) < 0.01 or absf(absf(v.z) - half) < 0.01:
 				outer[Vector2i(roundi(v.x * 10.0), roundi(v.z * 10.0))] = v.y
-	var tm: Mesh = terrain_node.mesh
-	var tv: PackedVector3Array = tm.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var tv: PackedVector3Array = terrain_verts
 	var bad := 0
 	for v in tv:
 		if absf(absf(v.x) - half) < 0.01 or absf(absf(v.z) - half) < 0.01:
@@ -1580,6 +1579,7 @@ func run_vida(dir: String) -> void:
 		shot_to(dir, "sala_computacion")
 		close_sheet()
 		road_check()
+		cross_check()
 		# de cerca sobre un cruce, de día
 		rebuild_road_list()
 		var c: int = tl_cells[tl_cells.size() / 2]
@@ -1648,7 +1648,7 @@ func run_vida(dir: String) -> void:
 			spawn_agents(0.016)
 		var best: int = road_list[0]
 		for c in road_list:
-			if road[c] >= 2 and zone[c + 1] > 0:
+			if (road[c] == 2 or road[c] == 3) and zone[c + 1] > 0:
 				best = c
 				break
 		vida_cam(best, 14.0, 17.5)
@@ -1672,12 +1672,18 @@ func run_vida(dir: String) -> void:
 	elif f == 644:
 		shot_to(dir, "autos_cerca")
 	elif f == 645:
-		var pc := cell_pos(peds[peds.size() / 2]["c"])
+		# una persona en una calle común, vista desde arriba para ver que va por la vereda
+		var pk: Dictionary = peds[peds.size() / 2]
+		for pd in peds:
+			if road[pd["c"]] == 2 and pd["kind"] == 0:
+				pk = pd
+				break
+		var pc := ped_pos(pk)
 		cam_target = pc
 		cam_goal = pc
-		cam_dist = 7.0
-		cam_dist_goal = 7.0
-		cam_pitch = 0.4
+		cam_dist = 12.0
+		cam_dist_goal = 12.0
+		cam_pitch = 0.85
 	elif f == 650:
 		shot_to(dir, "gente_cerca")
 		print("VIDA OK" if bt_fail == 0 else "VIDA FALLA")
@@ -1827,6 +1833,18 @@ func run_dibujo(dir: String) -> void:
 				for k in c:
 					if cat_models[k / 3 / 64]["fam"] == "arbol" and k % 3 == LOD_NEAR:
 						c[k].cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	elif f == 150:
+		# cuánto tarda cada parte de autos y gente (60 veces cada una)
+		var parts := {"spawn": func(): spawn_agents(0.016), "move_cars": func(): move_cars(0.016), "move_peds": func(): move_peds(0.016),
+			"move_svc": func(): move_svc(0.016), "move_lines": func(): move_lines(0.016), "move_parts": func(): move_parts(0.016),
+			"draw_dynamic": func(): draw_dynamic(), "road_list": func(): rebuild_road_list()}
+		var txt := ""
+		for k in parts:
+			var t0 := Time.get_ticks_usec()
+			for r in 60:
+				parts[k].call()
+			txt += " %s=%.2f" % [k, (Time.get_ticks_usec() - t0) / 60000.0]
+		print("BENCH partes_moviles_ms" + txt)
 	elif f == 160:
 		dib_stats(dir, "cerca")
 		dib_groups = dib_make_groups()
@@ -1913,7 +1931,7 @@ func dib_make_groups() -> Array:
 		prim.append_array(arr)
 	out.append(["primitivas", prim])
 	out.append(["gente_autos", crowd_nodes + car_mid_nodes])
-	out.append(["terreno", [terrain_node]])
+	out.append(["terreno", terrain_parts])
 	out.append(["agua", [water_node]])
 	out.append(["dinamicos", dyn_nodes + [glow_node, rails_node]])
 	if outer_nodes.size() > 0:
@@ -1931,3 +1949,37 @@ func save_bg_check() -> void:
 	var want = JSON.parse_string(JSON.stringify(snapshot()))
 	var ok: bool = steps > 1 and typeof(got) == TYPE_DICTIONARY and JSON.stringify(got, "", true) == JSON.stringify(want, "", true)
 	print("SAVE_BG_CHECK %s (%d pasos)" % ["ok" if ok else "FALLA", steps])
+# semáforos solo en cruces de verdad: una calle de dos carriles no es un cruce en cada celda
+func cross_check() -> void:
+	var x0 := 2
+	var z0 := 2
+	var saved := {}
+	for z in range(z0, z0 + 9):
+		for x in range(x0, x0 + 9):
+			saved[idx(x, z)] = road[idx(x, z)]
+			road[idx(x, z)] = 0
+	# calle ancha (filas z0+4 y z0+5) y una calle simple que la cruza en x0+4
+	for x in range(x0, x0 + 9):
+		road[idx(x, z0 + 4)] = 2
+		road[idx(x, z0 + 5)] = 2
+	for z in range(z0, z0 + 9):
+		road[idx(x0 + 4, z)] = 2
+	var lights := 0
+	var wrong := 0
+	for z in range(z0, z0 + 9):
+		for x in range(x0, x0 + 9):
+			if road[idx(x, z)] > 0 and cross_branches(idx(x, z)) >= 3:
+				lights += 1
+				if x != x0 + 4:
+					wrong += 1
+	for k in saved:
+		road[k] = saved[k]
+	bt(wrong == 0 and lights == 2, "CROSS_CHECK semáforos solo en el cruce (%d celdas, %d de más) %s" % [lights, wrong, "ok" if wrong == 0 and lights == 2 else "FALLA"])
+	# la gente va por la vereda: corrimiento fijo de una vereda (salvo mientras cruza)
+	var off_bad := 0
+	for pd in peds:
+		ped_side_check(pd)
+		var o: Vector2 = pd["o"]
+		if pd["o"] == pd["ot"] and (absf(absf(o.x) - PED_OFF) > 0.01 or absf(absf(o.y) - PED_OFF) > 0.01):
+			off_bad += 1
+	bt(off_bad == 0, "SIDEWALK_CHECK gente por la vereda %s" % ("ok" if off_bad == 0 else "FALLA %d" % off_bad))

@@ -664,7 +664,7 @@ func build_ui() -> void:
 	hint_label.add_theme_constant_override("outline_size", 6)
 	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	ui_root.add_child(hint_label)
-	toast_label = mk_label("", 0, Color(1, 1, 1))
+	toast_label = mk_label("", 17, Color(1, 1, 1))
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	toast_label.add_theme_stylebox_override("normal", sbox(Color(0.05, 0.05, 0.08, 0.85), 18))
@@ -1184,12 +1184,15 @@ func toast(t: String) -> void:
 	toast_label.visible = true
 	toast_label.modulate = Color(1, 1, 1, 1)
 	toast_t = 3.2
+	# aviso chico, del ancho del texto (como mucho 460): antes era una franja de 700 con letra grande
 	var w := ui_root.size.x
-	var fw := minf(700.0, w - 40.0)
+	var fnt := toast_label.get_theme_font("font")
+	var tw := fnt.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, toast_label.get_theme_font_size("font_size")).x if fnt else 400.0
+	var fw := minf(minf(460.0, w - 40.0), tw + 44.0)
 	toast_label.size = Vector2(fw, 0)
 	toast_label.reset_size()
 	toast_label.size.x = fw
-	toast_label.position = Vector2((w - fw) * 0.5, ui_root.size.y * 0.6)
+	toast_label.position = Vector2((w - fw) * 0.5, ui_root.size.y * 0.7)
 func set_cost_hint(t: String) -> void:
 	cost_label.text = t
 	layout_bottom()

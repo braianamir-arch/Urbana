@@ -16,6 +16,10 @@ var dtex: ImageTexture
 var ctex: ImageTexture
 var terrain_node: MeshInstance3D
 var terrain_shadow_node: MeshInstance3D
+# terreno fino en 4 x 4 pedazos: la placa solo dibuja los que entran en pantalla (antes era una sola malla de
+# 131.000 triángulos que se dibujaba entera aunque se viera una esquina)
+var terrain_parts: Array = []
+var terrain_verts := PackedVector3Array()   # todos los vértices del terreno (para empalmar el horizonte)
 var water_shadow_node: MeshInstance3D
 var water_node: MeshInstance3D
 var chunk_nodes: Array = []
@@ -241,6 +245,9 @@ func apply_quality() -> void:
 		mark_all_dirty()
 	bq_last = q
 	RenderingServer.directional_shadow_atlas_set_size(2048 if q < 2 else 4096, true)
+	# en el celular Godot dibuja las sombras con borde duro (serruchado) salvo que se pida otra cosa:
+	# en Alta, borde suave (y así el desenfoque de la sombra del sol también vale en el celular)
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW if q >= 2 else int(ProjectSettings.get_setting("rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality", 0)))
 	if sun:
 		sun.shadow_enabled = q >= 1 and opts["g_shadow"]
 	if env:
@@ -436,6 +443,8 @@ func build_terrain() -> void:
 		return
 	terrain_node.material_override = terrain_simple_mat
 	terrain_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	for tp in terrain_parts:
+		tp.visible = false
 	terrain_shadow_node.visible = false
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -486,6 +495,7 @@ func build_terrain() -> void:
 	set_hmap(himg)
 	st.generate_normals()
 	terrain_node.mesh = st.commit()
+	terrain_verts = terrain_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 	build_outer(grass)
 func set_hmap(himg: Image) -> void:
 	var half := N * CELL * 0.5
@@ -643,29 +653,54 @@ func build_terrain_tex() -> void:
 			if (u & 1) == 1 or (v & 1) == 1:
 				ow = (ow + own[mini((v + 1) >> 1, N) * N1 + mini((u + 1) >> 1, N)]) * 0.5
 			cols[k] = Color(1, 1, 1, ow)
-	var ids := PackedInt32Array()
-	ids.resize((M - 1) * (M - 1) * 6)
-	var n := 0
-	for v in M - 1:
-		for u in M - 1:
-			var a := v * M + u
-			# misma diagonal que el terreno de hoy (a-d)
-			ids[n] = a
-			ids[n + 1] = a + 1
-			ids[n + 2] = a + M + 1
-			ids[n + 3] = a
-			ids[n + 4] = a + M + 1
-			ids[n + 5] = a + M
-			n += 6
-	var arr := []
-	arr.resize(Mesh.ARRAY_MAX)
-	arr[Mesh.ARRAY_VERTEX] = verts
-	arr[Mesh.ARRAY_NORMAL] = nrms
-	arr[Mesh.ARRAY_COLOR] = cols
-	arr[Mesh.ARRAY_INDEX] = ids
-	var am := ArrayMesh.new()
-	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-	terrain_node.mesh = am
+	terrain_verts = verts
+	terrain_node.mesh = null
+	var TP := 4
+	var q := (M - 1) / TP
+	while terrain_parts.size() < TP * TP:
+		var mi := MeshInstance3D.new()
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		terrain_node.add_child(mi)
+		terrain_parts.append(mi)
+	for pz in TP:
+		for px in TP:
+			# vértices propios del pedazo (los del borde se repiten iguales en el vecino: sin rendijas)
+			var pv := PackedVector3Array()
+			var pn := PackedVector3Array()
+			var pc := PackedColorArray()
+			for v in range(pz * q, pz * q + q + 1):
+				for u in range(px * q, px * q + q + 1):
+					var k := v * M + u
+					pv.append(verts[k])
+					pn.append(nrms[k])
+					pc.append(cols[k])
+			var Q := q + 1
+			var ids := PackedInt32Array()
+			ids.resize(q * q * 6)
+			var n := 0
+			for v in q:
+				for u in q:
+					var a := v * Q + u
+					# misma diagonal que el terreno de hoy (a-d)
+					ids[n] = a
+					ids[n + 1] = a + 1
+					ids[n + 2] = a + Q + 1
+					ids[n + 3] = a
+					ids[n + 4] = a + Q + 1
+					ids[n + 5] = a + Q
+					n += 6
+			var arr := []
+			arr.resize(Mesh.ARRAY_MAX)
+			arr[Mesh.ARRAY_VERTEX] = pv
+			arr[Mesh.ARRAY_NORMAL] = pn
+			arr[Mesh.ARRAY_COLOR] = pc
+			arr[Mesh.ARRAY_INDEX] = ids
+			var am := ArrayMesh.new()
+			am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+			var part_node: MeshInstance3D = terrain_parts[pz * TP + px]
+			part_node.mesh = am
+			part_node.material_override = terrain_mat
+			part_node.visible = true
 	terrain_shadow_mesh(hsub, M, half)
 	var grass: Color = [Color(0.42, 0.62, 0.28), Color(0.58, 0.55, 0.28), Color(0.62, 0.66, 0.6), Color(0.45, 0.68, 0.32)][s]
 	build_outer(grass)
@@ -736,8 +771,8 @@ func build_outer(grass: Color) -> void:
 	nz.fractal_octaves = 4
 	# alturas reales del borde del terreno ya armado (para empalmar sin rendijas)
 	var edge := {}
-	if terrain_node.mesh != null:
-		var tv: PackedVector3Array = terrain_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	if not terrain_verts.is_empty():
+		var tv: PackedVector3Array = terrain_verts
 		for v in tv:
 			if absf(absf(v.x) - half) < 0.01 or absf(absf(v.z) - half) < 0.01:
 				edge[Vector2i(roundi(v.x * 10.0), roundi(v.z * 10.0))] = v.y
@@ -1083,7 +1118,7 @@ func emit_road(i: int, p: Vector3) -> void:
 		return
 	em(M_BOX, p.x, y, p.z, CELL, 0.2, CELL, 0.0, col, 0, -1.0 - road_marks(i) if t >= 2 else 0.0, -float(t) if t >= 2 else 0.0, am)
 	# semáforos en los cruces donde llega una avenida
-	if cnt >= 3 and not bridge:
+	if cnt >= 3 and not bridge and cross_branches(i) >= 3:
 		var av: bool = t >= 3
 		for o in [1, -1, N, -N]:
 			var j: int = i + o

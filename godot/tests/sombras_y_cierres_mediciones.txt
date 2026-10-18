@@ -10,3 +10,8 @@ alejado, sombras    470.183      289.121   (-39 %)
 
 Cierres: el guardado automático en otro hilo rompía la memoria (abortaba al salir 3 de 3 veces desde
 f86b930). Ahora se arma de a pedazos en el hilo principal: 0 de 3, y SAVE_BG_CHECK da el mismo archivo.
+
+Segunda vuelta (misma escena):
+- terreno en 16 pedazos: el terreno dibuja 66.150 triángulos en vez de 131.352 (solo lo que se ve)
+- autos y gente: solo lo que entra en pantalla, banderas elegidas una vez, lista de calles 1,9 -> 0,7 ms
+- sombras con borde suave también en el celular (Alta)

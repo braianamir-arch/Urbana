@@ -640,6 +640,27 @@ func road_n(i: int) -> Array:
 	var x := cx(i)
 	var z := cz(i)
 	return [x < N - 1 and road[i + 1] > 0, x > 0 and road[i - 1] > 0, z < N - 1 and road[i + N] > 0, z > 0 and road[i - N] > 0]
+# Calles que salen de un cruce de verdad. No cuenta el carril de al lado de una calle ancha (o dos calles
+# pegadas): esa celda tiene calle a los dos costados igual que la de al lado, así que no es una esquina.
+# Antes cada celda de una calle de dos carriles parecía un cruce y llevaba semáforos en fila.
+func cross_branches(i: int) -> int:
+	var nb := road_n(i)
+	var x := cx(i)
+	var z := cz(i)
+	var c := 0
+	for d in 4:
+		if not nb[d]:
+			continue
+		var j: int = i + [1, -1, N, -N][d]
+		var lane := true
+		# los dos costados (perpendiculares a la rama) tienen que ser calle en esta celda y en la vecina
+		for o in ([N, -N] if d < 2 else [1, -1]):
+			var ok_side: bool = (z + 1 < N if o == N else (z > 0 if o == -N else (x + 1 < N if o == 1 else x > 0)))
+			if not ok_side or road[i + o] == 0 or road[j + o] == 0:
+				lane = false
+		if not lane:
+			c += 1
+	return c
 func vert_h(x: int, z: int) -> float:
 	var hs := 0.0
 	var cnt := 0
@@ -3038,6 +3059,10 @@ var dtex: ImageTexture
 var ctex: ImageTexture
 var terrain_node: MeshInstance3D
 var terrain_shadow_node: MeshInstance3D
+# terreno fino en 4 x 4 pedazos: la placa solo dibuja los que entran en pantalla (antes era una sola malla de
+# 131.000 triángulos que se dibujaba entera aunque se viera una esquina)
+var terrain_parts: Array = []
+var terrain_verts := PackedVector3Array()   # todos los vértices del terreno (para empalmar el horizonte)
 var water_shadow_node: MeshInstance3D
 var water_node: MeshInstance3D
 var chunk_nodes: Array = []
@@ -3263,6 +3288,9 @@ func apply_quality() -> void:
 		mark_all_dirty()
 	bq_last = q
 	RenderingServer.directional_shadow_atlas_set_size(2048 if q < 2 else 4096, true)
+	# en el celular Godot dibuja las sombras con borde duro (serruchado) salvo que se pida otra cosa:
+	# en Alta, borde suave (y así el desenfoque de la sombra del sol también vale en el celular)
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_LOW if q >= 2 else int(ProjectSettings.get_setting("rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality", 0)))
 	if sun:
 		sun.shadow_enabled = q >= 1 and opts["g_shadow"]
 	if env:
@@ -3458,6 +3486,8 @@ func build_terrain() -> void:
 		return
 	terrain_node.material_override = terrain_simple_mat
 	terrain_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	for tp in terrain_parts:
+		tp.visible = false
 	terrain_shadow_node.visible = false
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -3508,6 +3538,7 @@ func build_terrain() -> void:
 	set_hmap(himg)
 	st.generate_normals()
 	terrain_node.mesh = st.commit()
+	terrain_verts = terrain_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
 	build_outer(grass)
 func set_hmap(himg: Image) -> void:
 	var half := N * CELL * 0.5
@@ -3665,29 +3696,54 @@ func build_terrain_tex() -> void:
 			if (u & 1) == 1 or (v & 1) == 1:
 				ow = (ow + own[mini((v + 1) >> 1, N) * N1 + mini((u + 1) >> 1, N)]) * 0.5
 			cols[k] = Color(1, 1, 1, ow)
-	var ids := PackedInt32Array()
-	ids.resize((M - 1) * (M - 1) * 6)
-	var n := 0
-	for v in M - 1:
-		for u in M - 1:
-			var a := v * M + u
-			# misma diagonal que el terreno de hoy (a-d)
-			ids[n] = a
-			ids[n + 1] = a + 1
-			ids[n + 2] = a + M + 1
-			ids[n + 3] = a
-			ids[n + 4] = a + M + 1
-			ids[n + 5] = a + M
-			n += 6
-	var arr := []
-	arr.resize(Mesh.ARRAY_MAX)
-	arr[Mesh.ARRAY_VERTEX] = verts
-	arr[Mesh.ARRAY_NORMAL] = nrms
-	arr[Mesh.ARRAY_COLOR] = cols
-	arr[Mesh.ARRAY_INDEX] = ids
-	var am := ArrayMesh.new()
-	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-	terrain_node.mesh = am
+	terrain_verts = verts
+	terrain_node.mesh = null
+	var TP := 4
+	var q := (M - 1) / TP
+	while terrain_parts.size() < TP * TP:
+		var mi := MeshInstance3D.new()
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		terrain_node.add_child(mi)
+		terrain_parts.append(mi)
+	for pz in TP:
+		for px in TP:
+			# vértices propios del pedazo (los del borde se repiten iguales en el vecino: sin rendijas)
+			var pv := PackedVector3Array()
+			var pn := PackedVector3Array()
+			var pc := PackedColorArray()
+			for v in range(pz * q, pz * q + q + 1):
+				for u in range(px * q, px * q + q + 1):
+					var k := v * M + u
+					pv.append(verts[k])
+					pn.append(nrms[k])
+					pc.append(cols[k])
+			var Q := q + 1
+			var ids := PackedInt32Array()
+			ids.resize(q * q * 6)
+			var n := 0
+			for v in q:
+				for u in q:
+					var a := v * Q + u
+					# misma diagonal que el terreno de hoy (a-d)
+					ids[n] = a
+					ids[n + 1] = a + 1
+					ids[n + 2] = a + Q + 1
+					ids[n + 3] = a
+					ids[n + 4] = a + Q + 1
+					ids[n + 5] = a + Q
+					n += 6
+			var arr := []
+			arr.resize(Mesh.ARRAY_MAX)
+			arr[Mesh.ARRAY_VERTEX] = pv
+			arr[Mesh.ARRAY_NORMAL] = pn
+			arr[Mesh.ARRAY_COLOR] = pc
+			arr[Mesh.ARRAY_INDEX] = ids
+			var am := ArrayMesh.new()
+			am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+			var part_node: MeshInstance3D = terrain_parts[pz * TP + px]
+			part_node.mesh = am
+			part_node.material_override = terrain_mat
+			part_node.visible = true
 	terrain_shadow_mesh(hsub, M, half)
 	var grass: Color = [Color(0.42, 0.62, 0.28), Color(0.58, 0.55, 0.28), Color(0.62, 0.66, 0.6), Color(0.45, 0.68, 0.32)][s]
 	build_outer(grass)
@@ -3758,8 +3814,8 @@ func build_outer(grass: Color) -> void:
 	nz.fractal_octaves = 4
 	# alturas reales del borde del terreno ya armado (para empalmar sin rendijas)
 	var edge := {}
-	if terrain_node.mesh != null:
-		var tv: PackedVector3Array = terrain_node.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	if not terrain_verts.is_empty():
+		var tv: PackedVector3Array = terrain_verts
 		for v in tv:
 			if absf(absf(v.x) - half) < 0.01 or absf(absf(v.z) - half) < 0.01:
 				edge[Vector2i(roundi(v.x * 10.0), roundi(v.z * 10.0))] = v.y
@@ -4105,7 +4161,7 @@ func emit_road(i: int, p: Vector3) -> void:
 		return
 	em(M_BOX, p.x, y, p.z, CELL, 0.2, CELL, 0.0, col, 0, -1.0 - road_marks(i) if t >= 2 else 0.0, -float(t) if t >= 2 else 0.0, am)
 	# semáforos en los cruces donde llega una avenida
-	if cnt >= 3 and not bridge:
+	if cnt >= 3 and not bridge and cross_branches(i) >= 3:
 		var av: bool = t >= 3
 		for o in [1, -1, N, -N]:
 			var j: int = i + o
@@ -6920,6 +6976,15 @@ var plane_t: float = 0.0
 var ship_t: float = 0.0
 var garbage_t: float = 0.0
 var flag_days: int = 0
+var flag_list: Array = []
+var flag_list_n: int = -1
+var dyn_fr: Array = []
+# el punto (con radio r) cae dentro de la pantalla: planos de los costados, arriba y abajo de la cámara
+func in_view(p: Vector3, r: float) -> bool:
+	for k in range(2, dyn_fr.size()):
+		if (dyn_fr[k] as Plane).distance_to(p) > r:
+			return false
+	return true
 # etapa 5: humo de chimeneas, agua de las fuentes y rayos con tormenta
 var road_list_seen: bool = false
 # celdas incendiadas: se revisa un pedazo del mapa por cuadro (recorrerlo entero trababa)
@@ -7082,8 +7147,10 @@ func rebuild_road_list() -> void:
 		if road[i] > 0:
 			road_list.append(i)
 			if road[i] >= 2 and not (wire[i] & W_ROUND):
-				var nb := road_n(i)
-				if int(nb[0]) + int(nb[1]) + int(nb[2]) + int(nb[3]) >= 3:
+				# primero la cuenta rápida de vecinos; la revisión fina de cruce solo donde hay 3 o más
+				var x := i % N
+				var nn := int(x < N - 1 and road[i + 1] > 0) + int(x > 0 and road[i - 1] > 0) + int(i + N < N * N and road[i + N] > 0) + int(i >= N and road[i - N] > 0)
+				if nn >= 3 and cross_branches(i) >= 3:
 					tl_cells.append(i)
 func spawn_agents(dt: float) -> void:
 	if dt <= 0.0:
@@ -7120,7 +7187,8 @@ func spawn_agents(dt: float) -> void:
 	var want_p := int(mini(max_peds(), pop / 5 + 6 if pop > 0 else 0) * street)
 	if peds.size() < want_p and road_list.size() > 4:
 		var c: int = road_list[randi() % road_list.size()]
-		if road[c] >= 2:
+		# calles y avenidas (por la autopista no camina nadie)
+		if road[c] == 2 or road[c] == 3:
 			var kind := 0
 			var r := randf()
 			if r < 0.15:
@@ -7277,6 +7345,8 @@ func move_peds(dt: float) -> void:
 		if pd.get("panic", 0.0) > 0.0:
 			spd = 1.5
 		pd["t"] = pd["t"] + dt * spd
+		if pd.has("o"):
+			pd["o"] = (pd["o"] as Vector2).move_toward(pd["ot"], dt * 1.4)
 		if pd["t"] >= 1.0:
 			pd["t"] = 0.0
 			pd["c"] = pd["n"]
@@ -7286,13 +7356,14 @@ func move_peds(dt: float) -> void:
 			var opts2: Array = []
 			for o in [1, -1, N, -N]:
 				var j: int = c + o
-				if j >= 0 and j < N * N and road[j] >= 2 and terr[j] != T_WATER:
+				if j >= 0 and j < N * N and (road[j] == 2 or road[j] == 3) and terr[j] != T_WATER:
 					if (o == 1 or o == -1) and cz(j) != cz(c):
 						continue
 					opts2.append(j)
 			if opts2.is_empty():
 				continue
 			pd["n"] = opts2[randi() % opts2.size()]
+			ped_side_check(pd)
 			if randf() < 0.01 and pd != follow_ped:
 				continue
 		keep.append(pd)
@@ -7579,7 +7650,7 @@ func pick_ped(pos: Vector2) -> Dictionary:
 	for pd in peds:
 		if pd["kind"] == 2:
 			continue
-		var pp := path_pos([pd["c"], pd["n"]], pd["t"], CELL * 0.42 * pd["side"])
+		var pp := ped_pose(pd)
 		var wp: Vector3 = pp[0]
 		if cam.is_position_behind(wp):
 			continue
@@ -7614,7 +7685,7 @@ func follow_citizen(chosen: Dictionary = {}) -> void:
 			follow_ped = null
 			hide_follow_card()
 			return null
-		var pp := path_pos([follow_ped["c"], follow_ped["n"]], follow_ped["t"], CELL * 0.42 * follow_ped["side"])
+		var pp := ped_pose(follow_ped)
 		return pp[0]
 	show_follow_card(pd)
 func draw_dynamic() -> void:
@@ -7635,20 +7706,26 @@ func draw_dynamic() -> void:
 	# solo lo que está cerca de la cámara (lo de más lejos ni se ve y costaba mucho armarlo)
 	var vr := clampf(cam_dist * 1.8 + 30.0, 70.0, 420.0)
 	var vr2 := vr * vr
+	# y además solo lo que entra en la pantalla (con margen para las sombras): lo que queda detrás de la
+	# cámara ya no se arma ni se sube a la placa
+	dyn_fr = cam.get_frustum() if cam else []
 	var cx0 := cam_target.x
 	var cz0 := cam_target.z
 	for c in cars:
 		var cpath: Array = c["p"]
 		var cc0 := cell_pos(cpath[clampi(int(c["k"]), 0, cpath.size() - 1)])
-		if (cc0.x - cx0) * (cc0.x - cx0) + (cc0.z - cz0) * (cc0.z - cz0) > vr2:
+		if (cc0.x - cx0) * (cc0.x - cx0) + (cc0.z - cz0) * (cc0.z - cz0) > vr2 or not in_view(cc0, 9.0):
 			continue
-		var pr := path_pos_s(c["p"], c["k"], CELL * 0.18)
-		var p: Vector3 = pr[0]
-		var r: float = pr[1]
 		var col: Color = c["col"]
 		var fade := clampf(minf(c["k"], c["p"].size() - 1.0 - c["k"]) * 1.2, 0.0, 1.0)
 		if fade < 0.05:
 			continue
+		# al salir y al llegar el auto entra o sale del lote del costado (casa, negocio): antes se achicaba
+		# hasta desaparecer y parecía que se hundía en el suelo
+		var into := 1.0 - fade
+		var pr := path_pos_s(c["p"], c["k"], CELL * (0.18 + 0.72 * into))
+		var p: Vector3 = pr[0]
+		var r: float = pr[1] + (0.9 * into if c["k"] < 1.0 else -0.9 * into)
 		var kd: int = c["kind"]
 		if kd == 5:
 			draw_moto(p, r, c, nf, lit and fade > 0.9, near2)
@@ -7660,7 +7737,7 @@ func draw_dynamic() -> void:
 		var on := lit and fade > 0.9
 		# una sola pieza por auto: el modelo trae carrocería, vidrios, techo, ruedas y luces
 		# los modelos van a lo largo de X y miden 1,7 m: se giran y se agrandan al tamaño de antes, sobre el asfalto
-		ce(CR_CAR + kd, p.x, p.y + 0.2, p.z, r - PI * 0.5, fade * 1.18, col, Vector4(0.0, 6.0 / 8.0, 0.5, 0.0))
+		ce(CR_CAR + kd, p.x, p.y + 0.2, p.z, r - PI * 0.5, 1.18, col, Vector4(0.0, 6.0 / 8.0, 0.5, 0.0))
 		if on:
 			veh_glow(p, r, ln, 0.4, bh * 0.85 + 0.2, 5.0)
 	if drive != null:
@@ -7685,9 +7762,9 @@ func draw_dynamic() -> void:
 		var pclose := cam_dist < 70.0
 		for pd in peds:
 			var pc0 := cell_pos(pd["c"])
-			if (pc0.x - cx0) * (pc0.x - cx0) + (pc0.z - cz0) * (pc0.z - cz0) > vr2:
+			if (pc0.x - cx0) * (pc0.x - cx0) + (pc0.z - cz0) * (pc0.z - cz0) > vr2 or not in_view(pc0, 7.0):
 				continue
-			var pr4 := path_pos([pd["c"], pd["n"]], pd["t"], CELL * 0.42 * pd["side"])
+			var pr4 := ped_pose(pd)
 			var p4: Vector3 = pr4[0]
 			var rp: float = pr4[1]
 			var ph: float = anim_time * (8.0 if pd.get("panic", 0.0) <= 0.0 else 16.0) + pd["side"] * 3.0
@@ -7710,8 +7787,9 @@ func draw_dynamic() -> void:
 						for f0 in pd["comp"]:
 							f0["code"] = person_code(f0["pant"], f0["skin"], f0["hair"])
 					draw_person(p4.x, p4.y, p4.z, rp, s, pd["col"], pd["pant"], pd["skin"], pd["hair"], ph, pclose, ex, pd["umb"], pd["code"])
-					var rx4 := cos(rp)
-					var rz4 := -sin(rp)
+					# acompañantes en fila (adelante o atrás): la vereda no da para ir de a dos
+					var rx4 := -sin(rp) * 1.3
+					var rz4 := -cos(rp) * 1.3
 					for f in pd["comp"]:
 						var off: float = f["off"]
 						var fs: float = f["s"]
@@ -7720,7 +7798,7 @@ func draw_dynamic() -> void:
 							ex2 |= 2
 						if ex & 4:
 							ex2 |= 4
-						draw_person(p4.x + rx4 * off * pd["side"], p4.y, p4.z + rz4 * off * pd["side"], rp, fs, f["col"], f["pant"], f["skin"], f["hair"], ph + 1.3, pclose, ex2, f["umb"], f.get("code", -1))
+						draw_person(p4.x + rx4 * off, p4.y, p4.z + rz4 * off, rp, fs, f["col"], f["pant"], f["skin"], f["hair"], ph + 1.3, pclose, ex2, f["umb"], f.get("code", -1))
 		for ln in lines:
 			if ln["pts"].size() < 2 or not (ln["kind"] in ["bus", "tram"]):
 				continue
@@ -7845,11 +7923,20 @@ func draw_dynamic() -> void:
 	burn_sweep = (burn_sweep + 512) % (N * N)
 	for i in burn_set.keys():
 		if burn[i] > 0.0:
-			emit_flames(cell_pos(i), i)
+			var pfl0 := cell_pos(i)
+			if in_view(pfl0, 12.0):
+				emit_flames(pfl0, i)
 	if flag_days > 0 and cam_dist < 250.0:
 		var nflag := 0
-		for i in zone_list:
-			if lvl[i] >= 2 and hsh(i, 99) < 0.12:
+		# las casas con bandera se eligen una vez por fiesta (antes se recorría toda la ciudad en cada cuadro)
+		if flag_list.is_empty() or flag_list_n != zone_list.size():
+			flag_list.clear()
+			flag_list_n = zone_list.size()
+			for i0 in zone_list:
+				if hsh(i0, 99) < 0.12:
+					flag_list.append(i0)
+		for i in flag_list:
+			if lvl[i] >= 2 and in_view(cell_pos(i), 6.0):
 				var fr := face_rot(i)
 				var pfl := cell_pos(i) + Vector3(sin(fr) * CELL * 0.44 + cos(fr) * CELL * 0.4, 0.1, cos(fr) * CELL * 0.44 - sin(fr) * CELL * 0.4)
 				var hh := 0.0
@@ -7878,6 +7965,8 @@ func draw_dynamic() -> void:
 	for p in parts:
 		var pp: Vector3 = p["p"]
 		var s2: float = p["s"]
+		if not in_view(pp, s2 + 2.0):
+			continue
 		em(M_BOX if p.has("glow") else M_SPH, pp.x, pp.y, pp.z, s2, s2, s2, p["t"] * 3.0, p["col"], 0, 0, p.get("glow", 0.0))
 	if weather in ["Lluvia", "Tormenta", "Nieve"] and opts["quality"] >= 1 and not opts["g_rain"]:
 		var snow := weather == "Nieve"
@@ -7939,7 +8028,26 @@ func new_ped(c: int, kind: int) -> Dictionary:
 			k["hand"] = true
 			comp.append(k)
 	pd["comp"] = comp
+	ped_spawn_side(pd)
 	return pd
+# al aparecer: de entrada sobre una vereda que exista (en una calle ancha, del lado de afuera)
+func ped_spawn_side(pd: Dictionary) -> void:
+	var c: int = pd["c"]
+	var o: Vector2 = Vector2(PED_OFF, PED_OFF) * float(pd["side"])
+	var x := c % N
+	var zr := func(sg: float) -> bool:
+		var j := c + (N if sg > 0.0 else -N)
+		return j >= 0 and j < N * N and road[j] > 0
+	var xr := func(sg: float) -> bool:
+		if (sg > 0.0 and x >= N - 1) or (sg < 0.0 and x <= 0):
+			return false
+		return road[c + (1 if sg > 0.0 else -1)] > 0
+	if zr.call(o.y) and not zr.call(-o.y):
+		o.y = -o.y
+	if xr.call(o.x) and not xr.call(-o.x):
+		o.x = -o.x
+	pd["o"] = o
+	pd["ot"] = o
 func person_code(pant: Color, skin: Color, hair: Color) -> int:
 	return pal_idx(pant, PANTS, 0) + 8 * pal_idx(skin, SKINS, 0) + 64 * pal_idx(hair, HAIRS, 6 if hair.v < 0.5 else 7)
 func draw_person(x: float, y: float, z: float, rp: float, s: float, shirt: Color, pant: Color, skin: Color, hair: Color, ph: float, close: bool, extra: int, umb: Color = Color.BLACK, code: int = -1) -> void:
@@ -8120,8 +8228,46 @@ func star_step(st: Dictionary, to: int) -> void:
 	else:
 		st["n"] = opts2[randi() % opts2.size()]
 func ped_pos(pd: Dictionary) -> Vector3:
-	var pr := path_pos([pd["c"], pd["n"]], pd["t"], CELL * 0.42 * pd["side"])
-	return pr[0]
+	return ped_pose(pd)[0]
+# Las personas van por la vereda: llevan un corrimiento fijo en el mundo (o = x, z hacia una de las cuatro
+# veredas de la celda), no relativo a hacia dónde caminan. Así, al doblar una esquina siguen por la vereda en
+# vez de saltar en diagonal por la calle, y cuando cambian de vereda cruzan caminando (o se mueve hacia ot).
+const PED_OFF := CELL * 0.44
+func ped_pose(pd: Dictionary) -> Array:
+	var a := cell_pos(pd["c"])
+	var b := cell_pos(pd["n"])
+	var p := a.lerp(b, pd["t"])
+	var o: Vector2 = pd.get("o", Vector2(PED_OFF, PED_OFF) * pd["side"])
+	p.x += o.x
+	p.z += o.y
+	var d := b - a
+	var r: float = pd.get("r", 0.0)
+	if d.length() > 0.01:
+		r = atan2(d.x, d.z)
+		pd["r"] = r
+	return [p, r]
+# al empezar un tramo de c a n: si de ese lado no hay vereda (calle ancha o dos calles pegadas), cambia de lado
+func ped_side_check(pd: Dictionary) -> void:
+	var c: int = pd["c"]
+	var n: int = pd["n"]
+	if not pd.has("o"):
+		pd["o"] = Vector2(PED_OFF, PED_OFF) * pd["side"]
+		pd["ot"] = pd["o"]
+	var ot: Vector2 = pd["ot"]
+	var horiz: bool = absi(n - c) == 1
+	var sg: int = 1 if (ot.y > 0.0 if horiz else ot.x > 0.0) else -1
+	var o: int = (N if horiz else 1) * sg
+	var lat_road := func(i: int, oo: int) -> bool:
+		var j := i + oo
+		if j < 0 or j >= N * N or (not horiz and cz(j) != cz(i)):
+			return false
+		return road[j] > 0
+	if lat_road.call(c, o) and lat_road.call(n, o) and not (lat_road.call(c, -o) and lat_road.call(n, -o)):
+		if horiz:
+			ot.y = -ot.y
+		else:
+			ot.x = -ot.x
+		pd["ot"] = ot
 func move_stars(dt: float) -> void:
 	if stars.is_empty():
 		var keep0: Array = []
@@ -9631,7 +9777,7 @@ func build_ui() -> void:
 	hint_label.add_theme_constant_override("outline_size", 6)
 	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	ui_root.add_child(hint_label)
-	toast_label = mk_label("", 0, Color(1, 1, 1))
+	toast_label = mk_label("", 17, Color(1, 1, 1))
 	toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	toast_label.add_theme_stylebox_override("normal", sbox(Color(0.05, 0.05, 0.08, 0.85), 18))
@@ -10151,12 +10297,15 @@ func toast(t: String) -> void:
 	toast_label.visible = true
 	toast_label.modulate = Color(1, 1, 1, 1)
 	toast_t = 3.2
+	# aviso chico, del ancho del texto (como mucho 460): antes era una franja de 700 con letra grande
 	var w := ui_root.size.x
-	var fw := minf(700.0, w - 40.0)
+	var fnt := toast_label.get_theme_font("font")
+	var tw := fnt.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, toast_label.get_theme_font_size("font_size")).x if fnt else 400.0
+	var fw := minf(minf(460.0, w - 40.0), tw + 44.0)
 	toast_label.size = Vector2(fw, 0)
 	toast_label.reset_size()
 	toast_label.size.x = fw
-	toast_label.position = Vector2((w - fw) * 0.5, ui_root.size.y * 0.6)
+	toast_label.position = Vector2((w - fw) * 0.5, ui_root.size.y * 0.7)
 func set_cost_hint(t: String) -> void:
 	cost_label.text = t
 	layout_bottom()
@@ -13119,8 +13268,7 @@ func seam_check() -> int:
 		for v in vs:
 			if absf(absf(v.x) - half) < 0.01 or absf(absf(v.z) - half) < 0.01:
 				outer[Vector2i(roundi(v.x * 10.0), roundi(v.z * 10.0))] = v.y
-	var tm: Mesh = terrain_node.mesh
-	var tv: PackedVector3Array = tm.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var tv: PackedVector3Array = terrain_verts
 	var bad := 0
 	for v in tv:
 		if absf(absf(v.x) - half) < 0.01 or absf(absf(v.z) - half) < 0.01:
@@ -13691,6 +13839,7 @@ func run_vida(dir: String) -> void:
 		shot_to(dir, "sala_computacion")
 		close_sheet()
 		road_check()
+		cross_check()
 		# de cerca sobre un cruce, de día
 		rebuild_road_list()
 		var c: int = tl_cells[tl_cells.size() / 2]
@@ -13759,7 +13908,7 @@ func run_vida(dir: String) -> void:
 			spawn_agents(0.016)
 		var best: int = road_list[0]
 		for c in road_list:
-			if road[c] >= 2 and zone[c + 1] > 0:
+			if (road[c] == 2 or road[c] == 3) and zone[c + 1] > 0:
 				best = c
 				break
 		vida_cam(best, 14.0, 17.5)
@@ -13783,12 +13932,18 @@ func run_vida(dir: String) -> void:
 	elif f == 644:
 		shot_to(dir, "autos_cerca")
 	elif f == 645:
-		var pc := cell_pos(peds[peds.size() / 2]["c"])
+		# una persona en una calle común, vista desde arriba para ver que va por la vereda
+		var pk: Dictionary = peds[peds.size() / 2]
+		for pd in peds:
+			if road[pd["c"]] == 2 and pd["kind"] == 0:
+				pk = pd
+				break
+		var pc := ped_pos(pk)
 		cam_target = pc
 		cam_goal = pc
-		cam_dist = 7.0
-		cam_dist_goal = 7.0
-		cam_pitch = 0.4
+		cam_dist = 12.0
+		cam_dist_goal = 12.0
+		cam_pitch = 0.85
 	elif f == 650:
 		shot_to(dir, "gente_cerca")
 		print("VIDA OK" if bt_fail == 0 else "VIDA FALLA")
@@ -13938,6 +14093,18 @@ func run_dibujo(dir: String) -> void:
 				for k in c:
 					if cat_models[k / 3 / 64]["fam"] == "arbol" and k % 3 == LOD_NEAR:
 						c[k].cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	elif f == 150:
+		# cuánto tarda cada parte de autos y gente (60 veces cada una)
+		var parts := {"spawn": func(): spawn_agents(0.016), "move_cars": func(): move_cars(0.016), "move_peds": func(): move_peds(0.016),
+			"move_svc": func(): move_svc(0.016), "move_lines": func(): move_lines(0.016), "move_parts": func(): move_parts(0.016),
+			"draw_dynamic": func(): draw_dynamic(), "road_list": func(): rebuild_road_list()}
+		var txt := ""
+		for k in parts:
+			var t0 := Time.get_ticks_usec()
+			for r in 60:
+				parts[k].call()
+			txt += " %s=%.2f" % [k, (Time.get_ticks_usec() - t0) / 60000.0]
+		print("BENCH partes_moviles_ms" + txt)
 	elif f == 160:
 		dib_stats(dir, "cerca")
 		dib_groups = dib_make_groups()
@@ -14024,7 +14191,7 @@ func dib_make_groups() -> Array:
 		prim.append_array(arr)
 	out.append(["primitivas", prim])
 	out.append(["gente_autos", crowd_nodes + car_mid_nodes])
-	out.append(["terreno", [terrain_node]])
+	out.append(["terreno", terrain_parts])
 	out.append(["agua", [water_node]])
 	out.append(["dinamicos", dyn_nodes + [glow_node, rails_node]])
 	if outer_nodes.size() > 0:
@@ -14042,6 +14209,40 @@ func save_bg_check() -> void:
 	var want = JSON.parse_string(JSON.stringify(snapshot()))
 	var ok: bool = steps > 1 and typeof(got) == TYPE_DICTIONARY and JSON.stringify(got, "", true) == JSON.stringify(want, "", true)
 	print("SAVE_BG_CHECK %s (%d pasos)" % ["ok" if ok else "FALLA", steps])
+# semáforos solo en cruces de verdad: una calle de dos carriles no es un cruce en cada celda
+func cross_check() -> void:
+	var x0 := 2
+	var z0 := 2
+	var saved := {}
+	for z in range(z0, z0 + 9):
+		for x in range(x0, x0 + 9):
+			saved[idx(x, z)] = road[idx(x, z)]
+			road[idx(x, z)] = 0
+	# calle ancha (filas z0+4 y z0+5) y una calle simple que la cruza en x0+4
+	for x in range(x0, x0 + 9):
+		road[idx(x, z0 + 4)] = 2
+		road[idx(x, z0 + 5)] = 2
+	for z in range(z0, z0 + 9):
+		road[idx(x0 + 4, z)] = 2
+	var lights := 0
+	var wrong := 0
+	for z in range(z0, z0 + 9):
+		for x in range(x0, x0 + 9):
+			if road[idx(x, z)] > 0 and cross_branches(idx(x, z)) >= 3:
+				lights += 1
+				if x != x0 + 4:
+					wrong += 1
+	for k in saved:
+		road[k] = saved[k]
+	bt(wrong == 0 and lights == 2, "CROSS_CHECK semáforos solo en el cruce (%d celdas, %d de más) %s" % [lights, wrong, "ok" if wrong == 0 and lights == 2 else "FALLA"])
+	# la gente va por la vereda: corrimiento fijo de una vereda (salvo mientras cruza)
+	var off_bad := 0
+	for pd in peds:
+		ped_side_check(pd)
+		var o: Vector2 = pd["o"]
+		if pd["o"] == pd["ot"] and (absf(absf(o.x) - PED_OFF) > 0.01 or absf(absf(o.y) - PED_OFF) > 0.01):
+			off_bad += 1
+	bt(off_bad == 0, "SIDEWALK_CHECK gente por la vereda %s" % ("ok" if off_bad == 0 else "FALLA %d" % off_bad))
 # ================================================================ src/main.gd
 # Arranque y bucle principal de Godot.
 func _unhandled_input(event: InputEvent) -> void:

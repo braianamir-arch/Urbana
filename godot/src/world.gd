@@ -264,6 +264,27 @@ func road_n(i: int) -> Array:
 	var x := cx(i)
 	var z := cz(i)
 	return [x < N - 1 and road[i + 1] > 0, x > 0 and road[i - 1] > 0, z < N - 1 and road[i + N] > 0, z > 0 and road[i - N] > 0]
+# Calles que salen de un cruce de verdad. No cuenta el carril de al lado de una calle ancha (o dos calles
+# pegadas): esa celda tiene calle a los dos costados igual que la de al lado, así que no es una esquina.
+# Antes cada celda de una calle de dos carriles parecía un cruce y llevaba semáforos en fila.
+func cross_branches(i: int) -> int:
+	var nb := road_n(i)
+	var x := cx(i)
+	var z := cz(i)
+	var c := 0
+	for d in 4:
+		if not nb[d]:
+			continue
+		var j: int = i + [1, -1, N, -N][d]
+		var lane := true
+		# los dos costados (perpendiculares a la rama) tienen que ser calle en esta celda y en la vecina
+		for o in ([N, -N] if d < 2 else [1, -1]):
+			var ok_side: bool = (z + 1 < N if o == N else (z > 0 if o == -N else (x + 1 < N if o == 1 else x > 0)))
+			if not ok_side or road[i + o] == 0 or road[j + o] == 0:
+				lane = false
+		if not lane:
+			c += 1
+	return c
 func vert_h(x: int, z: int) -> float:
 	var hs := 0.0
 	var cnt := 0
