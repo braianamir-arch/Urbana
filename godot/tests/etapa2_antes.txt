@@ -1,0 +1,5 @@
+# Mediciones antes de la etapa 2a+2b (commit 2425d6b; misma máquina: Vulkan por software lavapipe; Godot 4.7)
+frame_ms Alta (mediodía, 120 cuadros, renderer Mobile): 477.37
+frame_ms Baja: 191.15
+chunks_ms (5 × rehacer todos los bloques, gl_compatibility): 670
+pck Android: 43973736 bytes
