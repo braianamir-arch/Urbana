@@ -9592,6 +9592,8 @@ func clear_box(b: Node) -> void:
 		b.remove_child(ch)
 		ch.queue_free()
 var crumb_last: String = ""
+var lab_taps: int = 0
+var lab_tap_t: int = 0
 var crumb_f: FileAccess = null
 # anota el último paso para saber dónde se cerró el juego. Se escribe como mucho cada 0,1 s (antes eran
 # varias escrituras por cuadro y en el celular eso pesaba); "cierre limpio" se escribe siempre.
@@ -10963,8 +10965,8 @@ func open_options() -> void:
 		opts["ui_size"] = v
 		layout_ui()
 		save_opts()))
-	b.add_child(mk_label("Si el juego se cierra solo, probá apagar estas cosas:"))
-	b.add_child(mk_check("Dibujo compatible (OpenGL, para celulares que se cierran; se aplica al reiniciar)", draw_compat() if draw_cfg_kind() != "prueba" else false, func(on: bool):
+	b.add_child(mk_label("Rendimiento:"))
+	b.add_child(mk_check("Modo compatible (si el juego se cierra solo; al reiniciar)", draw_compat() if draw_cfg_kind() != "prueba" else false, func(on: bool):
 		if on:
 			draw_cfg_write("elegido")
 			draw_guard_on = false
@@ -11017,7 +11019,7 @@ func open_options() -> void:
 	b.add_child(mk_check("Sonido (se aplica al reiniciar)", opts["g_audio"], func(on: bool):
 		opts["g_audio"] = on
 		save_opts()))
-	b.add_child(mk_check("Música (puede cerrar el juego en algunos celulares)", opts["g_music"], func(on: bool):
+	b.add_child(mk_check("Música", opts["g_music"], func(on: bool):
 		opts["g_music"] = on
 		if on:
 			start_music()
@@ -11303,6 +11305,17 @@ func show_start() -> void:
 	start_reset(false)
 	var t := mk_label("URBANA", 72, COL_ACC)
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# 5 toques seguidos en el título muestran la Sala de computación en el menú (escondida para los demás)
+	t.mouse_filter = Control.MOUSE_FILTER_STOP
+	t.gui_input.connect(func(ev: InputEvent):
+		if (ev is InputEventScreenTouch or ev is InputEventMouseButton) and ev.pressed:
+			var now := Time.get_ticks_msec()
+			lab_taps = lab_taps + 1 if now - lab_tap_t < 800 else 1
+			lab_tap_t = now
+			if lab_taps >= 5 and not opts.get("lab", false):
+				opts["lab"] = true
+				save_opts()
+				toast("🖥 Sala de computación activada (Menú)"))
 	start_body.add_child(t)
 	var st := mk_label("Construí tu ciudad", 0, Color(1, 1, 1, 0.8))
 	st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -11316,9 +11329,6 @@ func show_start() -> void:
 			if load_game(ls):
 				enter_game(false)))
 	start_body.add_child(mk_main("✚  Nueva ciudad", func(): show_new_game()))
-	start_body.add_child(mk_btn("🧪 Ciudad de prueba (para ver autos, gente y luces)", func():
-		new_test_city()
-		enter_game(false), 0))
 	var r := mk_row()
 	var b1 := mk_btn("📂 Mis partidas", func(): show_slots(), 0)
 	b1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -11334,10 +11344,6 @@ func show_start() -> void:
 		var dn := mk_text(draw_note)
 		dn.modulate = Color(0.75, 0.9, 1.0)
 		start_body.add_child(dn)
-	elif prev_crumb != "" and not prev_crumb.contains("cierre limpio"):
-		var cl := mk_text("La vez anterior el juego se cerró solo. Último paso anotado:\n" + prev_crumb)
-		cl.modulate = Color(1, 0.8, 0.5)
-		start_body.add_child(cl)
 	layout_ui()
 func show_new_game() -> void:
 	start_reset(true)
@@ -11578,13 +11584,12 @@ func add_btn_icon(b: Button, n: String, s: int) -> void:
 	b.add_child(cc)
 	b.set_meta("ico", r)
 func menu_items() -> Array:
-	return [
+	var items := [
 		["📊 Estadísticas", func(): open_stats()], ["💰 Presupuesto e impuestos", func(): open_budget()],
 		["🏛 Intendente", func(): open_mayor()], ["📜 Decretos", func(): open_decrees()],
 		["🤝 Comercio con vecinos", func(): open_trade()], ["🚌 Transporte", func(): open_transport()],
 		["🗺 Distritos", func(): open_districts()], ["🏆 Logros y retos", func(): open_goals()],
 		["📰 Diario", func(): open_news()], ["💡 Asesores", func(): open_advisors()],
-		["🖥 Sala de computación", func(): open_lab()],
 		["🎉 Hacer un festival", func(): hold_festival()], ["🚗 Manejar por la ciudad", func():
 			close_sheet()
 			start_drive()],
@@ -11601,6 +11606,10 @@ func menu_items() -> Array:
 			close_sheet()
 			show_start()],
 	]
+	if opts.get("lab", false):
+		items.insert(10, ["🖥 Sala de computación", func(): open_lab()])
+	return items
+
 # ================================================================ src/audio.gd
 # Sonidos y música generados.
 const SR := 22050
