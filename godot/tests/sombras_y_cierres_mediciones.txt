@@ -1,0 +1,17 @@
+Medición con tools/dibujo.sh (renderer Mobile por software, 1170x540), ciudad de prueba en calidad Alta,
+90 autos y 150 personas, cámara a 49 m. "Antes" = versión 7d06d11 con la sombra fija en 170 m como en Android.
+
+                  antes        después
+imagen (tri)      1.426.671    1.426.671   (lo que se ve no cambia)
+sombras (tri)     1.504.893      993.249   (-34 %)
+total (tri)       2.931.564    2.419.920   (-17 %)
+cuadro (ms)          1056,8        567,1   (por software; marca la tendencia, no el celular)
+alejado, sombras    470.183      289.121   (-39 %)
+
+Cierres: el guardado automático en otro hilo rompía la memoria (abortaba al salir 3 de 3 veces desde
+f86b930). Ahora se arma de a pedazos en el hilo principal: 0 de 3, y SAVE_BG_CHECK da el mismo archivo.
+
+Segunda vuelta (misma escena):
+- terreno en 16 pedazos: el terreno dibuja 66.150 triángulos en vez de 131.352 (solo lo que se ve)
+- autos y gente: solo lo que entra en pantalla, banderas elegidas una vez, lista de calles 1,9 -> 0,7 ms
+- sombras con borde suave también en el celular (Alta)

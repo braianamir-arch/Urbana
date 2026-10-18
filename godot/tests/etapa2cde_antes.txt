@@ -1,0 +1,5 @@
+# Mediciones antes de la etapa 2c+2d+2e (commit d37f416; Vulkan por software lavapipe; Godot 4.7)
+frame_ms Alta (mediodía): 489.08
+frame_ms Baja: 207.71
+chunks_ms: 659
+pck Android: 64988120 bytes
