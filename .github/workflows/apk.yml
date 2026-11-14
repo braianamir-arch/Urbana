@@ -61,6 +61,7 @@ jobs:
             adb shell pidof app.urbana.juego > pid.txt || echo "LA APP NO ESTA CORRIENDO" > pid.txt
             grep -c "URBANA-JS" logcat.txt || true
             grep "URBANA-JS\|FATAL EXCEPTION\|AndroidRuntime" logcat.txt | head -60 > resumen.txt || true
+            echo "fin del resumen" >> resumen.txt
             cat pid.txt resumen.txt
       - name: Subir capturas
         env:
