@@ -54,7 +54,7 @@ jobs:
             adb shell am start -n app.urbana.juego/.MainActivity
             sleep 45
             adb exec-out screencap -p > captura1.png
-            S=$(adb shell wm size | tr -dc '0-9x'); W=${S%x*}; H=${S#*x}; echo "pantalla $W x $H"; adb shell input tap $((W/2)) $((H*455/1000))
+            S=$(adb shell wm size | tr -dc '0-9x'); W=${S%x*}; H=${S#*x}; echo "pantalla $W x $H"; adb shell input tap $((W/2)) $((H*41/100))
             sleep 30
             adb exec-out screencap -p > captura2.png
             adb logcat -d > logcat.txt
